@@ -372,47 +372,46 @@ impl DynamoDbBatch {
         db: &DynamoDbClientInternal,
         base_key: &[u8],
     ) -> Result<JournalHeader, DynamoDbContextError> {
-        let delete_count = self.0.deletions.len();
-        let insert_count = self.0.insertions.len();
-        let total_count = delete_count + insert_count;
+        let mut delete_iter = self.0.deletions.into_iter().peekable();
+        let mut insert_iter = self.0.insertions.into_iter().peekable();
         let mut value_size = 2;
         let mut transact_size = 0;
-        let mut curr_len = 0;
         let mut deletions = Vec::new();
         let mut insertions = Vec::new();
         let mut block_count = 0;
         let mut transacts = Vec::new();
-        for i in 0..total_count {
-            curr_len += 1;
-            if i < delete_count {
-                let delete = &self.0.deletions[i];
+        loop {
+            if let Some(delete) = delete_iter.next() {
                 value_size += delete.len() + 1;
-                deletions.push(delete.to_vec());
+                deletions.push(delete);
+            } else if let Some((key, value)) = insert_iter.next() {
+                value_size += key.len() + value.len() + 2;
+                insertions.push((key, value));
             } else {
-                let key_value = &self.0.insertions[i - delete_count];
-                value_size += key_value.0.len() + key_value.1.len() + 2;
-                insertions.push(key_value.clone());
+                break;
             }
-            let (value_flush, transact_flush) =
-                if i == total_count - 1 || curr_len == MAX_TRANSACT_WRITE_ITEM_SIZE - 2 {
-                    (true, true)
+            let (value_flush, transact_flush) = if (delete_iter.len() + insert_iter.len() == 0)
+                || deletions.len() + insertions.len() == MAX_TRANSACT_WRITE_ITEM_SIZE - 2
+            {
+                (true, true)
+            } else {
+                let next_size = if let Some(delete) = delete_iter.peek() {
+                    delete.len() + 1
                 } else {
-                    let next_size = if i + 1 < delete_count {
-                        self.0.deletions[i + 1].len() + 1
-                    } else {
-                        let key_value = &self.0.insertions[i + 1 - delete_count];
-                        key_value.0.len() + key_value.1.len() + 2
-                    };
-                    let next_value_size = value_size + next_size;
-                    let next_transact_size = transact_size + next_value_size;
-                    let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
-                        true
-                    } else {
-                        next_value_size > MAX_VALUE_BYTES
-                    };
-                    let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
-                    (value_flush, transact_flush)
+                    // Unwrapping: We checked above that at least one iterator is not empty.
+                    let (key, value) = insert_iter.peek().unwrap();
+                    key.len() + value.len() + 2
                 };
+                let next_value_size = value_size + next_size;
+                let next_transact_size = transact_size + next_value_size;
+                let value_flush = if next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES {
+                    true
+                } else {
+                    next_value_size > MAX_VALUE_BYTES
+                };
+                let transact_flush = next_transact_size > MAX_TRANSACT_WRITE_ITEM_BYTES;
+                (value_flush, transact_flush)
+            };
             if value_flush {
                 let simple_unordered_batch = SimpleUnorderedBatch {
                     deletions: mem::take(&mut deletions),
@@ -430,7 +429,6 @@ impl DynamoDbBatch {
             if transact_flush {
                 submit_transactions(mem::take(&mut transacts), db).await?;
                 transact_size = 0;
-                curr_len = 0;
             }
         }
         let header = JournalHeader { block_count };
