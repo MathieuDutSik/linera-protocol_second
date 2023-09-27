@@ -341,8 +341,8 @@ impl DynamoDbBatch {
 
     fn is_fastpath_feasible(&self) -> bool {
         let mut total_size = 0;
-        for insertion in &self.0.insertions {
-            total_size += insertion.0.len() + insertion.1.len();
+        for (key, value) in &self.0.insertions {
+            total_size += key.len() + value.len();
         }
         for deletion in &self.0.deletions {
             total_size += deletion.len();
