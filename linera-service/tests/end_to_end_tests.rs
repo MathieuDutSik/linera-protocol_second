@@ -9,13 +9,13 @@ use std::{collections::BTreeMap, env, mem, path::PathBuf, time::Duration};
 use anyhow::Result;
 use assert_matches::assert_matches;
 use async_graphql::InputType;
-use common::INTEGRATION_TEST_GUARD;
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use linera_base::{
     command::resolve_binary,
     crypto::{KeyPair, PublicKey},
     data_types::{Amount, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, Owner},
+    sync::Lazy,
 };
 #[cfg(feature = "remote_net")]
 use linera_service::cli_wrappers::remote_net::RemoteNetTestingConfig;
@@ -32,8 +32,14 @@ use linera_service::{
 };
 use serde_json::{json, Value};
 use test_case::test_case;
-use tokio::task::JoinHandle;
+use tokio::{sync::Mutex, task::JoinHandle};
 use tracing::{info, warn};
+
+/// The `counter` directory should be accessed only once at the same time.
+static COUNTER_DIRECTORY_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+/// The compilation needs to be guarded so that we do not compile at the same time.
+static COMPILATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 fn get_fungible_account_owner(client: &ClientWrapper) -> AccountOwner {
     let owner = client.get_owner().unwrap();
@@ -78,6 +84,11 @@ impl EthereumTrackerApp {
     async fn update(&self) {
         self.0.mutate("update").await.unwrap();
     }
+}
+
+async fn guarded_build(client: &ClientWrapper, name: &str) -> (PathBuf, PathBuf) {
+    let _guard = COMPILATION_TEST_GUARD.lock().await;
+    client.build_example(name).await.unwrap()
 }
 
 struct FungibleApp(ApplicationWrapper<fungible::FungibleTokenAbi>);
@@ -447,15 +458,14 @@ async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) ->
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client) = config.instantiate().await?;
 
     let original_counter_value = 35;
     let increment = 5;
 
-    let chain = client.load_wallet()?.default_chain().unwrap();
-    let (contract, service) = client.build_example("counter").await?;
+    let chain = client.load_wallet()?.default_chain()?;
+    let (contract, service) = guarded_build(&client, "counter").await;
 
     let application_id = client
         .publish_and_create::<CounterAbi, (), u64>(
@@ -467,7 +477,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let mut node_service = client.run_node_service(8080).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -499,15 +509,13 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfig) -> Result<()> {
     use counter::CounterAbi;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client) = config.instantiate().await?;
 
     let original_counter_value = 35;
     let increment = 5;
 
-    let chain = client.load_wallet()?.default_chain().unwrap();
-    let (contract, service) = client.build_example("counter").await?;
+    let chain = client.load_wallet()?.default_chain()?;
+    let (contract, service) = guarded_build(&client, "counter").await;
 
     let bytecode_id = client
         .publish_bytecode::<CounterAbi, (), u64>(contract, service, None)
@@ -515,7 +523,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let application_id = client
         .create_application(&bytecode_id, &(), &original_counter_value, &[], None)
         .await?;
-    let mut node_service = client.run_node_service(None).await?;
+    let mut node_service = client.run_node_service(8080).await?;
 
     let application = node_service
         .make_application(&chain, &application_id)
@@ -546,16 +554,15 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) -> Result<()> {
     use social::SocialAbi;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
 
-    let chain1 = client1.load_wallet()?.default_chain().unwrap();
+    let chain1 = client1.load_wallet()?.default_chain()?;
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
-    let (contract, service) = client1.build_example("social").await?;
+    let (contract, service) = guarded_build(&client1, "social").await;
     let bytecode_id = client1
         .publish_bytecode::<SocialAbi, (), ()>(contract, service, None)
         .await?;
@@ -643,10 +650,7 @@ async fn test_wasm_end_to_end_fungible(
 ) -> Result<()> {
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client1) = config.instantiate().await?;
-
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
 
@@ -663,7 +667,7 @@ async fn test_wasm_end_to_end_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
+    let (contract, service) = guarded_build(&client1, example_name).await;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
@@ -799,8 +803,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     example_name: &str,
 ) -> Result<()> {
     use fungible::{Account, FungibleTokenAbi, InitialState, Parameters};
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client1) = config.instantiate().await?;
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
@@ -827,7 +829,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     ]);
     let state = InitialState { accounts };
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example(example_name).await?;
+    let (contract, service) = guarded_build(&client1, example_name).await;
     let params = if example_name == "native-fungible" {
         // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
         Parameters::new("NAT")
@@ -920,8 +922,6 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Result<()> {
     use non_fungible::{NftOutput, NonFungibleTokenAbi};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
@@ -935,7 +935,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let account_owner2 = get_fungible_account_owner(&client2);
 
     // Setting up the application and verifying
-    let (contract, service) = client1.build_example("non-fungible").await?;
+    let (contract, service) = guarded_build(&client1, "non-fungible").await;
     let application_id = client1
         .publish_and_create::<NonFungibleTokenAbi, (), ()>(contract, service, &(), &(), &[], None)
         .await?;
@@ -1180,8 +1180,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
@@ -1199,7 +1197,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
     let state_fungible = InitialState { accounts };
 
     // Setting up the application fungible
-    let (contract_fungible, service_fungible) = client1.build_example("fungible").await?;
+    let (contract_fungible, service_fungible) = guarded_build(&client1, "fungible").await;
     let params = Parameters::new("FUN");
     let application_id_fungible = client1
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
@@ -1220,7 +1218,7 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
         deadline,
         target,
     };
-    let (contract_crowd, service_crowd) = client1.build_example("crowd-funding").await?;
+    let (contract_crowd, service_crowd) = guarded_build(&client1, "crowd-funding").await;
     let application_id_crowd = client1
         .publish_and_create::<CrowdFundingAbi, ApplicationId<FungibleTokenAbi>, InstantiationArgument>(
             contract_crowd,
@@ -1306,8 +1304,6 @@ async fn test_wasm_end_to_end_crowd_funding(config: impl LineraNetConfig) -> Res
 async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> Result<()> {
     use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     let (mut net, client_admin) = config.instantiate().await?;
 
     let client_a = net.make_client().await;
@@ -1317,10 +1313,10 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     client_b.wallet_init(&[], FaucetOption::None).await?;
 
     // Create initial server and client config.
-    let (contract_fungible_a, service_fungible_a) = client_a.build_example("fungible").await?;
-    let (contract_fungible_b, service_fungible_b) = client_b.build_example("fungible").await?;
+    let (contract_fungible_a, service_fungible_a) = guarded_build(&client_a, "fungible").await;
+    let (contract_fungible_b, service_fungible_b) = guarded_build(&client_b, "fungible").await;
     let (contract_matching, service_matching) =
-        client_admin.build_example("matching-engine").await?;
+        guarded_build(&client_admin, "matching-engine").await;
 
     let chain_admin = client_admin.load_wallet()?.default_chain().unwrap();
     let chain_a = client_admin.open_and_assign(&client_a, Amount::ONE).await?;
@@ -1593,7 +1589,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use amm::{AmmAbi, Parameters};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    use fungible::{FungibleTokenAbi, InitialState};
 
     let (mut net, client_amm) = config.instantiate().await?;
 
@@ -1602,8 +1598,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     client0.wallet_init(&[], FaucetOption::None).await?;
     client1.wallet_init(&[], FaucetOption::None).await?;
 
-    let (contract_fungible, service_fungible) = client_amm.build_example("fungible").await?;
-    let (contract_amm, service_amm) = client_amm.build_example("amm").await?;
+    let (contract_fungible, service_fungible) = guarded_build(&client_admin, "fungible").await;
+    let (contract_amm, service_amm) = guarded_build(&client_admin, "amm").await;
 
     // AMM chain
     let chain_amm = client_amm.load_wallet()?.default_chain().unwrap();
@@ -2322,8 +2318,7 @@ async fn test_resolve_binary() -> Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Tcp) ; "aws_tcp"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Udp) ; "aws_udp"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+async fn test_wasm_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
     let network = config.network;
     let (mut net, client) = config.instantiate().await?;
 
@@ -2335,7 +2330,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         .open_and_assign(&client_2, Amount::from_tokens(3))
         .await?;
     let node_service_2 = match network {
-        Network::Grpc => Some(client_2.run_node_service(8081).await?),
+        Network::Grpc => Some(client_2.run_node_service(8080).await?),
         Network::Tcp | Network::Udp => None,
     };
 
@@ -2435,8 +2430,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await?;
+    use fungible::{FungibleTokenAbi, InitialState};
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
     let public_key = client
@@ -2452,7 +2447,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
     let owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(owner, Amount::from_tokens(10))]);
     let state = fungible::InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await?;
+    let (contract, service) = guarded_build(&client, "fungible").await;
     let params = fungible::Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<fungible::FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
@@ -2541,9 +2536,7 @@ async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Result<()> {
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
@@ -2552,7 +2545,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
     client2.wallet_init(&[chain], FaucetOption::None).await?;
 
     // Listen for updates on root chain 0. There are no blocks on that chain yet.
-    let mut node_service2 = client2.run_node_service(8081).await?;
+    let mut node_service2 = client2.run_node_service(8080).await?;
     let response = node_service2
         .query_node(format!(
             "query {{ chain(chainId:\"{chain}\") {{ tipState {{ nextBlockHeight }} }} }}"
@@ -2602,9 +2595,7 @@ async fn test_end_to_end_retry_notification_stream(config: LocalNetConfig) -> Re
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_multiple_wallets(config: impl LineraNetConfig) -> Result<()> {
     // Create net and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2674,7 +2665,6 @@ async fn test_project_test() -> Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_project_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let _rustflags_override = override_disable_warnings_as_errors();
     let config = LocalNetConfig {
         num_initial_validators: 1,
@@ -2696,7 +2686,7 @@ async fn test_project_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await?;
+    let node_service = client.run_node_service(8080).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2760,7 +2750,6 @@ async fn test_linera_net_up_simple() -> Result<()> {
 #[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_example_publish(database: Database, network: Network) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let config = LocalNetConfig {
         num_initial_validators: 1,
         num_shards: 1,
@@ -2774,7 +2763,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
         .await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
 
-    let node_service = client.run_node_service(None).await?;
+    let node_service = client.run_node_service(8080).await?;
 
     assert_eq!(
         node_service.try_get_applications_uri(&chain).await?.len(),
@@ -2793,9 +2782,7 @@ async fn test_example_publish(database: Database, network: Network) -> Result<()
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) -> Result<()> {
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2861,9 +2848,7 @@ async fn test_end_to_end_open_multi_owner_chain(config: impl LineraNetConfig) ->
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_change_ownership(config: impl LineraNetConfig) -> Result<()> {
     // Create runner and client.
     let (mut net, client) = config.instantiate().await?;
 
@@ -2901,9 +2886,7 @@ async fn test_end_to_end_change_ownership(config: impl LineraNetConfig) -> Resul
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
+async fn test_wasm_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConfig) -> Result<()> {
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -2947,8 +2930,6 @@ async fn test_end_to_end_assign_greatgrandchild_chain(config: impl LineraNetConf
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_faucet(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -3026,8 +3007,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
     use linera_base::command::CommandExt;
     use tokio::process::Command;
 
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
 
@@ -3065,7 +3044,6 @@ async fn test_end_to_end_fungible_benchmark(config: impl LineraNetConfig) -> Res
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     // Create runner and client.
     let (mut net, client) = config.instantiate().await?;
     let chain_id = client.load_wallet()?.default_chain().unwrap();
@@ -3109,9 +3087,7 @@ async fn test_end_to_end_retry_pending_block(config: LocalNetConfig) -> Result<(
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
-
     config.num_other_initial_chains = 2;
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
     let (mut net, client) = config.instantiate().await?;
 
     assert_eq!(client.load_wallet()?.num_chains(), 2);
@@ -3124,7 +3100,7 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     let account_owner = get_fungible_account_owner(&client);
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
-    let (contract, service) = client.build_example("fungible").await?;
+    let (contract, service) = guarded_build(&client, "fungible").await;
     let params = Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
@@ -3174,8 +3150,6 @@ impl Drop for RestoreVarOnDrop {
 #[cfg_attr(feature = "remote_net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_listen_for_new_rounds(config: impl LineraNetConfig) -> Result<()> {
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
-
     // Create runner and two clients.
     let (mut net, client1) = config.instantiate().await?;
     let client2 = net.make_client().await;
