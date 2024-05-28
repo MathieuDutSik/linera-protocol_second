@@ -8,6 +8,7 @@ use linera_base::data_types::Amount;
 use linera_execution::ResourceControlPolicy;
 use linera_service::cli_wrappers::{
     ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
+    local_net::IndexPortChoice,
 };
 #[cfg(feature = "rocksdb")]
 use linera_service::{
@@ -83,6 +84,7 @@ pub async fn handle_net_up_rocks_db(
     let storage_config = StorageConfig::RocksDb { path: path_buf };
     let storage_config_builder = StorageConfigBuilder::ExistingConfig { storage_config };
     let path_provider = PathProvider::new(path);
+    let index_port_choice = IndexPortChoice::IndexPort { index: 0 };
     let config = LocalNetConfig {
         network: Network::Grpc,
         database: Database::RocksDb,
@@ -95,6 +97,7 @@ pub async fn handle_net_up_rocks_db(
         policy: ResourceControlPolicy::default(),
         storage_config_builder,
         path_provider,
+        index_port_choice,
     };
     let (mut net, client1) = config.instantiate().await?;
     net_up(extra_wallets, &mut net, client1).await?;

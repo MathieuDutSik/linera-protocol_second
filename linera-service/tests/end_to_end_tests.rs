@@ -25,7 +25,7 @@ use linera_service::cli_wrappers::{
 };
 use linera_service::{
     cli_wrappers::{
-        local_net::{Database, LocalNet, LocalNetConfig, PathProvider},
+        local_net::{Database, LocalNetConfig, PathProvider},
         ApplicationWrapper, ClientWrapper, FaucetOption, LineraNet, LineraNetConfig, Network,
     },
     config::WalletState,
@@ -34,9 +34,6 @@ use serde_json::{json, Value};
 use test_case::test_case;
 use tokio::{sync::Mutex, task::JoinHandle};
 use tracing::{info, warn};
-
-/// The `counter` directory should be accessed only once at the same time.
-static COUNTER_DIRECTORY_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 /// The compilation needs to be guarded so that we do not compile at the same time.
 static COMPILATION_TEST_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
@@ -351,7 +348,6 @@ impl AmmApp {
 #[test_log::test(tokio::test)]
 async fn test_wallet_lock() -> Result<()> {
     let config = LocalNetConfig::new_test(Database::Service, Network::Grpc);
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let (_net, client) = config.instantiate().await?;
 
@@ -376,7 +372,6 @@ async fn test_wasm_end_to_end_ethereum_tracker(_config: impl LineraNetConfig) ->
     use alloy::primitives::U256;
     use ethereum_tracker::{EthereumTrackerAbi, InstantiationArgument};
     use linera_ethereum::test_utils::{get_anvil, SimpleTokenContractFunction};
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let anvil_test = get_anvil().await?;
     let address0 = anvil_test.get_address(0);
@@ -464,7 +459,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     let original_counter_value = 35;
     let increment = 5;
 
-    let chain = client.load_wallet()?.default_chain()?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
     let (contract, service) = guarded_build(&client, "counter").await;
 
     let application_id = client
@@ -514,7 +509,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
     let original_counter_value = 35;
     let increment = 5;
 
-    let chain = client.load_wallet()?.default_chain()?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
     let (contract, service) = guarded_build(&client, "counter").await;
 
     let bytecode_id = client
@@ -560,7 +555,7 @@ async fn test_wasm_end_to_end_social_user_pub_sub(config: impl LineraNetConfig) 
     let client2 = net.make_client().await;
     client2.wallet_init(&[], FaucetOption::None).await?;
 
-    let chain1 = client1.load_wallet()?.default_chain()?;
+    let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
     let (contract, service) = guarded_build(&client1, "social").await;
     let bytecode_id = client1
@@ -1589,7 +1584,6 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     use amm::{AmmAbi, Parameters};
-    use fungible::{FungibleTokenAbi, InitialState};
 
     let (mut net, client_amm) = config.instantiate().await?;
 
@@ -1598,8 +1592,8 @@ async fn test_wasm_end_to_end_amm(config: impl LineraNetConfig) -> Result<()> {
     client0.wallet_init(&[], FaucetOption::None).await?;
     client1.wallet_init(&[], FaucetOption::None).await?;
 
-    let (contract_fungible, service_fungible) = guarded_build(&client_admin, "fungible").await;
-    let (contract_amm, service_amm) = guarded_build(&client_admin, "amm").await;
+    let (contract_fungible, service_fungible) = guarded_build(&client_amm, "fungible").await;
+    let (contract_amm, service_amm) = guarded_build(&client_amm, "amm").await;
 
     // AMM chain
     let chain_amm = client_amm.load_wallet()?.default_chain().unwrap();
@@ -2350,7 +2344,7 @@ async fn test_wasm_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<
 
     // Add 5th validator
     client
-        .set_validator(net.validator_name(4).unwrap(), LocalNet::proxy_port(4), 100)
+        .set_validator(net.validator_name(4).unwrap(), net.proxy_port(4), 100)
         .await?;
 
     client.query_validators(None).await?;
@@ -2358,7 +2352,7 @@ async fn test_wasm_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<
 
     // Add 6th validator
     client
-        .set_validator(net.validator_name(5).unwrap(), LocalNet::proxy_port(5), 100)
+        .set_validator(net.validator_name(5).unwrap(), net.proxy_port(5), 100)
         .await?;
 
     // Remove 5th validator
@@ -2431,7 +2425,6 @@ async fn test_wasm_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<
 #[test_log::test(tokio::test)]
 async fn test_open_chain_node_service(config: impl LineraNetConfig) -> Result<()> {
     let (mut net, client) = config.instantiate().await?;
-    use fungible::{FungibleTokenAbi, InitialState};
 
     let chain1 = client.load_wallet()?.default_chain().unwrap();
     let public_key = client
@@ -2705,8 +2698,6 @@ async fn test_linera_net_up_simple() -> Result<()> {
         io::{BufRead, BufReader},
         process::{Command, Stdio},
     };
-
-    let _guard = INTEGRATION_TEST_GUARD.lock().await;
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_linera"));
     command.args(["net", "up"]);
