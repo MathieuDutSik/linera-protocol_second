@@ -49,15 +49,13 @@ impl LineraNetConfig for RemoteNetTestingConfig {
         // chains with 10 tokens each. We create the first chain here
         client
             .wallet_init(&[], FaucetOption::NewChain(&self.faucet))
-            .await
-            .unwrap();
+            .await?;
 
         // And the remaining 9 here
         for _ in 0..9 {
             client
                 .open_and_assign(&client, Amount::from_tokens(10))
-                .await
-                .unwrap();
+                .await?;
         }
 
         Ok((net, client))

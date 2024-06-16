@@ -169,12 +169,11 @@ impl LineraNetConfig for SharedLocalKubernetesNetTestingConfig {
         let client = net.make_client().await;
         // The tests assume we've created a genesis config with 10
         // chains with 10 tokens each.
-        client.wallet_init(&[], FaucetOption::None).await.unwrap();
+        client.wallet_init(&[], FaucetOption::None).await?;
         for _ in 0..10 {
             initial_client
                 .open_and_assign(&client, Amount::from_tokens(10))
-                .await
-                .unwrap();
+                .await?;
         }
 
         Ok((net, client))
