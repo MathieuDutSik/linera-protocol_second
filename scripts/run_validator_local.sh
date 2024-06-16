@@ -7,14 +7,6 @@ SHARDS_PER_VALIDATOR=${2:-4}
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CONF_DIR="${SCRIPT_DIR}/../configuration/local"
 
-cd $SCRIPT_DIR/..
-
-# Clean up data files
-rm -rf *.json *.txt *.db
-
-# Make sure to clean up child processes on exit.
-trap 'kill $(jobs -p)' EXIT
-
 set -x
 
 # Create configuration files for NUM_VALIDATORS validators with SHARDS_PER_VALIDATOR shards each.
@@ -24,7 +16,7 @@ VALIDATOR_FILES=()
 for i in $(seq 1 $NUM_VALIDATORS); do
     VALIDATOR_FILES+=("$CONF_DIR/validator_$i.toml")
 done
-./linera-server generate --validators "${VALIDATOR_FILES[@]}" --committee committee.json --testing-prng-seed 1
+./linera-server generate --validators "${VALIDATOR_FILES[@]}" --committee committee.json --testing-prng-seed 37
 
 STORAGE="service:tcp:$LINERA_STORAGE_SERVICE:linera"
 
