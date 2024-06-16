@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# preliminary cleanup
+./linera-db delete_all --storage service:tcp:$LINERA_STORAGE_SERVICE:table_test
+pkill linera-server
+pkill linera-proxy
+rm -f server_*.json committee.json genesis.json wallet.json wallet_2.json
+rm -rf linera.db linera_2.db
+
 # Get the number of proxies and servers from command line arguments or use default values.
 # Default number of validators is 4, default number of shards per validator is 4.
 NUM_VALIDATORS=${1:-4}
@@ -32,14 +39,11 @@ done
 # Start servers and create initial chains in DB
 for I in $(seq 1 $NUM_VALIDATORS)
 do
-    ./linera-proxy server_"$I".json --storage $STORAGE --genesis genesis.json &
+    ./linera-proxy server_"$I".json --storage "$STORAGE"_"$I" --genesis genesis.json &
 
+    ./linera-server initialize --storage "$STORAGE"_"$I" --genesis genesis.json
     for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
     do
-        ./linera-server initialize --storage $STORAGE --genesis genesis.json
-    done
-    for J in $(seq 0 $((SHARDS_PER_VALIDATOR - 1)))
-    do
-        ./linera-server run --storage $STORAGE --server server_"$I".json --shard "$J" --genesis genesis.json &
+        ./linera-server run --storage "$STORAGE"_"$I" --server server_"$I".json --shard "$J" --genesis genesis.json &
     done
 done
