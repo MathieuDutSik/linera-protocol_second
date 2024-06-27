@@ -164,6 +164,14 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 self.#first_name_quote.context()
             }
 
+            fn pre_load(context: &#context) -> Vec<Vec<u8>> {
+                Vec::new()
+            }
+
+            fn post_load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+                panic!()
+            }
+
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
                 use linera_views::{futures::join, common::Context};
                 #increment_counter

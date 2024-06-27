@@ -8,12 +8,11 @@ use std::{
 
 use async_lock::Mutex;
 use async_trait::async_trait;
-use futures::join;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     batch::Batch,
-    common::{Context, MIN_VIEW_TAG},
+    common::{from_bytes_opt, Context, MIN_VIEW_TAG},
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
@@ -48,21 +47,31 @@ where
         self.inner.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let hash_key = context.base_tag(KeyTag::Hash as u8);
+    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+        let mut v = vec![context.base_tag(KeyTag::Hash as u8)];
         let base_key = context.base_tag(KeyTag::Inner as u8);
-        let (hash, inner) = join!(
-            context.read_value(&hash_key),
-            W::load(context.clone_with_base_key(base_key))
-        );
-        let hash = hash?;
-        let inner = inner?;
+        let context = context.clone_with_base_key(base_key);
+        v.extend(W::pre_load(&context));
+        v
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let hash = from_bytes_opt(values.first().unwrap())?;
+        let base_key = context.base_tag(KeyTag::Inner as u8);
+        let context = context.clone_with_base_key(base_key);
+        let inner = W::post_load(context, &values[1..])?;
         Ok(Self {
             _phantom: PhantomData,
             stored_hash: hash,
             hash: Mutex::new(hash),
             inner,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context);
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

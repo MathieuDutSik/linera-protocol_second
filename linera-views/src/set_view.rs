@@ -51,12 +51,20 @@ where
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -356,12 +364,22 @@ where
         self.set.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let set = ByteSetView::load(context).await?;
+    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+        ByteSetView::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let set = ByteSetView::post_load(context, values)?;
         Ok(Self {
             set,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context);
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {
@@ -605,12 +623,22 @@ where
         self.set.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let set = ByteSetView::load(context).await?;
+    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+        ByteSetView::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let set = ByteSetView::post_load(context, values)?;
         Ok(Self {
             set,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context);
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

@@ -78,13 +78,21 @@ where
         &self.context
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
+    fn pre_load(_context: &C) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+
+    fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         Ok(Self {
             context,
             delete_storage_first: false,
             updates: BTreeMap::new(),
             deleted_prefixes: BTreeSet::new(),
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        Self::post_load(context, &[])
     }
 
     fn rollback(&mut self) {
@@ -802,12 +810,22 @@ where
         self.map.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let map = ByteMapView::load(context).await?;
+    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+        ByteMapView::<C,V>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let map = ByteMapView::post_load(context, values)?;
         Ok(MapView {
             map,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context);
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {
@@ -1216,12 +1234,22 @@ where
         self.map.context()
     }
 
-    async fn load(context: C) -> Result<Self, ViewError> {
-        let map = ByteMapView::load(context).await?;
+    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+        ByteMapView::<C,V>::pre_load(context)
+    }
+
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
+        let map = ByteMapView::post_load(context, values)?;
         Ok(CustomMapView {
             map,
             _phantom: PhantomData,
         })
+    }
+
+    async fn load(context: C) -> Result<Self, ViewError> {
+        let keys = Self::pre_load(&context);
+        let values = context.read_multi_values_bytes(keys).await?;
+        Self::post_load(context, &values)
     }
 
     fn rollback(&mut self) {

@@ -24,7 +24,13 @@ pub trait View<C>: Sized {
     /// Obtains a mutable reference to the internal context.
     fn context(&self) -> &C;
 
-    /// Creates a view or a subview.
+    /// Creates the keys needed for loading
+    fn pre_load(context: &C) -> Vec<Vec<u8>>;
+
+    /// Load a view from the values
+    fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError>;
+
+    /// Loads a view
     async fn load(context: C) -> Result<Self, ViewError>;
 
     /// Discards all pending changes. After that `flush` should have no effect to storage.
