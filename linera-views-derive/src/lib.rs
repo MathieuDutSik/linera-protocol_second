@@ -114,6 +114,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut flush_quotes = Vec::new();
     let mut test_flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
+    let mut num_init_keys = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
@@ -136,6 +137,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
         test_flush_quotes.push(quote! { #test_flush_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
+        num_init_keys.push(quote! { #type_ident::NUM_INIT_KEYS });
     }
     let first_name_quote = name_quotes
         .first()
@@ -170,7 +172,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 Vec::new()
             }
 
-            fn post_load(context: #context) -> Result<Self, linera_views::views::ViewError> {
+            fn post_load(context: #context, _values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
                 panic!()
             }
 
