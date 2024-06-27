@@ -47,6 +47,8 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
@@ -360,12 +362,14 @@ where
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.set.context()
     }
 
     fn pre_load(context: &C) -> Vec<Vec<u8>> {
-        ByteSetView::pre_load(context)
+        ByteSetView::<C>::pre_load(context)
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -619,6 +623,8 @@ where
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
 {
+    const NUM_INIT_KEYS: usize = ByteSetView::<C>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.set.context()
     }

@@ -21,6 +21,9 @@ mod tests;
 /// address in storage.
 #[async_trait]
 pub trait View<C>: Sized {
+    /// The number of keys used for the initialization
+    const NUM_INIT_KEYS: usize;
+
     /// Obtains a mutable reference to the internal context.
     fn context(&self) -> &C;
 

@@ -156,6 +156,8 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
+    const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C,u32>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         &self.context
     }
@@ -163,9 +165,9 @@ where
     fn pre_load(context: &C) -> Vec<Vec<u8>> {
         let key_hash = context.base_tag(KeyTag::Hash as u8);
         let key_total_size = context.base_tag(KeyTag::TotalSize as u8);
+        let mut v = vec![key_hash, key_total_size];
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        let mut v = vec![key_hash, key_total_size];
         v.extend(ByteMapView::<C,u32>::pre_load(&context_sizes));
         v
     }

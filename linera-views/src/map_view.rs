@@ -74,6 +74,8 @@ where
     ViewError: From<C::Error>,
     V: Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
@@ -806,6 +808,8 @@ where
     I: Send + Sync + Serialize,
     V: Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = ByteMapView::<C,V>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.map.context()
     }
@@ -1230,6 +1234,8 @@ where
     I: Send + Sync + CustomSerialize,
     V: Clone + Send + Sync + Serialize,
 {
+    const NUM_INIT_KEYS: usize = ByteMapView::<C,V>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.map.context()
     }

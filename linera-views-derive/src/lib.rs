@@ -159,6 +159,8 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
         #where_clause
         {
+            const NUM_INIT_KEYS: usize = 0;
+
             fn context(&self) -> &#context {
                 use linera_views::views::View;
                 self.#first_name_quote.context()

@@ -43,6 +43,8 @@ where
     O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
     W::Hasher: Hasher<Output = O>,
 {
+    const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.inner.context()
     }

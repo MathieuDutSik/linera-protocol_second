@@ -49,6 +49,8 @@ where
     ViewError: From<C::Error>,
     T: Default + Send + Sync + Serialize + DeserializeOwned,
 {
+    const NUM_INIT_KEYS: usize = 1;
+
     fn context(&self) -> &C {
         &self.context
     }

@@ -102,6 +102,8 @@ where
     ViewError: From<C::Error>,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = 0;
+
     fn context(&self) -> &C {
         &self.context
     }
@@ -843,6 +845,8 @@ where
     I: Send + Sync + Debug + Serialize + DeserializeOwned,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C,W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
@@ -1279,6 +1283,8 @@ where
     I: Send + Sync + Debug + CustomSerialize,
     W: View<C> + Send + Sync,
 {
+    const NUM_INIT_KEYS: usize = ReentrantByteCollectionView::<C,W>::NUM_INIT_KEYS;
+
     fn context(&self) -> &C {
         self.collection.context()
     }
