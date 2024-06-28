@@ -27,8 +27,8 @@ pub trait View<C>: Sized {
     /// Obtains a mutable reference to the internal context.
     fn context(&self) -> &C;
 
-    /// Creates the keys needed for loading
-    fn pre_load(context: &C) -> Vec<Vec<u8>>;
+    /// Creates the keys needed for loading the view
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError>;
 
     /// Load a view from the values
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError>;

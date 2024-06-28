@@ -92,6 +92,17 @@ fn empty_where_clause() -> WhereClause {
     }
 }
 
+
+fn get_extended_entry(e: Type) -> TokenStream2 {
+    let syn::Type::Path(typepath) = e else {
+        panic!("The type should be a path");
+    };
+    let path_segment = typepath.path.segments.into_iter().next().unwrap();
+    let ident = path_segment.ident;
+    let arguments = path_segment.arguments;
+    quote!{ #ident :: #arguments }
+}
+
 fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let struct_name = input.ident;
     let (impl_generics, type_generics, maybe_where_clause) = input.generics.split_for_impl();
@@ -114,13 +125,15 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut flush_quotes = Vec::new();
     let mut test_flush_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
-    let mut num_init_keys = Vec::new();
+    let mut num_init_keys_quotes = Vec::new();
+    let mut pre_load_keys_quotes = Vec::new();
+    let mut post_load_keys_quotes = Vec::new();
     for (idx, e) in input.fields.into_iter().enumerate() {
         let name = e.clone().ident.unwrap();
         let fut = format_ident!("{}_fut", name.to_string());
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
-        let type_ident = get_type_field(e).expect("Failed to find the type");
+        let type_ident = get_type_field(e.clone()).expect("Failed to find the type");
         load_future_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
@@ -132,12 +145,27 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         load_result_quotes.push(quote! {
             let #name = result.#idx_lit?;
         });
+        let f : Type = e.ty;
+        let g = get_extended_entry(f.clone());
+        println!("idx={} f={:?}", idx, f);
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
         test_flush_quotes.push(quote! { #test_flush_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
-        num_init_keys.push(quote! { #type_ident::NUM_INIT_KEYS });
+        num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
+        pre_load_keys_quotes.push(quote! {
+            let index = #idx_lit;
+            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
+        });
+        post_load_keys_quotes.push(quote! {
+            let index = #idx_lit;
+            let pos_next = pos + #g :: NUM_INIT_KEYS;
+            let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
+            let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+            pos = pos_next;
+        });
     }
     let first_name_quote = name_quotes
         .first()
@@ -161,19 +189,23 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         impl #impl_generics linera_views::views::View<#context> for #struct_name #type_generics
         #where_clause
         {
-            const NUM_INIT_KEYS: usize = 0;
+            const NUM_INIT_KEYS: usize = #(#num_init_keys_quotes)+*;
 
             fn context(&self) -> &#context {
                 use linera_views::views::View;
                 self.#first_name_quote.context()
             }
 
-            fn pre_load(context: &#context) -> Vec<Vec<u8>> {
-                Vec::new()
+            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::views::ViewError> {
+                let mut keys = Vec::new();
+                #(#pre_load_keys_quotes)*
+                Ok(keys)
             }
 
-            fn post_load(context: #context, _values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
-                panic!()
+            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::views::ViewError> {
+                let mut pos = 0;
+                #(#post_load_keys_quotes)*
+                Ok(Self {#(#name_quotes),*})
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::views::ViewError> {
@@ -371,7 +403,9 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
 #[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    generate_view_code(input, false).into()
+    let stream = generate_view_code(input, false);
+    println!("1: stream={}", stream);
+    stream.into()
 }
 
 #[proc_macro_derive(HashableView, attributes(view))]
@@ -379,6 +413,7 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input));
+    println!("2: stream={}", stream);
     stream.into()
 }
 
@@ -387,6 +422,7 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input));
+    println!("3: stream={}", stream);
     stream.into()
 }
 
@@ -396,6 +432,7 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
+    println!("4: stream={}", stream);
     stream.into()
 }
 
@@ -406,6 +443,7 @@ pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
+    println!("5: stream={}", stream);
     stream.into()
 }
 
@@ -416,6 +454,7 @@ pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input.clone()));
     stream.extend(generate_hash_view_code(input));
+    println!("6: stream={}", stream);
     stream.into()
 }
 

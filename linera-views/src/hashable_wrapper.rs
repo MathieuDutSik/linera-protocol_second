@@ -49,12 +49,12 @@ where
         self.inner.context()
     }
 
-    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut v = vec![context.base_tag(KeyTag::Hash as u8)];
         let base_key = context.base_tag(KeyTag::Inner as u8);
         let context = context.clone_with_base_key(base_key);
-        v.extend(W::pre_load(&context));
-        v
+        v.extend(W::pre_load(&context)?);
+        Ok(v)
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -71,7 +71,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context);
+        let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }

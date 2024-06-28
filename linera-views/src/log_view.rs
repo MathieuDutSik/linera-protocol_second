@@ -67,8 +67,8 @@ where
         &self.context
     }
 
-    fn pre_load(context: &C) -> Vec<Vec<u8>> {
-        vec![context.base_tag(KeyTag::Count as u8)]
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![context.base_tag(KeyTag::Count as u8)])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -83,7 +83,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context);
+        let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }

@@ -162,14 +162,14 @@ where
         &self.context
     }
 
-    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let key_hash = context.base_tag(KeyTag::Hash as u8);
         let key_total_size = context.base_tag(KeyTag::TotalSize as u8);
         let mut v = vec![key_hash, key_total_size];
         let base_key = context.base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
-        v.extend(ByteMapView::<C,u32>::pre_load(&context_sizes));
-        v
+        v.extend(ByteMapView::<C,u32>::pre_load(&context_sizes)?);
+        Ok(v)
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -192,7 +192,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context);
+        let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }

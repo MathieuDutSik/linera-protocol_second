@@ -95,8 +95,8 @@ where
         &self.context
     }
 
-    fn pre_load(_context: &C) -> Vec<Vec<u8>> {
-        vec![]
+    fn pre_load(_context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
+        Ok(vec![])
     }
 
     fn post_load(context: C, _values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
@@ -643,7 +643,7 @@ where
         self.collection.context()
     }
 
-    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         ByteCollectionView::<C,W>::pre_load(context)
     }
 
@@ -656,7 +656,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context);
+        let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
@@ -990,7 +990,7 @@ where
         self.collection.context()
     }
 
-    fn pre_load(context: &C) -> Vec<Vec<u8>> {
+    fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         ByteCollectionView::<C,W>::pre_load(&context)
     }
 
@@ -1003,7 +1003,7 @@ where
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context);
+        let keys = Self::pre_load(&context)?;
         let values = context.read_multi_values_bytes(keys).await?;
         Self::post_load(context, &values)
     }
