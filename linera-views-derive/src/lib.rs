@@ -145,9 +145,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         load_result_quotes.push(quote! {
             let #name = result.#idx_lit?;
         });
-        let f : Type = e.ty;
-        let g = get_extended_entry(f.clone());
-        println!("idx={} f={:?}", idx, f);
+        let g = get_extended_entry(e.ty.clone());
         name_quotes.push(quote! { #name });
         rollback_quotes.push(quote! { self.#name.rollback(); });
         flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
@@ -403,9 +401,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
 #[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
-    let stream = generate_view_code(input, false);
-    println!("1: stream={}", stream);
-    stream.into()
+    generate_view_code(input, false).into()
 }
 
 #[proc_macro_derive(HashableView, attributes(view))]
@@ -413,7 +409,6 @@ pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input));
-    println!("2: stream={}", stream);
     stream.into()
 }
 
@@ -422,7 +417,6 @@ pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let mut stream = generate_view_code(input.clone(), true);
     stream.extend(generate_save_delete_view_code(input));
-    println!("3: stream={}", stream);
     stream.into()
 }
 
@@ -432,7 +426,6 @@ pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let mut stream = generate_view_code(input.clone(), false);
     stream.extend(generate_hash_view_code(input.clone()));
     stream.extend(generate_crypto_hash_code(input));
-    println!("4: stream={}", stream);
     stream.into()
 }
 
