@@ -177,7 +177,7 @@ impl FungibleApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
-    async fn claim(&self, source: fungible::Account, target: fungible::Account, amount: Amount) {
+    async fn claim(&self, source: fungible::Account, amount: Amount, target: fungible::Account) {
         // Claiming tokens from chain1 to chain2.
         let mutation = format!(
             "claim(sourceAccount: {}, amount: \"{}\", targetAccount: {})",
@@ -809,11 +809,11 @@ async fn test_wasm_end_to_end_fungible(
             chain_id: chain1,
             owner: account_owner2,
         },
+        Amount::from_tokens(2),
         fungible::Account {
             chain_id: chain2,
             owner: account_owner2,
         },
-        Amount::from_tokens(2),
     )
     .await;
 
