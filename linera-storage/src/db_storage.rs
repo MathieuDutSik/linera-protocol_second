@@ -387,7 +387,7 @@ impl TestClock {
 #[async_trait]
 impl<Client, C> Storage for DbStorage<Client, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Client: KeyValueStore + Send + Sync + 'static,
     C: Clock + Clone + Send + Sync + 'static,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error:
@@ -633,7 +633,7 @@ where
 
 impl<Client, C> DbStorage<Client, C>
 where
-    Client: KeyValueStore + Clone + Send + Sync + 'static,
+    Client: KeyValueStore + Send + Sync + 'static,
     C: Clock,
     ViewError: From<<Client as KeyValueStore>::Error>,
     <Client as KeyValueStore>::Error: From<bcs::Error> + Send + Sync + serde::ser::StdError,

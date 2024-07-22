@@ -450,7 +450,7 @@ pub trait LocalAdminKeyValueStore: Sized {
 
 /// Low-level, asynchronous write and read key-value operations. Useful for storage APIs not based on views.
 pub trait KeyValueStore:
-    ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
+    Clone + ReadableKeyValueStore<Self::Error> + WritableKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug;
@@ -702,7 +702,7 @@ pub struct ContextFromStore<E, S> {
 impl<E, S> ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: KeyValueStore + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {
@@ -750,7 +750,7 @@ where
 impl<E, S> Context for ContextFromStore<E, S>
 where
     E: Clone + Send + Sync,
-    S: KeyValueStore + Clone + Send + Sync,
+    S: KeyValueStore + Send + Sync,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {

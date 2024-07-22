@@ -83,7 +83,7 @@ pub trait DirectWritableKeyValueStore<E> {
 
 /// Low-level, asynchronous direct read/write key-value operations with simplified batch
 pub trait DirectKeyValueStore:
-    ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error>
+    Clone + ReadableKeyValueStore<Self::Error> + DirectWritableKeyValueStore<Self::Error>
 {
     /// The error type.
     type Error: Debug + From<bcs::Error>;

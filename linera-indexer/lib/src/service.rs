@@ -131,7 +131,7 @@ impl Listener {
         chain_id: ChainId,
     ) -> Result<ChainId, IndexerError>
     where
-        DB: KeyValueStore + Clone + Send + Sync + 'static,
+        DB: KeyValueStore + Send + Sync + 'static,
         DB::Error: From<bcs::Error>
             + From<DatabaseConsistencyError>
             + Send

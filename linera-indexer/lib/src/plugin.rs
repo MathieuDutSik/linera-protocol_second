@@ -19,7 +19,7 @@ use crate::common::IndexerError;
 #[async_trait::async_trait]
 pub trait Plugin<S>: Send + Sync
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S: KeyValueStore + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {
@@ -72,7 +72,7 @@ pub async fn load<S, V: View<ContextFromStore<(), S>>>(
     name: &str,
 ) -> Result<Arc<Mutex<V>>, IndexerError>
 where
-    S: KeyValueStore + Clone + Send + Sync + 'static,
+    S: KeyValueStore + Send + Sync + 'static,
     S::Error: From<bcs::Error> + Send + Sync + std::error::Error + 'static,
     ViewError: From<S::Error>,
 {

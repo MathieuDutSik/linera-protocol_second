@@ -47,7 +47,7 @@ impl<DB, Config> Runner<DB, Config>
 where
     Self: Send,
     Config: Clone + std::fmt::Debug + Send + Sync + clap::Parser + clap::Args,
-    DB: KeyValueStore + Clone + Send + Sync + 'static,
+    DB: KeyValueStore + Send + Sync + 'static,
     DB::Error: From<bcs::Error>
         + From<DatabaseConsistencyError>
         + Send
