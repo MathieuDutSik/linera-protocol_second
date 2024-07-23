@@ -300,7 +300,7 @@ where
                     let key = self
                         .context
                         .base_tag_index(KeyTag::Subview as u8, short_key);
-                    let context = self.context.clone_with_base_key(key);
+                    let context = self.context.clone_with_relative_key(key);
                     let view = W::load(context).await?;
                     entry.insert(Update::Set(view));
                     let guard = RwLockWriteGuard::downgrade(updates);
@@ -337,7 +337,7 @@ where
         let key = self
             .context
             .base_tag_index(KeyTag::Subview as u8, short_key);
-        let context = self.context.clone_with_base_key(key);
+        let context = self.context.clone_with_relative_key(key);
         let view = W::new(context)?;
         self.updates
             .get_mut()
@@ -416,7 +416,7 @@ where
                         let key = self
                             .context
                             .base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = self.context.clone_with_base_key(key);
+                        let context = self.context.clone_with_relative_key(key);
                         // Obtain a view and set its pending state to the default (e.g. empty) state
                         let view = W::new(context)?;
                         *entry = Update::Set(view);
@@ -431,7 +431,7 @@ where
                 let key = self
                     .context
                     .base_tag_index(KeyTag::Subview as u8, short_key);
-                let context = self.context.clone_with_base_key(key);
+                let context = self.context.clone_with_relative_key(key);
                 let view = if self.delete_storage_first {
                     W::new(context)?
                 } else {
@@ -602,7 +602,7 @@ where
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
-                    let context = self.context.clone_with_base_key(key);
+                    let context = self.context.clone_with_relative_key(key);
                     let mut view = W::load(context).await?;
                     view.hash_mut().await?
                 }
@@ -630,7 +630,7 @@ where
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
-                    let context = self.context.clone_with_base_key(key);
+                    let context = self.context.clone_with_relative_key(key);
                     let view = W::load(context).await?;
                     view.hash().await?
                 }

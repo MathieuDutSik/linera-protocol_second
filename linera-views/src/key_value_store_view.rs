@@ -169,7 +169,7 @@ where
         let key_total_size = context.base_tag(KeyTag::TotalSize as u8);
         let mut v = vec![key_hash, key_total_size];
         let base_key = context.base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
+        let context_sizes = context.clone_with_relative_key(base_key);
         v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
         Ok(v)
     }
@@ -179,7 +179,7 @@ where
         let total_size =
             from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
+        let context_sizes = context.clone_with_relative_key(base_key);
         let sizes = ByteMapView::post_load(
             context_sizes,
             values.get(2..).ok_or(ViewError::PostLoadValuesError)?,

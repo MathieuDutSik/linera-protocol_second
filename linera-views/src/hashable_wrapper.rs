@@ -52,7 +52,7 @@ where
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut v = vec![context.base_tag(KeyTag::Hash as u8)];
         let base_key = context.base_tag(KeyTag::Inner as u8);
-        let context = context.clone_with_base_key(base_key);
+        let context = context.clone_with_relative_key(base_key);
         v.extend(W::pre_load(&context)?);
         Ok(v)
     }
@@ -60,7 +60,7 @@ where
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_tag(KeyTag::Inner as u8);
-        let context = context.clone_with_base_key(base_key);
+        let context = context.clone_with_relative_key(base_key);
         let inner = W::post_load(
             context,
             values.get(1..).ok_or(ViewError::PostLoadValuesError)?,

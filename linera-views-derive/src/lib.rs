@@ -132,13 +132,13 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
         pre_load_keys_quotes.push(quote! {
             let index = #idx_lit;
             let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-            keys.extend(#g :: pre_load(&context.clone_with_base_key(base_key))?);
+            keys.extend(#g :: pre_load(&context.clone_with_relative_key(base_key))?);
         });
         post_load_keys_quotes.push(quote! {
             let index = #idx_lit;
             let pos_next = pos + #g :: NUM_INIT_KEYS;
             let base_key = context.derive_tag_key(linera_views::common::MIN_VIEW_TAG, &index)?;
-            let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+            let #name = #g :: post_load(context.clone_with_relative_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
     }

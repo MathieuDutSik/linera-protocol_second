@@ -601,7 +601,7 @@ pub trait Context: Clone {
     fn extra(&self) -> &Self::Extra;
 
     /// Obtains a similar [`Context`] implementation with a different base key.
-    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self;
+    fn clone_with_relative_key(&self, base_key: Vec<u8>) -> Self;
 
     /// Getter for the address of the current entry (aka the base_key).
     fn base_key(&self) -> Vec<u8>;
@@ -815,7 +815,7 @@ where
         log_time_async(self.store.write_batch(batch, &self.base_key), "write_batch").await
     }
 
-    fn clone_with_base_key(&self, base_key: Vec<u8>) -> Self {
+    fn clone_with_relative_key(&self, base_key: Vec<u8>) -> Self {
         Self {
             store: self.store.clone(),
             base_key,

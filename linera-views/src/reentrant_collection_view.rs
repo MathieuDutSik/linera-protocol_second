@@ -243,7 +243,7 @@ where
         short_key: &[u8],
     ) -> Result<Arc<RwLock<W>>, ViewError> {
         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-        let context = context.clone_with_base_key(key);
+        let context = context.clone_with_relative_key(key);
         // Obtain a view and set its pending state to the default (e.g. empty) state
         let view = if delete_storage_first {
             W::new(context)?
@@ -434,7 +434,7 @@ where
         let key = self
             .context
             .base_tag_index(KeyTag::Subview as u8, short_key);
-        let context = self.context.clone_with_base_key(key);
+        let context = self.context.clone_with_relative_key(key);
         let view = W::new(context)?;
         let view = Arc::new(RwLock::new(view));
         let view = Update::Set(view);
@@ -468,7 +468,7 @@ where
                     let entry = entry.into_mut();
                     if let Update::Removed = entry {
                         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
+                        let context = context.clone_with_relative_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         *entry = Update::Set(view);
@@ -477,7 +477,7 @@ where
                 btree_map::Entry::Vacant(entry) => {
                     if delete_storage_first {
                         let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-                        let context = context.clone_with_base_key(key);
+                        let context = context.clone_with_relative_key(key);
                         let view = W::new(context)?;
                         let view = Arc::new(RwLock::new(view));
                         entry.insert(Update::Set(view));
@@ -490,7 +490,7 @@ where
         let mut handles = Vec::new();
         for short_key in &selected_short_keys {
             let key = context.base_tag_index(KeyTag::Subview as u8, short_key);
-            let context = context.clone_with_base_key(key);
+            let context = context.clone_with_relative_key(key);
             handles.push(tokio::spawn(async move { W::load(context).await }));
         }
         let response = futures::future::join_all(handles).await;
@@ -760,7 +760,7 @@ where
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
-                    let context = self.context.clone_with_base_key(key);
+                    let context = self.context.clone_with_relative_key(key);
                     let mut view = W::load(context).await?;
                     view.hash_mut().await?
                 }
@@ -791,7 +791,7 @@ where
                 }
                 None => {
                     let key = self.context.base_tag_index(KeyTag::Subview as u8, &key);
-                    let context = self.context.clone_with_base_key(key);
+                    let context = self.context.clone_with_relative_key(key);
                     let view = W::load(context).await?;
                     view.hash().await?
                 }
