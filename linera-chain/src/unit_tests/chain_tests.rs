@@ -20,7 +20,7 @@ use linera_execution::{
     TestExecutionRuntimeContext, UserApplicationDescription,
 };
 use linera_views::{
-    memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES},
+    memory::MemoryContext,
     views::{View, ViewError},
 };
 
@@ -40,7 +40,7 @@ where
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, exec_runtime_context);
+        let context = MemoryContext::new(exec_runtime_context);
         Self::load(context)
             .await
             .expect("Loading from memory should work")

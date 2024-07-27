@@ -3,8 +3,9 @@
 
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
-use async_lock::{RwLock};
+use async_lock::{RwLock, RwLockWriteGuardArc};
 use futures::FutureExt as _;
+use linera_base::sync::Lazy;
 use thiserror::Error;
 
 use crate::{
@@ -16,8 +17,6 @@ use crate::{
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
-use linera_base::sync::Lazy;
-use async_lock::RwLockWriteGuardArc;
 
 /// The data is serialized in memory just like for RocksDB / DynamoDB
 /// The analog of the database is the BTreeMap
@@ -27,7 +26,8 @@ pub type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 pub type NamespaceMemoryStore = BTreeMap<String, Arc<RwLock<MemoryStoreMap>>>;
 
 /// The global variables of the Namespace memory stores
-static MEMORY_STORES: Lazy<RwLock<NamespaceMemoryStore>> = Lazy::new(|| RwLock::new(NamespaceMemoryStore::new()));
+static MEMORY_STORES: Lazy<RwLock<NamespaceMemoryStore>> =
+    Lazy::new(|| RwLock::new(NamespaceMemoryStore::new()));
 
 /// The initial configuration of the system
 #[derive(Debug)]
@@ -167,9 +167,13 @@ impl AdminKeyValueStore for MemoryStore {
         let max_stream_queries = config.common_config.max_stream_queries;
         let namespace_memory_store = MEMORY_STORES.read().await;
         let namespace = namespace.to_string();
-        let store = namespace_memory_store.get(&namespace)
+        let store = namespace_memory_store
+            .get(&namespace)
             .ok_or(MemoryStoreError::NotExistentNamespace)?;
-        let store = store.clone().try_write_arc().ok_or(MemoryStoreError::TryLockError)?;
+        let store = store
+            .clone()
+            .try_write_arc()
+            .ok_or(MemoryStoreError::TryLockError)?;
         let store = Arc::new(RwLock::new(store));
         Ok(MemoryStore {
             store,
@@ -210,18 +214,24 @@ impl KeyValueStore for MemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Creates a test config for the memory store
+pub fn test_memory_store_config() -> MemoryStoreConfig {
+    let max_stream_queries = TEST_MEMORY_MAX_STREAM_QUERIES;
+    let common_config = CommonStoreConfig {
+        max_concurrent_queries: None,
+        max_stream_queries,
+        cache_size: 1000,
+    };
+    MemoryStoreConfig { common_config }
+}
+
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
 pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
-    pub fn new(max_stream_queries: usize, extra: E) -> Self {
-        let common_config = CommonStoreConfig {
-            max_concurrent_queries: None,
-            max_stream_queries,
-            cache_size: 1000,
-        };
-        let config = MemoryStoreConfig { common_config };
+    pub fn new(extra: E) -> Self {
+        let config = test_memory_store_config();
         let namespace = "linera";
         let store = MemoryStore::connect(&config, namespace)
             .now_or_never()
@@ -240,7 +250,7 @@ impl<E> MemoryContext<E> {
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
 pub fn create_memory_context() -> MemoryContext<()> {
-    MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ())
+    MemoryContext::new(())
 }
 
 /// Creates a test memory client for working.

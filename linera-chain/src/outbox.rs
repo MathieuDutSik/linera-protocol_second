@@ -3,7 +3,7 @@
 
 use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
-use linera_views::memory::{MemoryContext, TEST_MEMORY_MAX_STREAM_QUERIES};
+use linera_views::memory::MemoryContext;
 use linera_views::{
     common::Context,
     queue_view::QueueView,
@@ -79,7 +79,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let context = MemoryContext::new(TEST_MEMORY_MAX_STREAM_QUERIES, ());
+        let context = MemoryContext::new(());
         Self::load(context)
             .await
             .expect("Loading from memory should work")
