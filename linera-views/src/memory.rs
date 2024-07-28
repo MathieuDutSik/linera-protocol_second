@@ -13,7 +13,7 @@ use crate::{
         get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    test_utils::generate_test_namespace,
+    namespace::generate_test_namespace,
     value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };

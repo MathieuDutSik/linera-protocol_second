@@ -106,6 +106,9 @@ pub mod collection_view;
 /// Helper definitions for in-memory storage.
 pub mod memory;
 
+/// The `namespace` generation code
+pub mod namespace;
+
 /// The LRU (least recently used) caching.
 pub mod lru_caching;
 

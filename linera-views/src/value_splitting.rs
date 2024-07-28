@@ -13,7 +13,7 @@ use crate::{
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
-    test_utils::generate_test_namespace,
+    namespace::generate_test_namespace,
 };
 
 /// Data type indicating that the database is not consistent
