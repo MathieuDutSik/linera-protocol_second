@@ -12,8 +12,8 @@ use crate::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    test_utils::generate_test_namespace,
     memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
+    test_utils::generate_test_namespace,
 };
 
 /// Data type indicating that the database is not consistent
@@ -418,7 +418,8 @@ impl TestMemoryStoreInternal {
         let config = MemoryStoreConfig { common_config };
         let namespace = generate_test_namespace();
         let store = MemoryStore::maybe_create_and_connect(&config, &namespace)
-            .await.unwrap();
+            .await
+            .unwrap();
         TestMemoryStoreInternal { store }
     }
 }

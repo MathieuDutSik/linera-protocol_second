@@ -6,14 +6,15 @@ use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use async_lock::{RwLock, RwLockWriteGuardArc};
 use linera_base::sync::Lazy;
 use thiserror::Error;
+
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
         get_interval, AdminKeyValueStore, CommonStoreConfig, Context, ContextFromStore,
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
-    value_splitting::DatabaseConsistencyError,
     test_utils::generate_test_namespace,
+    value_splitting::DatabaseConsistencyError,
     views::ViewError,
 };
 
@@ -233,7 +234,8 @@ impl<E> MemoryContext<E> {
         let config = test_memory_store_config();
         let namespace = generate_test_namespace();
         let store = MemoryStore::maybe_create_and_connect(&config, &namespace)
-            .await.unwrap();
+            .await
+            .unwrap();
         let base_key = Vec::new();
         Self {
             store,
@@ -260,7 +262,8 @@ pub async fn create_memory_store_stream_queries(max_stream_queries: usize) -> Me
     let config = MemoryStoreConfig { common_config };
     let namespace = generate_test_namespace();
     MemoryStore::maybe_create_and_connect(&config, &namespace)
-        .await.unwrap()
+        .await
+        .unwrap()
 }
 
 /// Creates a test memory store for working.
