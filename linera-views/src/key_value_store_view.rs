@@ -311,7 +311,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   let total_size = view.total_size();
     ///   assert_eq!(total_size, SizeData::default());
@@ -328,7 +328,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -398,7 +398,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -429,7 +429,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -498,7 +498,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -527,7 +527,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -551,7 +551,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -575,7 +575,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![0]).await.unwrap();
     ///   view.insert(vec![0,2], vec![0]).await.unwrap();
@@ -599,7 +599,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![42]));
@@ -628,7 +628,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   assert!(view.contains_key(&[0,1]).await.unwrap());
@@ -657,7 +657,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   let keys = vec![vec![0,1], vec![0,2]];
@@ -699,7 +699,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![42]).await.unwrap();
     ///   assert_eq!(view.multi_get(vec![vec![0,1], vec![0,2]]).await.unwrap(), vec![Some(vec![42]), None]);
@@ -743,7 +743,7 @@ where
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use linera_views::batch::Batch;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.insert(vec![3,4], vec![42]).await.unwrap();
@@ -826,7 +826,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   assert_eq!(view.get(&[0,1]).await.unwrap(), Some(vec![34]));
@@ -844,7 +844,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.remove(vec![0,1]).await.unwrap();
@@ -863,7 +863,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.remove_by_prefix(vec![0]).await.unwrap();
@@ -882,7 +882,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.insert(vec![3,4], vec![42]).await.unwrap();
@@ -953,7 +953,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::key_value_store_view::KeyValueStoreView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut view = KeyValueStoreView::load(context).await.unwrap();
     ///   view.insert(vec![0,1], vec![34]).await.unwrap();
     ///   view.insert(vec![3,4], vec![42]).await.unwrap();
@@ -1183,7 +1183,7 @@ pub type KeyValueStoreMemoryContext<E> = ContextFromStore<E, ViewContainer<Memor
 impl<E> KeyValueStoreMemoryContext<E> {
     /// Creates a [`KeyValueStoreMemoryContext`].
     pub async fn new(base_key: Vec<u8>, extra: E) -> Result<Self, ViewError> {
-        let context = MemoryContext::new(());
+        let context = MemoryContext::new(()).await;
         let store = ViewContainer::new(context).await?;
         Ok(Self {
             store,

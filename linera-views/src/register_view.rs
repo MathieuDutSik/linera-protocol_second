@@ -136,7 +136,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut register = RegisterView::<_,u32>::load(context).await.unwrap();
     ///   let value = register.get();
     ///   assert_eq!(*value, 0);
@@ -155,7 +155,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut register = RegisterView::load(context).await.unwrap();
     ///   register.set(5);
     ///   let value = register.get();
@@ -184,7 +184,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::register_view::RegisterView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut register : RegisterView<_,u32> = RegisterView::load(context).await.unwrap();
     ///   let value = register.get_mut();
     ///   assert_eq!(*value, 0);

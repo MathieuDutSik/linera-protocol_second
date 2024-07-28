@@ -206,7 +206,7 @@ impl TestContextFactory for MemoryContextFactory {
     type Context = MemoryContext<()>;
 
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        Ok(create_memory_context())
+        Ok(create_memory_context().await)
     }
 }
 
@@ -296,7 +296,7 @@ async fn test_clone_includes_staged_changes<V>(
 where
     V: TestView,
 {
-    let context = create_memory_context();
+    let context = create_memory_context().await;
     let mut original = V::load(context).await?;
     let original_state = original.stage_initial_changes().await?;
 
@@ -320,7 +320,7 @@ async fn test_original_and_clone_stage_changes_separately<V>(
 where
     V: TestView,
 {
-    let context = create_memory_context();
+    let context = create_memory_context().await;
     let mut original = V::load(context).await?;
     original.stage_initial_changes().await?;
 
@@ -344,7 +344,7 @@ where
 /// Otherwise `rollback` may set the cached staged hash value to an incorrect value.
 #[tokio::test]
 async fn test_clearing_of_cached_stored_hash() -> anyhow::Result<()> {
-    let context = create_memory_context();
+    let context = create_memory_context().await;
     let mut view = HashedRegisterView::<_, String>::load(context.clone()).await?;
 
     let empty_hash = view.hash().await?;

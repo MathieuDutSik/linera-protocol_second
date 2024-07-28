@@ -3,7 +3,6 @@
 
 use std::fmt::Debug;
 
-use futures::FutureExt as _;
 use linera_base::ensure;
 use thiserror::Error;
 
@@ -13,6 +12,7 @@ use crate::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
         KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
+    test_utils::generate_test_namespace,
     memory::{MemoryStore, MemoryStoreConfig, MemoryStoreError, TEST_MEMORY_MAX_STREAM_QUERIES},
 };
 
@@ -345,12 +345,6 @@ pub struct TestMemoryStoreInternal {
     store: MemoryStore,
 }
 
-impl Default for TestMemoryStoreInternal {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ReadableKeyValueStore<MemoryStoreError> for TestMemoryStoreInternal {
     const MAX_KEY_SIZE: usize = usize::MAX;
     type Keys = Vec<Vec<u8>>;
@@ -415,18 +409,16 @@ impl KeyValueStore for TestMemoryStoreInternal {
 
 impl TestMemoryStoreInternal {
     /// Creates a `TestMemoryStoreInternal`
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let common_config = CommonStoreConfig {
             max_concurrent_queries: None,
             max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
             cache_size: 1000,
         };
         let config = MemoryStoreConfig { common_config };
-        let namespace = "linera";
-        let store = MemoryStore::connect(&config, namespace)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let namespace = generate_test_namespace();
+        let store = MemoryStore::maybe_create_and_connect(&config, &namespace)
+            .await.unwrap();
         TestMemoryStoreInternal { store }
     }
 }
@@ -495,16 +487,10 @@ impl KeyValueStore for TestMemoryStore {
 
 impl TestMemoryStore {
     /// Creates a `TestMemoryStore` from the guard
-    pub fn new() -> Self {
-        let store = TestMemoryStoreInternal::new();
+    pub async fn new() -> Self {
+        let store = TestMemoryStoreInternal::new().await;
         let store = ValueSplittingStore::new(store);
         TestMemoryStore { store }
-    }
-}
-
-impl Default for TestMemoryStore {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -513,8 +499,8 @@ pub type TestMemoryContext<E> = ContextFromStore<E, TestMemoryStore>;
 
 impl<E> TestMemoryContext<E> {
     /// Creates a [`TestMemoryContext`].
-    pub fn new(extra: E) -> Self {
-        let store = TestMemoryStore::new();
+    pub async fn new(extra: E) -> Self {
+        let store = TestMemoryStore::new().await;
         let base_key = Vec::new();
         Self {
             store,
@@ -527,13 +513,13 @@ impl<E> TestMemoryContext<E> {
 /// Provides a `TestMemoryContext<()>` that can be used for tests.
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
-pub fn create_test_memory_context() -> TestMemoryContext<()> {
-    TestMemoryContext::new(())
+pub async fn create_test_memory_context() -> TestMemoryContext<()> {
+    TestMemoryContext::new(()).await
 }
 
 /// Creates a `TestMemoryStore` for working.
-pub fn create_test_memory_store() -> TestMemoryStore {
-    TestMemoryStore::new()
+pub async fn create_test_memory_store() -> TestMemoryStore {
+    TestMemoryStore::new().await
 }
 
 /// An implementation of [`crate::common::Context`] that stores all values in memory.
@@ -541,8 +527,8 @@ pub type TestMemoryContextInternal<E> = ContextFromStore<E, TestMemoryStoreInter
 
 impl<E> TestMemoryContextInternal<E> {
     /// Creates a [`TestMemoryContextInternal`].
-    pub fn new(extra: E) -> Self {
-        let store = TestMemoryStoreInternal::new();
+    pub async fn new(extra: E) -> Self {
+        let store = TestMemoryStoreInternal::new().await;
         let base_key = Vec::new();
         Self {
             store,
@@ -553,13 +539,13 @@ impl<E> TestMemoryContextInternal<E> {
 }
 
 /// Provides a `TestMemoryStoreInternal<()>` that can be used for tests.
-pub fn create_test_memory_store_internal() -> TestMemoryStoreInternal {
-    TestMemoryStoreInternal::new()
+pub async fn create_test_memory_store_internal() -> TestMemoryStoreInternal {
+    TestMemoryStoreInternal::new().await
 }
 
 /// Provides a `TestMemoryContextInternal<()>` that can be used for tests.
-pub fn create_test_memory_context_internal() -> TestMemoryContextInternal<()> {
-    TestMemoryContextInternal::new(())
+pub async fn create_test_memory_context_internal() -> TestMemoryContextInternal<()> {
+    TestMemoryContextInternal::new(()).await
 }
 
 #[cfg(test)]
@@ -578,7 +564,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
-        let store = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal().await;
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         assert!(MAX_LEN > 10);
         let big_store = ValueSplittingStore::new(store.clone());
@@ -604,7 +590,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting2_testing_splitting() {
-        let store = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal().await;
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
@@ -641,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_splitting3_write_and_delete() {
-        let store = create_test_memory_store_internal();
+        let store = create_test_memory_store_internal().await;
         const MAX_LEN: usize = TestMemoryStoreInternal::MAX_VALUE_SIZE;
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];

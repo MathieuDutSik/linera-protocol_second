@@ -151,7 +151,7 @@ enum ComplexIndex {
 async fn create_populated_reentrant_collection_view(
 ) -> ReentrantCollectionView<MemoryContext<()>, ComplexIndex, RegisterView<MemoryContext<()>, String>>
 {
-    let context = create_memory_context();
+    let context = create_memory_context().await;
     let mut view: ReentrantCollectionView<_, ComplexIndex, RegisterView<_, String>> =
         ReentrantCollectionView::load(context)
             .await

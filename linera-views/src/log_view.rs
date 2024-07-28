@@ -156,7 +156,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut log = LogView::load(context).await.unwrap();
     ///   log.push(34);
     /// # })
@@ -171,7 +171,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut log = LogView::load(context).await.unwrap();
     ///   log.push(34);
     ///   log.push(42);
@@ -204,7 +204,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut log = LogView::load(context).await.unwrap();
     ///   log.push(34);
     ///   assert_eq!(log.get(0).await.unwrap(), Some(34));
@@ -228,7 +228,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut log = LogView::load(context).await.unwrap();
     ///   log.push(34);
     ///   log.push(42);
@@ -287,7 +287,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::log_view::LogView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut log = LogView::load(context).await.unwrap();
     ///   log.push(34);
     ///   log.push(42);

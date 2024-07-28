@@ -85,7 +85,7 @@ impl StateStore for MemoryTestStore {
     async fn new() -> Self {
         let namespace = generate_test_namespace();
         let config = test_memory_store_config();
-        let store = MemoryStore::connect(&config, &namespace).await.unwrap();
+        let store = MemoryStore::maybe_create_and_connect(&config, &namespace).await.unwrap();
         MemoryTestStore {
             accessed_chains: BTreeSet::new(),
             store,
@@ -119,7 +119,7 @@ impl StateStore for KeyValueStoreTestStore {
     async fn new() -> Self {
         let namespace = generate_test_namespace();
         let config = test_memory_store_config();
-        let store = MemoryStore::connect(&config, &namespace).await.unwrap();
+        let store = MemoryStore::maybe_create_and_connect(&config, &namespace).await.unwrap();
         let context = MemoryContext {
             store,
             base_key: Vec::new(),
@@ -160,7 +160,7 @@ impl StateStore for LruMemoryStore {
     async fn new() -> Self {
         let namespace = generate_test_namespace();
         let config = test_memory_store_config();
-        let store = MemoryStore::connect(&config, &namespace).await.unwrap();
+        let store = MemoryStore::maybe_create_and_connect(&config, &namespace).await.unwrap();
         let n = 1000;
         let store = LruCachingStore::new(store, n);
         LruMemoryStore {
@@ -693,7 +693,7 @@ pub struct ByteMapStateView<C> {
 
 #[tokio::test]
 async fn test_byte_map_view() -> Result<()> {
-    let context = create_memory_context();
+    let context = create_memory_context().await;
     {
         let mut view = ByteMapStateView::load(context.clone()).await?;
         view.map.insert(vec![0, 1], 5);
@@ -890,7 +890,7 @@ async fn test_collection_removal() -> Result<()> {
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_memory_context().await;
 
     // Write a dummy entry into the collection.
     let mut collection = CollectionViewType::load(context.clone()).await?;
@@ -921,7 +921,7 @@ async fn test_removal_api_first_second_condition(
     type EntryType = HashedRegisterView<MemoryContext<()>, u8>;
     type CollectionViewType = HashedCollectionView<MemoryContext<()>, u8, EntryType>;
 
-    let context = create_memory_context();
+    let context = create_memory_context().await;
 
     // First add an entry `1` with value `100` and commit
     let mut collection: CollectionViewType = HashedCollectionView::load(context.clone()).await?;

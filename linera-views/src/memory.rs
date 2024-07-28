@@ -4,10 +4,8 @@
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use async_lock::{RwLock, RwLockWriteGuardArc};
-use futures::FutureExt as _;
 use linera_base::sync::Lazy;
 use thiserror::Error;
-
 use crate::{
     batch::{Batch, DeletePrefixExpander, WriteOperation},
     common::{
@@ -15,6 +13,7 @@ use crate::{
         KeyIterable, KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
     },
     value_splitting::DatabaseConsistencyError,
+    test_utils::generate_test_namespace,
     views::ViewError,
 };
 
@@ -230,13 +229,11 @@ pub type MemoryContext<E> = ContextFromStore<E, MemoryStore>;
 
 impl<E> MemoryContext<E> {
     /// Creates a [`MemoryContext`].
-    pub fn new(extra: E) -> Self {
+    pub async fn new(extra: E) -> Self {
         let config = test_memory_store_config();
-        let namespace = "linera";
-        let store = MemoryStore::connect(&config, namespace)
-            .now_or_never()
-            .unwrap()
-            .unwrap();
+        let namespace = generate_test_namespace();
+        let store = MemoryStore::maybe_create_and_connect(&config, &namespace)
+            .await.unwrap();
         let base_key = Vec::new();
         Self {
             store,
@@ -249,28 +246,26 @@ impl<E> MemoryContext<E> {
 /// Provides a `MemoryContext<()>` that can be used for tests.
 /// It is not named create_memory_test_context because it is massively
 /// used and so we want to have a short name.
-pub fn create_memory_context() -> MemoryContext<()> {
-    MemoryContext::new(())
+pub async fn create_memory_context() -> MemoryContext<()> {
+    MemoryContext::new(()).await
 }
 
 /// Creates a test memory client for working.
-pub fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemoryStore {
+pub async fn create_memory_store_stream_queries(max_stream_queries: usize) -> MemoryStore {
     let common_config = CommonStoreConfig {
         max_concurrent_queries: None,
         max_stream_queries,
         cache_size: 1000,
     };
     let config = MemoryStoreConfig { common_config };
-    let namespace = "linera";
-    MemoryStore::connect(&config, namespace)
-        .now_or_never()
-        .unwrap()
-        .unwrap()
+    let namespace = generate_test_namespace();
+    MemoryStore::maybe_create_and_connect(&config, &namespace)
+        .await.unwrap()
 }
 
 /// Creates a test memory store for working.
-pub fn create_memory_store() -> MemoryStore {
-    create_memory_store_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES)
+pub async fn create_memory_store() -> MemoryStore {
+    create_memory_store_stream_queries(TEST_MEMORY_MAX_STREAM_QUERIES).await
 }
 
 /// The error type for [`MemoryContext`].

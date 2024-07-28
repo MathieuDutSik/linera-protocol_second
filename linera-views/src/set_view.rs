@@ -136,7 +136,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
     ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), true);
@@ -151,7 +151,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.remove(vec![0,1]);
     ///   assert_eq!(set.contains(&[0,1]).await.unwrap(), false);
@@ -182,7 +182,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
     ///   assert_eq!(set.contains(&[34]).await.unwrap(), false);
@@ -215,7 +215,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
     ///   set.insert(vec![0,2]);
@@ -239,7 +239,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
     ///   set.insert(vec![0,2]);
@@ -302,7 +302,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::ByteSetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = ByteSetView::load(context).await.unwrap();
     ///   set.insert(vec![0,1]);
     ///   set.insert(vec![0,2]);
@@ -434,7 +434,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
     ///   assert_eq!(set.indices().await.unwrap().len(), 1);
@@ -455,7 +455,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.remove(&(34 as u32));
     ///   assert_eq!(set.indices().await.unwrap().len(), 0);
@@ -488,7 +488,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
     ///   assert_eq!(set.contains(&(34 as u32)).await.unwrap(), true);
@@ -516,7 +516,7 @@ where
     /// # tokio_test::block_on(async {
     /// # use linera_views::{memory::create_memory_context, set_view::SetView};
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set : SetView<_,u32> = SetView::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
     ///   assert_eq!(set.indices().await.unwrap(), vec![34 as u32]);
@@ -540,7 +540,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
     ///   set.insert(&(37 as u32));
@@ -573,7 +573,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::SetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = SetView::<_,u32>::load(context).await.unwrap();
     ///   set.insert(&(34 as u32));
     ///   set.insert(&(37 as u32));
@@ -697,7 +697,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
     ///   assert_eq!(set.indices().await.unwrap().len(), 1);
@@ -719,7 +719,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.remove(&(34 as u128));
     ///   assert_eq!(set.indices().await.unwrap().len(), 0);
@@ -753,7 +753,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
     ///   assert_eq!(set.contains(&(34 as u128)).await.unwrap(), true);
@@ -783,7 +783,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
     ///   set.insert(&(37 as u128));
@@ -808,7 +808,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
     ///   set.insert(&(37 as u128));
@@ -841,7 +841,7 @@ where
     /// # use linera_views::memory::create_memory_context;
     /// # use linera_views::set_view::CustomSetView;
     /// # use crate::linera_views::views::View;
-    /// # let context = create_memory_context();
+    /// # let context = create_memory_context().await;
     ///   let mut set = CustomSetView::<_,u128>::load(context).await.unwrap();
     ///   set.insert(&(34 as u128));
     ///   set.insert(&(37 as u128));
