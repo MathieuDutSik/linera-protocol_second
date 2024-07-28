@@ -574,7 +574,7 @@ async fn main() {
     let common_config = CommonStoreConfig::default();
     let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
-            let store = create_memory_store_stream_queries(common_config.max_stream_queries);
+            let store = create_memory_store_stream_queries(common_config.max_stream_queries).await;
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }

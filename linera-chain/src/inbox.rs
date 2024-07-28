@@ -269,7 +269,7 @@ where
     ViewError: From<<MemoryContext<()> as linera_views::common::Context>::Error>,
 {
     pub async fn new() -> Self {
-        let context = MemoryContext::new(());
+        let context = MemoryContext::new(()).await;
         Self::load(context)
             .await
             .expect("Loading from memory should work")

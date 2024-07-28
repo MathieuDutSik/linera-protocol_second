@@ -102,7 +102,7 @@ impl SystemExecutionState {
             application_permissions,
         } = self;
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
-        let context = MemoryContext::new(extra);
+        let context = MemoryContext::new(extra).await;
         let mut view = ExecutionStateView::load(context)
             .await
             .expect("Loading from memory should work");
