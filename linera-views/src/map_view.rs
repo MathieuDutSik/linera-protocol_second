@@ -64,8 +64,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        from_bytes_option, get_interval, Context, CustomSerialize, DeletionSet, HasherOutput, KeyIterable,
-        KeyValueIterable, MIN_VIEW_TAG, SuffixClosedSetIterator, Update,
+        from_bytes_option, get_interval, Context, CustomSerialize, DeletionSet, HasherOutput,
+        KeyIterable, KeyValueIterable, SuffixClosedSetIterator, Update, MIN_VIEW_TAG,
     },
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
@@ -78,7 +78,7 @@ enum MapState<V> {
         deletion_set: DeletionSet,
     },
     SmallMap {
-	small_map: BTreeMap<Vec<u8>, V>,
+        small_map: BTreeMap<Vec<u8>, V>,
         stored_small_map: BTreeMap<Vec<u8>, V>,
         delete_storage_first: bool,
     },
@@ -114,17 +114,28 @@ where
         let map_state = match value {
             None => {
                 // No existing data, start with a small map
-                MapState::SmallMap { small_map: BTreeMap::new(), stored_small_map: BTreeMap::new(), delete_storage_first: false }
+                MapState::SmallMap {
+                    small_map: BTreeMap::new(),
+                    stored_small_map: BTreeMap::new(),
+                    delete_storage_first: false,
+                }
             }
             Some(option) => {
                 match option {
                     None => {
                         // Stored value is None, so it is a big map.
-                        MapState::BigMap { updates: BTreeMap::new(), deletion_set: DeletionSet::new() }
-                    },
+                        MapState::BigMap {
+                            updates: BTreeMap::new(),
+                            deletion_set: DeletionSet::new(),
+                        }
+                    }
                     Some(map) => {
                         // Stored value is Some(map), so we have a small map
-                        MapState::SmallMap { small_map: map.clone(), stored_small_map: map, delete_storage_first: false }
+                        MapState::SmallMap {
+                            small_map: map.clone(),
+                            stored_small_map: map,
+                            delete_storage_first: false,
+                        }
                     }
                 }
             }
@@ -140,11 +151,18 @@ where
 
     fn rollback(&mut self) {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 updates.clear();
                 deletion_set.rollback();
-            },
-            MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
+            }
+            MapState::SmallMap {
+                small_map,
+                stored_small_map,
+                delete_storage_first,
+            } => {
                 *small_map = stored_small_map.clone();
                 *delete_storage_first = false;
             }
@@ -153,19 +171,25 @@ where
 
     async fn has_pending_changes(&self) -> bool {
         match &self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
-                deletion_set.has_pending_changes() || !updates.is_empty()
-            },
-            MapState::SmallMap { small_map, delete_storage_first, stored_small_map } => {
-                *delete_storage_first || (!small_map.is_empty() && small_map != stored_small_map)
-            },
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => deletion_set.has_pending_changes() || !updates.is_empty(),
+            MapState::SmallMap {
+                small_map,
+                delete_storage_first,
+                stored_small_map,
+            } => *delete_storage_first || (!small_map.is_empty() && small_map != stored_small_map),
         }
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 if deletion_set.delete_storage_first {
                     delete_view = true;
                     batch.delete_key_prefix(self.context.base_key());
@@ -190,8 +214,12 @@ where
                     }
                 }
                 deletion_set.delete_storage_first = false;
-            },
-            MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
+            }
+            MapState::SmallMap {
+                small_map,
+                stored_small_map,
+                delete_storage_first,
+            } => {
                 if *delete_storage_first {
                     batch.delete_key_prefix(self.context.base_key());
                     delete_view = true;
@@ -203,21 +231,28 @@ where
                     *stored_small_map = small_map.clone();
                     delete_view = false;
                 }
-            },
+            }
         }
         Ok(delete_view)
     }
 
     fn clear(&mut self) {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 updates.clear();
                 deletion_set.clear();
-            },
-            MapState::SmallMap {small_map, delete_storage_first, .. } => {
+            }
+            MapState::SmallMap {
+                small_map,
+                delete_storage_first,
+                ..
+            } => {
                 small_map.clear();
                 *delete_storage_first = true;
-            },
+            }
         }
     }
 }
@@ -263,18 +298,23 @@ where
             MapState::SmallMap { small_map, .. } => {
                 small_map.insert(short_key, value);
                 small_map.len()
-            },
+            }
         };
         if crit_size >= LIMIT_SMALL_MAP {
             let MapState::SmallMap { small_map, .. } = &self.map_state else {
                 unreachable!()
             };
-            let updates = small_map.iter().map(|(key,value)| {
-                let value: V = value.clone();
-                (key.clone(), Update::Set(value))
-            })
-                .collect::<BTreeMap<Vec<u8>,Update<V>>>();
-            self.map_state = MapState::BigMap { updates, deletion_set: DeletionSet::new() };
+            let updates = small_map
+                .iter()
+                .map(|(key, value)| {
+                    let value: V = value.clone();
+                    (key.clone(), Update::Set(value))
+                })
+                .collect::<BTreeMap<Vec<u8>, Update<V>>>();
+            self.map_state = MapState::BigMap {
+                updates,
+                deletion_set: DeletionSet::new(),
+            };
         }
     }
 
@@ -292,17 +332,20 @@ where
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 if deletion_set.contains_prefix_of(&short_key) {
                     // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
                     updates.remove(&short_key);
                 } else {
                     updates.insert(short_key, Update::Removed);
                 }
-            },
+            }
             MapState::SmallMap { small_map, .. } => {
                 small_map.remove(&short_key);
-            },
+            }
         }
     }
 
@@ -322,7 +365,10 @@ where
     /// ```
     pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 let key_list = updates
                     .range(get_interval(key_prefix.clone()))
                     .map(|x| x.0.to_vec())
@@ -331,7 +377,7 @@ where
                     updates.remove(&key);
                 }
                 deletion_set.insert_key_prefix(key_prefix);
-            },
+            }
             MapState::SmallMap { small_map, .. } => {
                 let key_list = small_map
                     .range(get_interval(key_prefix.clone()))
@@ -340,7 +386,7 @@ where
                 for key in key_list {
                     small_map.remove(&key);
                 }
-            },
+            }
         }
     }
 
@@ -364,7 +410,10 @@ where
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
         match &self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 if let Some(update) = updates.get(short_key) {
                     let test = match update {
                         Update::Removed => false,
@@ -377,10 +426,8 @@ where
                 }
                 let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                 Ok(self.context.contains_key(&key).await?)
-            },
-            MapState::SmallMap { small_map, .. } => {
-                Ok(small_map.contains_key(short_key))
-            },
+            }
+            MapState::SmallMap { small_map, .. } => Ok(small_map.contains_key(short_key)),
         }
     }
 }
@@ -405,7 +452,10 @@ where
     /// ```
     pub async fn get(&self, short_key: &[u8]) -> Result<Option<V>, ViewError> {
         match &self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 if let Some(update) = updates.get(short_key) {
                     let value = match update {
                         Update::Removed => None,
@@ -418,10 +468,8 @@ where
                 }
                 let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                 Ok(self.context.read_value(&key).await?)
-            },
-            MapState::SmallMap { small_map, .. } => {
-                Ok(small_map.get(short_key).cloned())
-            },
+            }
+            MapState::SmallMap { small_map, .. } => Ok(small_map.get(short_key).cloned()),
         }
     }
 
@@ -442,7 +490,10 @@ where
     /// ```
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 let update = match updates.entry(short_key.to_vec()) {
                     Entry::Vacant(e) => {
                         if deletion_set.contains_prefix_of(short_key) {
@@ -462,10 +513,8 @@ where
                     Some(Update::Set(value)) => Some(value),
                     _ => None,
                 })
-            },
-            MapState::SmallMap { small_map, .. } => {
-                Ok(small_map.get_mut(short_key))
-            },
+            }
+            MapState::SmallMap { small_map, .. } => Ok(small_map.get_mut(short_key)),
         }
     }
 }
@@ -477,7 +526,13 @@ where
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// The big map case
-    async fn for_each_key_while_big<F>(context: &C, updates: &BTreeMap<Vec<u8>,Update<V>>, deletion_set: &DeletionSet, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    async fn for_each_key_while_big<F>(
+        context: &C,
+        updates: &BTreeMap<Vec<u8>, Update<V>>,
+        deletion_set: &DeletionSet,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
@@ -553,19 +608,22 @@ where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         match &self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 Self::for_each_key_while_big(&self.context, updates, deletion_set, f, prefix).await
-            },
+            }
             MapState::SmallMap { small_map, .. } => {
                 let prefix_len = prefix.len();
                 let small_map = small_map.range(get_interval(prefix.clone()));
-		for (key, _) in small_map {
+                for (key, _) in small_map {
                     if !f(&key[prefix_len..])? {
                         return Ok(());
                     }
                 }
                 Ok(())
-            },
+            }
         }
     }
 
@@ -693,7 +751,7 @@ where
     /// The big map case
     async fn for_each_key_value_while_big<F>(
         context: &C,
-        updates: &BTreeMap<Vec<u8>,Update<V>>,
+        updates: &BTreeMap<Vec<u8>, Update<V>>,
         deletion_set: &DeletionSet,
         mut f: F,
         prefix: Vec<u8>,
@@ -710,11 +768,7 @@ where
                 .range(get_interval(prefix.clone()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
             let base = context.base_index(&prefix);
-            for entry in context
-                .find_key_values_by_prefix(&base)
-                .await?
-                .iterator()
-            {
+            for entry in context.find_key_values_by_prefix(&base).await?.iterator() {
                 let (index, bytes) = entry?;
                 loop {
                     match update {
@@ -775,25 +829,33 @@ where
     ///   assert_eq!(part_keys.len(), 2);
     /// # })
     /// ```
-    pub async fn for_each_key_value_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub async fn for_each_key_value_while<F>(
+        &self,
+        mut f: F,
+        prefix: Vec<u8>,
+    ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
         match &self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
-                Self::for_each_key_value_while_big(&self.context, updates, deletion_set, f, prefix).await
-            },
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
+                Self::for_each_key_value_while_big(&self.context, updates, deletion_set, f, prefix)
+                    .await
+            }
             MapState::SmallMap { small_map, .. } => {
                 let prefix_len = prefix.len();
                 let small_map = small_map.range(get_interval(prefix.clone()));
-		for (key, value) in small_map {
+                for (key, value) in small_map {
                     let value = bcs::to_bytes(value)?;
                     if !f(&key[prefix_len..], &value)? {
                         return Ok(());
                     }
                 }
                 Ok(())
-            },
+            }
         }
     }
 
@@ -914,7 +976,10 @@ where
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
         match &mut self.map_state {
-            MapState::BigMap { updates, deletion_set } => {
+            MapState::BigMap {
+                updates,
+                deletion_set,
+            } => {
                 let update = match updates.entry(short_key.to_vec()) {
                     Entry::Vacant(e) if deletion_set.contains_prefix_of(short_key) => {
                         e.insert(Update::Set(V::default()))
@@ -939,18 +1004,14 @@ where
                     unreachable!()
                 };
                 Ok(value)
-            },
-            MapState::SmallMap { small_map, .. } => {
-                Ok(match small_map.entry(short_key.to_vec()) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(V::default())
-                    },
-                    Entry::Occupied(entry) => {
-                        let entry = entry.into_mut();
-                        &mut *entry
-                    },
-                })
-            },
+            }
+            MapState::SmallMap { small_map, .. } => Ok(match small_map.entry(short_key.to_vec()) {
+                Entry::Vacant(entry) => entry.insert(V::default()),
+                Entry::Occupied(entry) => {
+                    let entry = entry.into_mut();
+                    &mut *entry
+                }
+            }),
         }
     }
 }
