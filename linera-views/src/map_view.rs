@@ -47,6 +47,9 @@ static MAP_VIEW_HASH_RUNTIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     .expect("Histogram can be created")
 });
 
+/// The threshold for choosing between small maps stored as a single value
+const LIMIT_SMALL_MAP: usize = 1000;
+
 use std::{
     borrow::Borrow,
     collections::{btree_map::Entry, BTreeMap},
@@ -61,15 +64,15 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
     batch::Batch,
     common::{
-        get_interval, Context, CustomSerialize, DeletionSet, HasherOutput, KeyIterable,
-        KeyValueIterable, SuffixClosedSetIterator, Update,
+        from_bytes_option, get_interval, Context, CustomSerialize, DeletionSet, HasherOutput, KeyIterable,
+        KeyValueIterable, MIN_VIEW_TAG, SuffixClosedSetIterator, Update,
     },
     hashable_wrapper::WrappedHashableContainerView,
     views::{ClonableView, HashableView, Hasher, View, ViewError},
 };
 
 #[derive(Debug, Clone)]
-enum MapState {
+enum MapState<V> {
     BigMap {
         updates: BTreeMap<Vec<u8>, Update<V>>,
         deletion_set: DeletionSet,
@@ -85,7 +88,7 @@ enum MapState {
 #[derive(Debug)]
 pub struct ByteMapView<C, V> {
     context: C,
-    map_state: MapState,
+    map_state: MapState<V>,
 }
 
 #[async_trait]
@@ -93,7 +96,7 @@ impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Send + Sync + Serialize,
+    V: Send + Sync + Serialize + DeserializeOwned + Clone,
 {
     const NUM_INIT_KEYS: usize = 0;
 
@@ -106,15 +109,23 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let small_map = match from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?) {
+        let value = values.first().ok_or(ViewError::PostLoadValuesError)?;
+        let value = from_bytes_option::<Option<BTreeMap<Vec<u8>, V>>, _>(value)?;
+        let map_state = match value {
             None => {
-                MapState::BigMap { updates: BTreeMap::new(), deletion_set: DeletionSet::new() },
+                // No existing data, start with a small map
+                MapState::SmallMap { small_map: BTreeMap::new(), stored_small_map: BTreeMap::new(), delete_storage_first: false }
             }
-            Some(map) {
-                MapState::SmallMap { small_map: map.clone(), stored_small_map: map, delete_storage_first: false }
+            Some(option) => {
+                match option {
+                    None => MapState::BigMap { updates: BTreeMap::new(), deletion_set: DeletionSet::new() },
+                    Some(map) => {
+                        MapState::SmallMap { small_map: map.clone(), stored_small_map: map, delete_storage_first: false }
+                    }
+                }
             }
         };
-        Ok(Self { context, small_map })
+        Ok(Self { context, map_state })
     }
 
     async fn load(context: C) -> Result<Self, ViewError> {
@@ -124,37 +135,37 @@ where
     }
 
     fn rollback(&mut self) {
-        match self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 updates.clear();
                 deletion_set.rollback();
             },
             MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
-                small_map = stored_small_map.clone();
-                delete_storage_first = false;
+                *small_map = stored_small_map.clone();
+                *delete_storage_first = false;
             }
         }
     }
 
     async fn has_pending_changes(&self) -> bool {
-        match self.map_state {
+        match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 deletion_set.has_pending_changes() || !updates.is_empty()
             },
-            MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
-                delete_storage_first || small_map != stored_small_map
+            MapState::SmallMap { small_map, delete_storage_first, .. } => {
+                *delete_storage_first || small_map.len() > 0
             },
         }
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
-        match self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 if deletion_set.delete_storage_first {
                     delete_view = true;
                     batch.delete_key_prefix(self.context.base_key());
-                    for (index, update) in mem::take(&mut updates) {
+                    for (index, update) in mem::take(updates) {
                         if let Update::Set(value) = update {
                             let key = self.context.base_index(&index);
                             batch.put_key_value(key, &value)?;
@@ -166,7 +177,7 @@ where
                         let key = self.context.base_index(&index);
                         batch.delete_key_prefix(key);
                     }
-                    for (index, update) in mem::take(&mut updates) {
+                    for (index, update) in mem::take(updates) {
                         let key = self.context.base_index(&index);
                         match update {
                             Update::Removed => batch.delete_key(key),
@@ -174,19 +185,19 @@ where
                         }
                     }
                 }
-                self.deletion_set.delete_storage_first = false;
+                deletion_set.delete_storage_first = false;
             },
             MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
-                if delete_storage_first {
+                if *delete_storage_first {
                     batch.delete_key(self.context.base_key());
                     delete_view = true;
                 }
-                if small_map.size() > 0 {
-                    let key = context.base_tag(KeyTag::SmallMap as u8);
-                    batch.put_key_value(key, &Some(small_map));
-                    stored_small_map = small_map.clone();
+                if small_map.len() > 0 {
+                    let key = self.context.base_tag(KeyTag::SmallMap as u8);
+                    batch.put_key_value(key, &Some(small_map.clone()));
+                    *stored_small_map = small_map.clone();
                 }
-                delete_storage_first = false;
+                *delete_storage_first = false;
             },
         }
         Ok(delete_view)
@@ -201,12 +212,12 @@ impl<C, V> ClonableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Clone + Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteMapView {
             context: self.context.clone(),
-            small_map: self.small_map.clone(),
+            map_state: self.map_state.clone(),
         })
     }
 }
@@ -215,6 +226,7 @@ impl<C, V> ByteMapView<C, V>
 where
     C: Context,
     ViewError: From<C::Error>,
+    V: Clone,
 {
     /// Inserts or resets the value of a key of the map.
     /// ```rust
@@ -229,7 +241,7 @@ where
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>, value: V) {
-        let crit_size = match self.map_state {
+        let crit_size = match &mut self.map_state {
             MapState::BigMap { updates, .. } => {
                 updates.insert(short_key, Update::Set(value));
                 0
@@ -240,10 +252,14 @@ where
             },
         };
         if crit_size >= LIMIT_SMALL_MAP {
-            let MapState::SmallMap { small_map, .. } = self.map_state else {
+            let MapState::SmallMap { small_map, .. } = &self.map_state else {
                 unreachable!()
             };
-            let updates = small_map.into_iter().map(|(key,value) (key, Update::Set(value))).collect::<BTreeMap<_,_>>();
+            let updates = small_map.into_iter().map(|(key,value)| {
+                let value: V = value.clone();
+                (key.clone(), Update::Set(value))
+            })
+                .collect::<BTreeMap<Vec<u8>,Update<V>>>();
             self.map_state = MapState::BigMap { updates, deletion_set: DeletionSet::new() };
         }
     }
@@ -261,9 +277,9 @@ where
     /// # })
     /// ```
     pub fn remove(&mut self, short_key: Vec<u8>) {
-        match self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                if self.deletion_set.contains_prefix_of(&short_key) {
+                if deletion_set.contains_prefix_of(&short_key) {
                     // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
                     updates.remove(&short_key);
                 } else {
@@ -291,7 +307,7 @@ where
     /// # })
     /// ```
     pub fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) {
-        match self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 let key_list = updates
                     .range(get_interval(key_prefix.clone()))
@@ -302,7 +318,7 @@ where
                 }
                 deletion_set.insert_key_prefix(key_prefix);
             },
-            MapState::SmallMap { small_map, stored_small_map } => {
+            MapState::SmallMap { small_map, .. } => {
                 let key_list = small_map
                     .range(get_interval(key_prefix.clone()))
                     .map(|x| x.0.to_vec())
@@ -333,7 +349,7 @@ where
     /// # })
     /// ```
     pub async fn contains_key(&self, short_key: &[u8]) -> Result<bool, ViewError> {
-        match self.map_state {
+        match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 if let Some(update) = updates.get(short_key) {
                     let test = match update {
@@ -349,7 +365,7 @@ where
                 Ok(self.context.contains_key(&key).await?)
             },
             MapState::SmallMap { small_map, .. } => {
-                Ok(small_map.contains(short_key))
+                Ok(small_map.contains_key(short_key))
             },
         }
     }
@@ -374,7 +390,7 @@ where
     /// # })
     /// ```
     pub async fn get(&self, short_key: &[u8]) -> Result<Option<V>, ViewError> {
-        match self.map_state {
+        match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 if let Some(update) = updates.get(short_key) {
                     let value = match update {
@@ -390,7 +406,7 @@ where
                 Ok(self.context.read_value(&key).await?)
             },
             MapState::SmallMap { small_map, .. } => {
-                Ok(small_map.get(short_key))
+                Ok(small_map.get(short_key).cloned())
             },
         }
     }
@@ -411,16 +427,16 @@ where
     /// # })
     /// ```
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
-        let self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                let update = match updates.entry(short_key.to_vec()) {
+                let update = match &mut updates.entry(short_key.to_vec()) {
                     Entry::Vacant(e) => {
                         if deletion_set.contains_prefix_of(short_key) {
                             None
                         } else {
                             let key = self.context.base_index(short_key);
                             let value = self.context.read_value(&key).await?;
-                            value.map(|value| e.insert(Update::Set(value)))
+                            value.map(|x| e.insert(Update::Set(x)))
                         }
                     }
                     Entry::Occupied(e) => Some(e.into_mut()),
@@ -444,7 +460,7 @@ where
     V: Sync + Serialize + DeserializeOwned + 'static,
 {
     /// The big map case
-    async fn for_each_key_while_big<F>(context: &C, updates: &BTreeMap<Vec<u8>,V>, deletion_set: &DeletionSet, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    async fn for_each_key_while_big<F>(context: &C, updates: &BTreeMap<Vec<u8>,Update<V>>, deletion_set: &DeletionSet, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
@@ -519,11 +535,11 @@ where
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
-        match self.map_state {
-            MapState::BigMap { updates, deleted_prefixes } => {
-                Self::for_each_key_while_big(self.context, self.updates, self.deletion_set, f, prefix).await
+        match &self.map_state {
+            MapState::BigMap { updates, deletion_set } => {
+                Self::for_each_key_while_big(&self.context, &updates, &deletion_set, f, prefix).await
             },
-            MapState::SmallMap { small_map, stored_small_map } => {
+            MapState::SmallMap { small_map, .. } => {
 		for (key, _) in small_map {
                     if !f(key)? {
                         return Ok(());
@@ -658,7 +674,7 @@ where
     /// The big map case
     async fn for_each_key_value_while_big<F>(
         context: &C,
-        updates: &BTreeMap<Vec<u8>,V>,
+        updates: &BTreeMap<Vec<u8>,Update<V>>,
         deletion_set: &DeletionSet,
         mut f: F,
         prefix: Vec<u8>,
@@ -744,14 +760,14 @@ where
     where
         F: FnMut(&[u8], &[u8]) -> Result<bool, ViewError> + Send,
     {
-        match self.map_state {
+        match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                Self::for_each_key_value_while_big(self.context, self.updates, self.deletion_set, f, prefix).await
+                Self::for_each_key_value_while_big(&self.context, &updates, &deletion_set, f, prefix).await
             },
-            MapState::SmallMap { small_map, stored_small_map } => {
+            MapState::SmallMap { small_map, .. } => {
 		for (key, value) in small_map {
                     let value = bcs::to_bytes(value)?;
-                    if !f(key, &value)? {
+                    if !f(&key, &value)? {
                         return Ok(());
                     }
                 }
@@ -876,7 +892,7 @@ where
     /// # })
     /// ```
     pub async fn get_mut_or_default(&mut self, short_key: &[u8]) -> Result<&mut V, ViewError> {
-        match self.map_state {
+        match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
                 let update = match updates.entry(short_key.to_vec()) {
                     Entry::Vacant(e) if deletion_set.contains_prefix_of(short_key) => {
@@ -904,15 +920,15 @@ where
                 Ok(value)
             },
             MapState::SmallMap { small_map, .. } => {
-                match small_map.entry(short_key) {
+                Ok(match small_map.entry(short_key.to_vec()) {
                     Entry::Vacant(entry) => {
                         entry.insert(V::default())
                     },
                     Entry::Occupied(entry) => {
-                        let entry.into_mut();
+                        let entry = entry.into_mut();
                         &mut *entry
                     },
-                }
+                })
             },
         }
     }
@@ -966,7 +982,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
-    V: Send + Sync + Serialize,
+    V: Send + Sync + Serialize + DeserializeOwned + Clone,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
 
@@ -1012,7 +1028,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
-    V: Clone + Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(MapView {
@@ -1026,6 +1042,7 @@ impl<C, I, V> MapView<C, I, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
+    V: Clone,
     I: Serialize,
 {
     /// Inserts or resets a value at an index.
@@ -1394,7 +1411,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
 
@@ -1440,7 +1457,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomMapView {
@@ -1454,6 +1471,7 @@ impl<C, I, V> CustomMapView<C, I, V>
 where
     C: Context + Sync,
     ViewError: From<C::Error>,
+    V: Clone,
     I: CustomSerialize,
 {
     /// Insert or resets a value.
