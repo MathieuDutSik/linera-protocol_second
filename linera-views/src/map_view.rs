@@ -118,8 +118,12 @@ where
             }
             Some(option) => {
                 match option {
-                    None => MapState::BigMap { updates: BTreeMap::new(), deletion_set: DeletionSet::new() },
+                    None => {
+                        // Stored value is None, so it is a big map.
+                        MapState::BigMap { updates: BTreeMap::new(), deletion_set: DeletionSet::new() }
+                    },
                     Some(map) => {
+                        // Stored value is Some(map), so we have a small map
                         MapState::SmallMap { small_map: map.clone(), stored_small_map: map, delete_storage_first: false }
                     }
                 }
@@ -189,22 +193,32 @@ where
             },
             MapState::SmallMap { small_map, stored_small_map, delete_storage_first } => {
                 if *delete_storage_first {
-                    batch.delete_key(self.context.base_key());
+                    batch.delete_key_prefix(self.context.base_key());
                     delete_view = true;
+                    *delete_storage_first = false;
                 }
                 if small_map.len() > 0 {
                     let key = self.context.base_tag(KeyTag::SmallMap as u8);
                     batch.put_key_value(key, &Some(small_map.clone()))?;
                     *stored_small_map = small_map.clone();
+                    delete_view = false;
                 }
-                *delete_storage_first = false;
             },
         }
         Ok(delete_view)
     }
 
     fn clear(&mut self) {
-        self.map_state = MapState::SmallMap { small_map: BTreeMap::new(), stored_small_map: BTreeMap::new(), delete_storage_first: true };
+        match &mut self.map_state {
+            MapState::BigMap { updates, deletion_set } => {
+                updates.clear();
+                deletion_set.clear();
+            },
+            MapState::SmallMap {small_map, delete_storage_first, .. } => {
+                small_map.clear();
+                *delete_storage_first = true;
+            },
+        }
     }
 }
 
@@ -543,8 +557,10 @@ where
                 Self::for_each_key_while_big(&self.context, &updates, &deletion_set, f, prefix).await
             },
             MapState::SmallMap { small_map, .. } => {
+                let prefix_len = prefix.len();
+                let small_map = small_map.range(get_interval(prefix.clone()));
 		for (key, _) in small_map {
-                    if !f(key)? {
+                    if !f(&key[prefix_len..])? {
                         return Ok(());
                     }
                 }
