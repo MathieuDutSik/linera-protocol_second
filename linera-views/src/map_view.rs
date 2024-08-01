@@ -98,7 +98,7 @@ where
     ViewError: From<C::Error>,
     V: Send + Sync + Serialize + DeserializeOwned + Clone,
 {
-    const NUM_INIT_KEYS: usize = 0;
+    const NUM_INIT_KEYS: usize = 1;
 
     fn context(&self) -> &C {
         &self.context
@@ -768,9 +768,11 @@ where
                 Self::for_each_key_value_while_big(&self.context, &updates, &deletion_set, f, prefix).await
             },
             MapState::SmallMap { small_map, .. } => {
+                let prefix_len = prefix.len();
+                let small_map = small_map.range(get_interval(prefix.clone()));
 		for (key, value) in small_map {
                     let value = bcs::to_bytes(value)?;
-                    if !f(&key, &value)? {
+                    if !f(&key[prefix_len..], &value)? {
                         return Ok(());
                     }
                 }
