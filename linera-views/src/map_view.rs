@@ -96,7 +96,7 @@ impl<C, V> View<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Send + Sync + Serialize + DeserializeOwned + Clone,
+    V: Send + Sync + Serialize + DeserializeOwned + Clone + PartialEq,
 {
     const NUM_INIT_KEYS: usize = 1;
 
@@ -156,8 +156,8 @@ where
             MapState::BigMap { updates, deletion_set } => {
                 deletion_set.has_pending_changes() || !updates.is_empty()
             },
-            MapState::SmallMap { small_map, delete_storage_first, .. } => {
-                *delete_storage_first || small_map.len() > 0
+            MapState::SmallMap { small_map, delete_storage_first, stored_small_map } => {
+                *delete_storage_first || (!small_map.is_empty() && small_map != stored_small_map)
             },
         }
     }
@@ -197,7 +197,7 @@ where
                     delete_view = true;
                     *delete_storage_first = false;
                 }
-                if small_map.len() > 0 {
+                if !small_map.is_empty() && small_map != stored_small_map {
                     let key = self.context.base_tag(KeyTag::SmallMap as u8);
                     batch.put_key_value(key, &Some(small_map.clone()))?;
                     *stored_small_map = small_map.clone();
@@ -226,7 +226,7 @@ impl<C, V> ClonableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(ByteMapView {
@@ -269,7 +269,7 @@ where
             let MapState::SmallMap { small_map, .. } = &self.map_state else {
                 unreachable!()
             };
-            let updates = small_map.into_iter().map(|(key,value)| {
+            let updates = small_map.iter().map(|(key,value)| {
                 let value: V = value.clone();
                 (key.clone(), Update::Set(value))
             })
@@ -554,7 +554,7 @@ where
     {
         match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                Self::for_each_key_while_big(&self.context, &updates, &deletion_set, f, prefix).await
+                Self::for_each_key_while_big(&self.context, updates, deletion_set, f, prefix).await
             },
             MapState::SmallMap { small_map, .. } => {
                 let prefix_len = prefix.len();
@@ -781,7 +781,7 @@ where
     {
         match &self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                Self::for_each_key_value_while_big(&self.context, &updates, &deletion_set, f, prefix).await
+                Self::for_each_key_value_while_big(&self.context, updates, deletion_set, f, prefix).await
             },
             MapState::SmallMap { small_map, .. } => {
                 let prefix_len = prefix.len();
@@ -960,7 +960,7 @@ impl<C, V> HashableView<C> for ByteMapView<C, V>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1003,7 +1003,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
-    V: Send + Sync + Serialize + DeserializeOwned + Clone,
+    V: Send + Sync + Serialize + DeserializeOwned + Clone + PartialEq,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
 
@@ -1049,7 +1049,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(MapView {
@@ -1406,7 +1406,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + Serialize + DeserializeOwned,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
@@ -1432,7 +1432,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq,
 {
     const NUM_INIT_KEYS: usize = ByteMapView::<C, V>::NUM_INIT_KEYS;
 
@@ -1478,7 +1478,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(CustomMapView {
@@ -1835,7 +1835,7 @@ where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
     I: Send + Sync + CustomSerialize,
-    V: Clone + Send + Sync + Serialize + DeserializeOwned + 'static,
+    V: Clone + Send + Sync + Serialize + DeserializeOwned + PartialEq + 'static,
 {
     type Hasher = sha3::Sha3_256;
 
