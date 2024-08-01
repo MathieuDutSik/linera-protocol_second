@@ -167,18 +167,18 @@ where
                     batch.delete_key_prefix(self.context.base_key());
                     for (index, update) in mem::take(updates) {
                         if let Update::Set(value) = update {
-                            let key = self.context.base_index(&index);
+                            let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                             batch.put_key_value(key, &value)?;
                             delete_view = false;
                         }
                     }
                 } else {
                     for index in mem::take(&mut deletion_set.deleted_prefixes) {
-                        let key = self.context.base_index(&index);
+                        let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                         batch.delete_key_prefix(key);
                     }
                     for (index, update) in mem::take(updates) {
-                        let key = self.context.base_index(&index);
+                        let key = self.context.base_tag_index(KeyTag::Index as u8, &index);
                         match update {
                             Update::Removed => batch.delete_key(key),
                             Update::Set(value) => batch.put_key_value(key, &value)?,
@@ -194,7 +194,7 @@ where
                 }
                 if small_map.len() > 0 {
                     let key = self.context.base_tag(KeyTag::SmallMap as u8);
-                    batch.put_key_value(key, &Some(small_map.clone()));
+                    batch.put_key_value(key, &Some(small_map.clone()))?;
                     *stored_small_map = small_map.clone();
                 }
                 *delete_storage_first = false;
@@ -361,7 +361,7 @@ where
                 if deletion_set.contains_prefix_of(short_key) {
                     return Ok(false);
                 }
-                let key = self.context.base_index(short_key);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                 Ok(self.context.contains_key(&key).await?)
             },
             MapState::SmallMap { small_map, .. } => {
@@ -402,7 +402,7 @@ where
                 if deletion_set.contains_prefix_of(short_key) {
                     return Ok(None);
                 }
-                let key = self.context.base_index(short_key);
+                let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                 Ok(self.context.read_value(&key).await?)
             },
             MapState::SmallMap { small_map, .. } => {
@@ -429,17 +429,20 @@ where
     pub async fn get_mut(&mut self, short_key: &[u8]) -> Result<Option<&mut V>, ViewError> {
         match &mut self.map_state {
             MapState::BigMap { updates, deletion_set } => {
-                let update = match &mut updates.entry(short_key.to_vec()) {
+                let update = match updates.entry(short_key.to_vec()) {
                     Entry::Vacant(e) => {
                         if deletion_set.contains_prefix_of(short_key) {
                             None
                         } else {
-                            let key = self.context.base_index(short_key);
+                            let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                             let value = self.context.read_value(&key).await?;
                             value.map(|x| e.insert(Update::Set(x)))
                         }
                     }
-                    Entry::Occupied(e) => Some(e.into_mut()),
+                    Entry::Occupied(e) => {
+                        let e = e.into_mut();
+                        Some(e)
+                    }
                 };
                 Ok(match update {
                     Some(Update::Set(value)) => Some(value),
@@ -899,7 +902,7 @@ where
                         e.insert(Update::Set(V::default()))
                     }
                     Entry::Vacant(e) => {
-                        let key = self.context.base_index(short_key);
+                        let key = self.context.base_tag_index(KeyTag::Index as u8, short_key);
                         let value = self.context.read_value(&key).await?.unwrap_or_default();
                         e.insert(Update::Set(value))
                     }
