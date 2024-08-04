@@ -125,6 +125,10 @@ pub enum ViewError {
     /// The value is too large for the client
     #[error("The value is too large for the client")]
     TooLargeValue,
+
+    /// Invalid hexadecimal
+    #[error("Invalid hexadecimal: {0}")]
+    Hex(#[from] hex::FromHexError),
 }
 
 impl ViewError {

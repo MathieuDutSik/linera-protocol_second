@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Serialize, Deserialize};
 
 use crate::{batch::Batch, views::ViewError};
 
@@ -165,6 +165,40 @@ where
         None => Ok(V::default()),
     }
 }
+
+/// The combination of a `namespace` and a `root_key`.
+#[derive(Serialize, Deserialize)]
+pub struct NamespaceRootKey {
+    namespace: String,
+    root_key: Vec<u8>,
+}
+
+impl NamespaceRootKey {
+    /// Convert to a `Vec<u8>` to process
+    pub fn to_vec(&self) -> Result<Vec<u8>, ViewError> {
+        Ok(bcs::to_bytes(self)?)
+    }
+
+    /// Converting from bytes to a `NamespaceRootKey`.
+    pub fn from_vec(bytes: &[u8]) -> Result<Self, ViewError> {
+        Ok(bcs::from_bytes(bytes)?)
+    }
+
+    /// Converting to an hexadecimal string.
+    pub fn to_string(&self) -> Result<String, ViewError> {
+        let bytes = bcs::to_bytes(self)?;
+        Ok(hex::encode(bytes))
+    }
+
+    /// Converting from an hexadecimal string to a `NamespaceRootKey`.
+    pub fn from_string(string: &str) -> Result<Self, ViewError> {
+        let bytes = hex::decode(string)?;
+        Ok(bcs::from_bytes(&bytes)?)
+    }
+}
+
+
+
 
 /// `SuffixClosedSetIterator` iterates over the entries of a container ordered
 /// lexicographically.
