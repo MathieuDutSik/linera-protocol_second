@@ -276,7 +276,7 @@ impl TestContextFactory for ScyllaDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let config = create_scylla_db_test_config().await;
         let namespace = generate_test_namespace();
-        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace).await?;
+        let store = ScyllaDbStore::recreate_and_connect(&config, &namespace, &[]).await?;
         let dummy_key_prefix = vec![0];
         let context = ScyllaDbContext::new(store, dummy_key_prefix, ());
         Ok(context)

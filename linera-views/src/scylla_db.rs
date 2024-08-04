@@ -42,7 +42,7 @@ use crate::{
     batch::{Batch, DeletePrefixExpander, UnorderedBatch},
     common::{
         get_upper_bound_option, AdminKeyValueStore, CommonStoreConfig, ContextFromStore,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        KeyValueStore, NamespaceRootKey, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -419,6 +419,10 @@ pub enum ScyllaDbStoreError {
 
     /// The database is not coherent
     #[error(transparent)]
+    ViewError(#[from] crate::views::ViewError),
+
+    /// The database is not coherent
+    #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
 
     /// The journal is not coherent
@@ -544,14 +548,15 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
     type Error = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, ScyllaDbStoreError> {
         Self::check_namespace(namespace)?;
+        let namespace = Self::get_combined_namespace(namespace, root_key)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
             .boxed()
             .await?;
-        let store = ScyllaDbClient::new(session, namespace.to_string());
+        let store = ScyllaDbClient::new(session, namespace);
         let store = Arc::new(store);
         let semaphore = config
             .common_config
@@ -565,7 +570,7 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, ScyllaDbStoreError> {
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -603,7 +608,8 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
                 for row in rows.into_typed::<(String, String, String, String)>() {
                     let (_, object_kind, name, _) = row?;
                     if object_kind == "table" {
-                        namespaces.push(name);
+                        let pair = NamespaceRootKey::from_string(&name)?;
+                        namespaces.push(pair);
                     }
                 }
             }
@@ -625,8 +631,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbStoreError> {
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, ScyllaDbStoreError> {
         Self::check_namespace(namespace)?;
+        let namespace = Self::get_combined_namespace(namespace, root_key)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -666,8 +673,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ScyllaDbStoreError> {
         Self::check_namespace(namespace)?;
+        let namespace = Self::get_combined_namespace(namespace, root_key)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -691,8 +699,9 @@ impl AdminKeyValueStore for ScyllaDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ScyllaDbStoreError> {
         Self::check_namespace(namespace)?;
+        let namespace = Self::get_combined_namespace(namespace, root_key)?;
         let session = SessionBuilder::new()
             .known_node(config.uri.as_str())
             .build()
@@ -729,6 +738,11 @@ impl ScyllaDbStoreInternal {
     pub async fn get_namespace(&self) -> String {
         let store = self.store.deref();
         store.namespace.clone()
+    }
+
+    fn get_combined_namespace(namespace: &str, root_key: &[u8]) -> Result<String, ScyllaDbStoreError> {
+        let namespace_root_key = NamespaceRootKey::new(namespace, root_key);
+        Ok(namespace_root_key.to_string()?)
     }
 
     fn check_namespace(namespace: &str) -> Result<(), ScyllaDbStoreError> {
@@ -828,9 +842,9 @@ impl AdminKeyValueStore for ScyllaDbStore {
     type Error = ScyllaDbStoreError;
     type Config = ScyllaDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ScyllaDbStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, ScyllaDbStoreError> {
         let cache_size = config.common_config.cache_size;
-        let simple_store = ScyllaDbStoreInternal::connect(config, namespace).await?;
+        let simple_store = ScyllaDbStoreInternal::connect(config, namespace, root_key).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         #[cfg(feature = "metrics")]
         let store = MeteredStore::new(&SCYLLA_DB_METRICS, store);
@@ -840,7 +854,7 @@ impl AdminKeyValueStore for ScyllaDbStore {
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, ScyllaDbStoreError> {
         ScyllaDbStoreInternal::list_all(config).await
     }
 
@@ -848,16 +862,16 @@ impl AdminKeyValueStore for ScyllaDbStore {
         ScyllaDbStoreInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::exists(config, namespace).await
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, ScyllaDbStoreError> {
+        ScyllaDbStoreInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::create(config, namespace).await
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ScyllaDbStoreError> {
+        ScyllaDbStoreInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ScyllaDbStoreError> {
-        ScyllaDbStoreInternal::delete(config, namespace).await
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ScyllaDbStoreError> {
+        ScyllaDbStoreInternal::delete(config, namespace, root_key).await
     }
 }
 
@@ -908,7 +922,7 @@ pub async fn create_scylla_db_test_config() -> ScyllaDbStoreConfig {
 pub async fn create_scylla_db_test_store() -> ScyllaDbStore {
     let config = create_scylla_db_test_config().await;
     let namespace = generate_test_namespace();
-    ScyllaDbStore::recreate_and_connect(&config, &namespace)
+    ScyllaDbStore::recreate_and_connect(&config, &namespace, &[])
         .await
         .expect("store")
 }
