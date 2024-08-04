@@ -436,41 +436,42 @@ pub trait LocalAdminKeyValueStore: Sized {
     type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, Self::Error>;
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, Self::Error>;
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, Self::Error>;
 
     /// Deletes all the existing namespaces.
     fn delete_all(config: &Self::Config) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             let namespaces = Self::list_all(config).await?;
-            for namespace in namespaces {
-                Self::delete(config, &namespace).await?;
+            for (namespace, root_key) in namespaces {
+                Self::delete(config, &namespace, &root_key).await?;
             }
             Ok(())
         }
     }
 
     /// Tests if a given namespace exists.
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, Self::Error>;
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, Self::Error>;
 
     /// Creates a namespace. Returns an error if the namespace exists.
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Deletes the given namespace.
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), Self::Error>;
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error>;
 
     /// Initializes a storage if missing and provides it.
     fn maybe_create_and_connect(
         config: &Self::Config,
         namespace: &str,
+        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
-            if !Self::exists(config, namespace).await? {
-                Self::create(config, namespace).await?;
+            if !Self::exists(config, namespace, root_key).await? {
+                Self::create(config, namespace, root_key).await?;
             }
-            Self::connect(config, namespace).await
+            Self::connect(config, namespace, root_key).await
         }
     }
 
@@ -478,13 +479,14 @@ pub trait LocalAdminKeyValueStore: Sized {
     fn recreate_and_connect(
         config: &Self::Config,
         namespace: &str,
+        root_key: &[u8],
     ) -> impl Future<Output = Result<Self, Self::Error>> {
         async {
-            if Self::exists(config, namespace).await? {
-                Self::delete(config, namespace).await?;
+            if Self::exists(config, namespace, root_key).await? {
+                Self::delete(config, namespace, root_key).await?;
             }
-            Self::create(config, namespace).await?;
-            Self::connect(config, namespace).await
+            Self::create(config, namespace, root_key).await?;
+            Self::connect(config, namespace, root_key).await
         }
     }
 }
