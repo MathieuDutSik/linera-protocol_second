@@ -12,7 +12,7 @@ use linera_views::test_utils::generate_test_namespace;
 use linera_views::{
     batch::{Batch, WriteOperation},
     common::{
-        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, ReadableKeyValueStore,
+        AdminKeyValueStore, CommonStoreConfig, KeyValueStore, NamespaceRootKey, ReadableKeyValueStore,
         WritableKeyValueStore,
     },
 };
@@ -298,10 +298,17 @@ impl ServiceStoreClientInternal {
         }
     }
 
-    fn namespace_as_vec(namespace: &str) -> Result<Vec<u8>, ServiceStoreError> {
-        let mut key = vec![KeyTag::Key as u8];
-        bcs::serialize_into(&mut key, namespace)?;
-        Ok(key)
+    fn to_vec(namespace: &str, root_key: &[u8]) -> Result<Vec<u8>, ServiceStoreError> {
+        let namespace = namespace.to_string();
+        let root_key = root_key.to_vec();
+        let key = NamespaceRootKey { namespace, root_key };
+        Ok(key.to_vec()?)
+    }
+
+    fn namespace_as_vec(namespace: &str, root_key: &[u8]) -> Result<Vec<u8>, ServiceStoreError> {
+        let mut big_key = vec![KeyTag::Key as u8];
+        big_key.extend(Self::to_vec(namespace, root_key)?);
+        Ok(big_key)
     }
 
     async fn submit_statements(&self, statements: Vec<Statement>) -> Result<(), ServiceStoreError> {
@@ -366,7 +373,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     type Error = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
         let endpoint = format!("http://{}", config.endpoint);
         let endpoint = Endpoint::from_shared(endpoint)?;
         let client = StoreProcessorClient::connect(endpoint).await?;
@@ -376,7 +383,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let namespace = Self::namespace_as_vec(namespace)?;
+        let namespace = Self::namespace_as_vec(namespace, root_key)?;
         Ok(Self {
             client,
             semaphore,
@@ -385,7 +392,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, ServiceStoreError> {
         let query = RequestListAll {};
         let request = tonic::Request::new(query);
         let endpoint = format!("http://{}", config.endpoint);
@@ -396,7 +403,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let ReplyListAll { namespaces } = response;
         let namespaces = namespaces
             .into_iter()
-            .map(|x| bcs::from_bytes(&x))
+            .map(|x| NamespaceRootKey::from_vec(&x))
             .collect::<Result<_, _>>()?;
         Ok(namespaces)
     }
@@ -411,8 +418,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceStoreError> {
-        let namespace = bcs::to_bytes(namespace)?;
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, ServiceStoreError> {
+        let namespace = Self::to_vec(namespace, root_key)?;
         let query = RequestExistsNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = format!("http://{}", config.endpoint);
@@ -424,8 +431,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(exists)
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        let namespace = bcs::to_bytes(namespace)?;
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ServiceStoreError> {
+        let namespace = Self::to_vec(namespace, root_key)?;
         let query = RequestCreateNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = format!("http://{}", config.endpoint);
@@ -435,8 +442,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        let namespace = bcs::to_bytes(namespace)?;
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ServiceStoreError> {
+        let namespace = Self::to_vec(namespace, root_key)?;
         let query = RequestDeleteNamespace { namespace };
         let request = tonic::Request::new(query);
         let endpoint = format!("http://{}", config.endpoint);
@@ -481,7 +488,8 @@ pub async fn storage_service_check_absence(endpoint: &str) -> Result<bool, Servi
 pub async fn storage_service_check_validity(endpoint: &str) -> Result<(), ServiceStoreError> {
     let config = service_config_from_endpoint(endpoint).unwrap();
     let namespace = "namespace";
-    let store = ServiceStoreClientInternal::connect(&config, namespace).await?;
+    let root_key = Vec::new();
+    let store = ServiceStoreClientInternal::connect(&config, namespace, &root_key).await?;
     let _value = store.read_value_bytes(&[42]).await?;
     Ok(())
 }
@@ -567,14 +575,14 @@ impl AdminKeyValueStore for ServiceStoreClient {
     type Error = ServiceStoreError;
     type Config = ServiceStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, ServiceStoreError> {
-        let store = ServiceStoreClientInternal::connect(config, namespace).await?;
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
+        let store = ServiceStoreClientInternal::connect(config, namespace, root_key).await?;
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&STORAGE_SERVICE_METRICS, store);
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, ServiceStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, ServiceStoreError> {
         ServiceStoreClientInternal::list_all(config).await
     }
 
@@ -582,15 +590,15 @@ impl AdminKeyValueStore for ServiceStoreClient {
         ServiceStoreClientInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, ServiceStoreError> {
-        ServiceStoreClientInternal::exists(config, namespace).await
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, ServiceStoreError> {
+        ServiceStoreClientInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        ServiceStoreClientInternal::create(config, namespace).await
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ServiceStoreError> {
+        ServiceStoreClientInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), ServiceStoreError> {
-        ServiceStoreClientInternal::delete(config, namespace).await
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), ServiceStoreError> {
+        ServiceStoreClientInternal::delete(config, namespace, root_key).await
     }
 }

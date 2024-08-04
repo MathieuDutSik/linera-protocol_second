@@ -169,8 +169,10 @@ where
 /// The combination of a `namespace` and a `root_key`.
 #[derive(Serialize, Deserialize)]
 pub struct NamespaceRootKey {
-    namespace: String,
-    root_key: Vec<u8>,
+    /// The namespace being used
+    pub namespace: String,
+    /// The root_key being used
+    pub root_key: Vec<u8>,
 }
 
 impl NamespaceRootKey {
@@ -180,8 +182,9 @@ impl NamespaceRootKey {
     }
 
     /// Converting from bytes to a `NamespaceRootKey`.
-    pub fn from_vec(bytes: &[u8]) -> Result<Self, ViewError> {
-        Ok(bcs::from_bytes(bytes)?)
+    pub fn from_vec(bytes: &[u8]) -> Result<(String, Vec<u8>), ViewError> {
+        let pair = bcs::from_bytes::<NamespaceRootKey>(bytes)?;
+        Ok((pair.namespace, pair.root_key))
     }
 
     /// Converting to an hexadecimal string.

@@ -72,6 +72,10 @@ pub enum ServiceStoreError {
     /// The database is not consistent
     #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+
+    /// View error
+    #[error(transparent)]
+    ViewError(#[from] linera_views::views::ViewError),
 }
 
 impl From<ServiceStoreError> for linera_views::views::ViewError {

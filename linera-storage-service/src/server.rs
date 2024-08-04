@@ -575,7 +575,8 @@ async fn main() {
     let (store, endpoint) = match options {
         ServiceStoreServerOptions::Memory { endpoint } => {
             let namespace = "linera_storage_service";
-            let store = MemoryStore::new(common_config.max_stream_queries, namespace).unwrap();
+            let root_key = Vec::new();
+            let store = MemoryStore::new(common_config.max_stream_queries, namespace, &root_key).unwrap();
             let store = ServiceStoreServerInternal::Memory(store);
             (store, endpoint)
         }
