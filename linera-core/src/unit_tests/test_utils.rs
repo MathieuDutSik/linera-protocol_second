@@ -909,9 +909,11 @@ impl StorageBuilder for MemoryStorageBuilder {
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
         let store_config = create_memory_store_test_config();
         let namespace = generate_test_namespace();
+        let root_key = &[];
         Ok(MemoryStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
@@ -980,9 +982,11 @@ impl StorageBuilder for RocksDbStorageBuilder {
             common_config,
         };
         let namespace = generate_test_namespace();
+        let root_key = &[];
         let storage = RocksDbStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
@@ -1034,10 +1038,12 @@ impl StorageBuilder for ServiceStorageBuilder {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         let store_config = service_config_from_endpoint(&self.endpoint)?;
         let namespace = format!("{}_{}", self.namespace, self.instance_counter);
+        let root_key = &[];
         self.instance_counter += 1;
         Ok(ServiceStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
@@ -1083,6 +1089,7 @@ impl StorageBuilder for DynamoDbStorageBuilder {
         let config = self.localstack.as_ref().unwrap().dynamo_db_config();
         let namespace = generate_test_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
+        let root_key = &[];
         let common_config = create_dynamo_db_common_config();
         let store_config = DynamoDbStoreConfig {
             config,
@@ -1092,6 +1099,7 @@ impl StorageBuilder for DynamoDbStorageBuilder {
         let storage = DynamoDbStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )
@@ -1150,6 +1158,7 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
         self.instance_counter += 1;
         let namespace = generate_test_namespace();
         let namespace = format!("{}_{}", namespace, self.instance_counter);
+        let root_key = &[];
         let common_config = create_scylla_db_common_config();
         let store_config = ScyllaDbStoreConfig {
             uri: self.uri.clone(),
@@ -1158,6 +1167,7 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
         let storage = ScyllaDbStorage::new_for_testing(
             store_config,
             &namespace,
+            root_key,
             self.wasm_runtime,
             self.clock.clone(),
         )

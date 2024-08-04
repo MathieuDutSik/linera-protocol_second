@@ -238,9 +238,10 @@ where
     pub async fn new_for_testing(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::recreate_and_connect(&store_config, namespace).await?;
+        let client = Client::recreate_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -248,9 +249,10 @@ where
     pub async fn initialize(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let store = Client::maybe_create_and_connect(&store_config, namespace).await?;
+        let store = Client::maybe_create_and_connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(store, wasm_runtime);
         Ok(storage)
     }
@@ -258,9 +260,10 @@ where
     pub async fn make(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let client = Client::connect(&store_config, namespace).await?;
+        let client = Client::connect(&store_config, namespace, root_key).await?;
         let storage = Self::new(client, wasm_runtime);
         Ok(storage)
     }
@@ -807,19 +810,21 @@ where
     pub async fn initialize(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
         let storage =
-            DbStorageInner::<Client>::initialize(store_config, namespace, wasm_runtime).await?;
+            DbStorageInner::<Client>::initialize(store_config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))
     }
 
     pub async fn new(
         store_config: Client::Config,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
     ) -> Result<Self, <Client as KeyValueStore>::Error> {
-        let storage = DbStorageInner::<Client>::make(store_config, namespace, wasm_runtime).await?;
+        let storage = DbStorageInner::<Client>::make(store_config, namespace, root_key, wasm_runtime).await?;
         Ok(Self::create(storage, WallClock))
     }
 }

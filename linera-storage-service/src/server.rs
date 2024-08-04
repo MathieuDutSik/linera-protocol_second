@@ -588,7 +588,8 @@ async fn main() {
                 common_config,
             };
             let namespace = "linera";
-            let store = RocksDbStore::maybe_create_and_connect(&config, namespace)
+            let root_key = &[];
+            let store = RocksDbStore::maybe_create_and_connect(&config, namespace, root_key)
                 .await
                 .expect("store");
             let store = ServiceStoreServerInternal::RocksDb(store);

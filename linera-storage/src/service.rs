@@ -23,7 +23,8 @@ impl ServiceStorage<TestClock> {
         let endpoint = "127.0.0.1:8942";
         let store_config = service_config_from_endpoint(endpoint).expect("store_config");
         let namespace = generate_test_namespace();
-        ServiceStorage::new_for_testing(store_config, &namespace, wasm_runtime, TestClock::new())
+        let root_key = &[];
+        ServiceStorage::new_for_testing(store_config, &namespace, root_key, wasm_runtime, TestClock::new())
             .await
             .expect("storage")
     }
@@ -31,12 +32,14 @@ impl ServiceStorage<TestClock> {
     pub async fn new_for_testing(
         store_config: ServiceStoreConfig,
         namespace: &str,
+        root_key: &[u8],
         wasm_runtime: Option<WasmRuntime>,
         clock: TestClock,
     ) -> Result<Self, ServiceStoreError> {
         let storage = DbStorageInner::<ServiceStoreClient>::new_for_testing(
             store_config,
             namespace,
+            root_key,
             wasm_runtime,
         )
         .await?;
