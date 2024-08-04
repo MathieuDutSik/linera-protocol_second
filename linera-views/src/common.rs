@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{batch::Batch, views::ViewError};
 
@@ -180,7 +180,10 @@ impl NamespaceRootKey {
     pub fn new(namespace: &str, root_key: &[u8]) -> Self {
         let namespace = namespace.to_string();
         let root_key = root_key.to_vec();
-        Self { namespace, root_key }
+        Self {
+            namespace,
+            root_key,
+        }
     }
 
     /// Convert to a `Vec<u8>` to process
@@ -207,8 +210,6 @@ impl NamespaceRootKey {
         Ok((pair.namespace, pair.root_key))
     }
 }
-
-
 
 /// `SuffixClosedSetIterator` iterates over the entries of a container ordered
 /// lexicographically.
@@ -480,7 +481,11 @@ pub trait LocalAdminKeyValueStore: Sized {
     type Config: Send + Sync;
 
     /// Connects to an existing namespace using the given configuration.
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, Self::Error>;
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error>;
 
     /// Obtains the list of existing namespaces.
     async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, Self::Error>;
@@ -497,13 +502,25 @@ pub trait LocalAdminKeyValueStore: Sized {
     }
 
     /// Tests if a given namespace exists.
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, Self::Error>;
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, Self::Error>;
 
     /// Creates a namespace. Returns an error if the namespace exists.
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error>;
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), Self::Error>;
 
     /// Deletes the given namespace.
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error>;
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), Self::Error>;
 
     /// Initializes a storage if missing and provides it.
     fn maybe_create_and_connect(

@@ -76,7 +76,10 @@ impl RocksDbStoreInternal {
     fn get_full_namespace(namespace: &str, root_key: &[u8]) -> Result<String, RocksDbStoreError> {
         let namespace = namespace.to_string();
         let root_key = root_key.to_vec();
-        let key = NamespaceRootKey { namespace, root_key };
+        let key = NamespaceRootKey {
+            namespace,
+            root_key,
+        };
         Ok(key.to_string()?)
     }
 }
@@ -283,7 +286,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
         let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let options = rocksdb::Options::default();
@@ -317,7 +324,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Ok(namespaces)
     }
 
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, RocksDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
         let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let options = rocksdb::Options::default();
@@ -336,7 +347,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
         let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let mut options = rocksdb::Options::default();
@@ -347,7 +362,11 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
         let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let mut path_buf = config.path_buf.clone();
@@ -410,7 +429,7 @@ pub async fn create_rocks_db_test_config() -> (RocksDbStoreConfig, TempDir) {
 pub async fn create_rocks_db_test_store() -> (RocksDbStore, TempDir) {
     let (store_config, dir) = create_rocks_db_test_config().await;
     let namespace = generate_test_namespace();
-    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
+    let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, &[])
         .await
         .expect("client");
     (store, dir)
@@ -478,7 +497,11 @@ impl AdminKeyValueStore for RocksDbStore {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, RocksDbStoreError> {
         let store = RocksDbStoreInternal::connect(config, namespace, root_key).await?;
         let cache_size = config.common_config.cache_size;
         #[cfg(with_metrics)]
@@ -492,7 +515,7 @@ impl AdminKeyValueStore for RocksDbStore {
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<(String,Vec<u8>)>, RocksDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, RocksDbStoreError> {
         RocksDbStoreInternal::list_all(config).await
     }
 
@@ -500,15 +523,27 @@ impl AdminKeyValueStore for RocksDbStore {
         RocksDbStoreInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, RocksDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, RocksDbStoreError> {
         RocksDbStoreInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), RocksDbStoreError> {
         RocksDbStoreInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), RocksDbStoreError> {
         RocksDbStoreInternal::delete(config, namespace, root_key).await
     }
 }

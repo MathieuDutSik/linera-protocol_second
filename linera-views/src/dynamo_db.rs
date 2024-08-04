@@ -332,7 +332,11 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Error = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let semaphore = config
@@ -349,7 +353,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<(String,Vec<u8>)>, DynamoDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, DynamoDbStoreError> {
         let client = Client::from_conf(config.config.clone());
         let mut namespaces = Vec::new();
         let mut start_table = None;
@@ -390,7 +394,11 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, DynamoDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
         let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
@@ -422,7 +430,11 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
         let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
@@ -465,7 +477,11 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
         let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
@@ -501,7 +517,10 @@ impl DynamoDbStoreInternal {
         Ok(())
     }
 
-    fn get_combined_namespace(namespace: &str, root_key: &[u8]) -> Result<String, DynamoDbStoreError> {
+    fn get_combined_namespace(
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<String, DynamoDbStoreError> {
         let namespace_root_key = NamespaceRootKey::new(namespace, root_key);
         Ok(namespace_root_key.to_string()?)
     }
@@ -994,7 +1013,11 @@ impl AdminKeyValueStore for DynamoDbStore {
     type Error = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, DynamoDbStoreError> {
         let cache_size = config.common_config.cache_size;
         let simple_store = DynamoDbStoreInternal::connect(config, namespace, root_key).await?;
         let store = JournalingKeyValueStore::new(simple_store);
@@ -1017,15 +1040,27 @@ impl AdminKeyValueStore for DynamoDbStore {
         DynamoDbStoreInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, DynamoDbStoreError> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, DynamoDbStoreError> {
         DynamoDbStoreInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), DynamoDbStoreError> {
         DynamoDbStoreInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), DynamoDbStoreError> {
         DynamoDbStoreInternal::delete(config, namespace, root_key).await
     }
 }

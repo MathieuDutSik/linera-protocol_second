@@ -672,7 +672,7 @@ where
     let namespaces = S::list_all(config).await.expect("namespaces");
     namespaces
         .into_iter()
-        .map(|(x,_)| x)
+        .map(|(x, _)| x)
         .filter(|x| x.starts_with(prefix))
         .collect::<BTreeSet<_>>()
 }

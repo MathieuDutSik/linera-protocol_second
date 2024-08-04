@@ -223,7 +223,7 @@ impl TestContextFactory for RocksDbContextFactory {
     async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
         let (store_config, directory) = create_rocks_db_test_config().await;
         let namespace = generate_test_namespace();
-        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace)
+        let store = RocksDbStore::recreate_and_connect(&store_config, &namespace, &[])
             .await
             .expect("store");
         let dummy_key_prefix = vec![0];

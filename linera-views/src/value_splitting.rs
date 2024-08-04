@@ -261,12 +261,16 @@ where
     type Error = K::Error;
     type Config = K::Config;
 
-    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, Self::Error> {
+    async fn connect(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<Self, Self::Error> {
         let store = K::connect(config, namespace, root_key).await?;
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<(String,Vec<u8>)>, Self::Error> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, Self::Error> {
         K::list_all(config).await
     }
 
@@ -274,15 +278,27 @@ where
         K::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, Self::Error> {
+    async fn exists(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<bool, Self::Error> {
         K::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error> {
+    async fn create(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), Self::Error> {
         K::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), Self::Error> {
+    async fn delete(
+        config: &Self::Config,
+        namespace: &str,
+        root_key: &[u8],
+    ) -> Result<(), Self::Error> {
         K::delete(config, namespace, root_key).await
     }
 }
