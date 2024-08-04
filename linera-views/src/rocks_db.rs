@@ -25,7 +25,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::{
         get_upper_bound, AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyValueStore,
-        ReadableKeyValueStore, WritableKeyValueStore,
+        NamespaceRootKey, ReadableKeyValueStore, WritableKeyValueStore,
     },
     lru_caching::LruCachingStore,
     value_splitting::{DatabaseConsistencyError, ValueSplittingStore},
@@ -71,6 +71,13 @@ impl RocksDbStoreInternal {
             return Err(RocksDbStoreError::InvalidTableName);
         }
         Ok(())
+    }
+
+    fn get_full_namespace(namespace: &str, root_key: &[u8]) -> Result<String, RocksDbStoreError> {
+        let namespace = namespace.to_string();
+        let root_key = root_key.to_vec();
+        let key = NamespaceRootKey { namespace, root_key };
+        Ok(key.to_string()?)
     }
 }
 
@@ -276,11 +283,12 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
+        let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
-        path_buf.push(namespace);
+        path_buf.push(full_namespace);
         let db = DB::open(&options, path_buf)?;
         let max_stream_queries = config.common_config.max_stream_queries;
         Ok(RocksDbStoreInternal {
@@ -289,7 +297,7 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, RocksDbStoreError> {
         let entries = std::fs::read_dir(config.path_buf.clone())?;
         let mut namespaces = Vec::new();
         for entry in entries {
@@ -303,26 +311,18 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
                 }
                 Ok(namespace) => namespace,
             };
-            namespaces.push(namespace);
+            let pair = NamespaceRootKey::from_string(&namespace)?;
+            namespaces.push(pair);
         }
         Ok(namespaces)
     }
 
-    async fn delete_all(config: &Self::Config) -> Result<(), RocksDbStoreError> {
-        let namespaces = RocksDbStoreInternal::list_all(config).await?;
-        for namespace in namespaces {
-            let mut path_buf = config.path_buf.clone();
-            path_buf.push(&namespace);
-            std::fs::remove_dir_all(path_buf.as_path())?;
-        }
-        Ok(())
-    }
-
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbStoreError> {
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, RocksDbStoreError> {
         Self::check_namespace(namespace)?;
+        let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let options = rocksdb::Options::default();
         let mut path_buf = config.path_buf.clone();
-        path_buf.push(namespace);
+        path_buf.push(full_namespace);
         let result = DB::open(&options, path_buf.clone());
         match result {
             Ok(_) => Ok(true),
@@ -336,20 +336,22 @@ impl AdminKeyValueStore for RocksDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
+        let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         let mut path_buf = config.path_buf.clone();
-        path_buf.push(namespace);
+        path_buf.push(full_namespace);
         let _db = DB::open(&options, path_buf)?;
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
         Self::check_namespace(namespace)?;
+        let full_namespace = Self::get_full_namespace(namespace, root_key)?;
         let mut path_buf = config.path_buf.clone();
-        path_buf.push(namespace);
+        path_buf.push(full_namespace);
         let path = path_buf.as_path();
         std::fs::remove_dir_all(path)?;
         Ok(())
@@ -476,8 +478,8 @@ impl AdminKeyValueStore for RocksDbStore {
     type Error = RocksDbStoreError;
     type Config = RocksDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, RocksDbStoreError> {
-        let store = RocksDbStoreInternal::connect(config, namespace).await?;
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, RocksDbStoreError> {
+        let store = RocksDbStoreInternal::connect(config, namespace, root_key).await?;
         let cache_size = config.common_config.cache_size;
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&ROCKS_DB_METRICS, store);
@@ -490,7 +492,7 @@ impl AdminKeyValueStore for RocksDbStore {
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, RocksDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String,Vec<u8>)>, RocksDbStoreError> {
         RocksDbStoreInternal::list_all(config).await
     }
 
@@ -498,16 +500,16 @@ impl AdminKeyValueStore for RocksDbStore {
         RocksDbStoreInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, RocksDbStoreError> {
-        RocksDbStoreInternal::exists(config, namespace).await
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, RocksDbStoreError> {
+        RocksDbStoreInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
-        RocksDbStoreInternal::create(config, namespace).await
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+        RocksDbStoreInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), RocksDbStoreError> {
-        RocksDbStoreInternal::delete(config, namespace).await
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), RocksDbStoreError> {
+        RocksDbStoreInternal::delete(config, namespace, root_key).await
     }
 }
 
@@ -572,6 +574,10 @@ pub enum RocksDbStoreError {
     /// The database is not coherent
     #[error(transparent)]
     DatabaseConsistencyError(#[from] DatabaseConsistencyError),
+
+    /// A view error
+    #[error(transparent)]
+    ViewError(#[from] crate::views::ViewError),
 }
 
 impl From<RocksDbStoreError> for crate::views::ViewError {

@@ -194,9 +194,10 @@ impl NamespaceRootKey {
     }
 
     /// Converting from an hexadecimal string to a `NamespaceRootKey`.
-    pub fn from_string(string: &str) -> Result<Self, ViewError> {
+    pub fn from_string(string: &str) -> Result<(String, Vec<u8>), ViewError> {
         let bytes = hex::decode(string)?;
-        Ok(bcs::from_bytes(&bytes)?)
+        let pair = bcs::from_bytes::<NamespaceRootKey>(&bytes)?;
+        Ok((pair.namespace, pair.root_key))
     }
 }
 
