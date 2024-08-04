@@ -312,8 +312,8 @@ impl<E> LruCachingMemoryContext<E> {
         };
         let config = MemoryStoreConfig { common_config };
         let namespace = "linera";
-        let root_key = Vec::new();
-        let store = MemoryStore::connect(&config, namespace, &root_key)
+
+        let store = MemoryStore::connect(&config, namespace, &[])
             .await
             .expect("store");
         let store = LruCachingStore::new(store, n);

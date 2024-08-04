@@ -281,11 +281,11 @@ impl StateStore for DynamoDbTestStore {
         let namespace = &self.namespace;
 
         let store = if self.is_created {
-            DynamoDbStore::connect(&store_config, namespace)
+            DynamoDbStore::connect(&store_config, namespace, &[])
                 .await
                 .expect("failed to connect")
         } else {
-            DynamoDbStore::recreate_and_connect(&store_config, namespace)
+            DynamoDbStore::recreate_and_connect(&store_config, namespace, &[])
                 .await
                 .expect("failed to create from scratch")
         };

@@ -43,7 +43,7 @@ use crate::{
     batch::{Batch, SimpleUnorderedBatch},
     common::{
         AdminKeyValueStore, CommonStoreConfig, ContextFromStore, KeyIterable, KeyValueIterable,
-        KeyValueStore, ReadableKeyValueStore, WritableKeyValueStore,
+        KeyValueStore, NamespaceRootKey, ReadableKeyValueStore, WritableKeyValueStore,
     },
     journaling::{
         DirectKeyValueStore, DirectWritableKeyValueStore, JournalConsistencyError,
@@ -314,7 +314,7 @@ impl TransactionBuilder {
 #[derive(Debug, Clone)]
 pub struct DynamoDbStoreInternal {
     client: Client,
-    namespace: String,
+    combined_namespace: String,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
 }
@@ -332,7 +332,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
     type Error = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
         let client = Client::from_conf(config.config.clone());
         let semaphore = config
@@ -340,16 +340,16 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
         let max_stream_queries = config.common_config.max_stream_queries;
-        let namespace = namespace.to_string();
+        let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         Ok(Self {
             client,
-            namespace,
+            combined_namespace,
             semaphore,
             max_stream_queries,
         })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String,Vec<u8>)>, DynamoDbStoreError> {
         let client = Client::from_conf(config.config.clone());
         let mut namespaces = Vec::new();
         let mut start_table = None;
@@ -361,7 +361,10 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
                 .boxed()
                 .await?;
             if let Some(namespaces_blk) = response.table_names {
-                namespaces.extend(namespaces_blk);
+                for combined_namespace in namespaces_blk {
+                    let pair = NamespaceRootKey::from_string(&combined_namespace)?;
+                    namespaces.push(pair);
+                }
             }
             if response.last_evaluated_table_name.is_none() {
                 break;
@@ -376,6 +379,7 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         let client = Client::from_conf(config.config.clone());
         let tables = Self::list_all(config).await?;
         for table in tables {
+            let table = Self::get_combined_namespace(&table.0, &table.1)?;
             client
                 .delete_table()
                 .table_name(&table)
@@ -386,13 +390,14 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbStoreError> {
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
+        let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
         let key_db = build_key(DB_KEY.to_vec());
         let response = client
             .get_item()
-            .table_name(namespace)
+            .table_name(combined_namespace)
             .set_key(Some(key_db))
             .send()
             .boxed()
@@ -417,12 +422,13 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         }
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
+        let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
         let _result = client
             .create_table()
-            .table_name(namespace)
+            .table_name(combined_namespace)
             .attribute_definitions(
                 AttributeDefinition::builder()
                     .attribute_name(PARTITION_ATTRIBUTE)
@@ -459,12 +465,13 @@ impl AdminKeyValueStore for DynamoDbStoreInternal {
         Ok(())
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
         Self::check_namespace(namespace)?;
+        let combined_namespace = Self::get_combined_namespace(namespace, root_key)?;
         let client = Client::from_conf(config.config.clone());
         client
             .delete_table()
-            .table_name(namespace)
+            .table_name(combined_namespace)
             .send()
             .boxed()
             .await?;
@@ -494,11 +501,16 @@ impl DynamoDbStoreInternal {
         Ok(())
     }
 
+    fn get_combined_namespace(namespace: &str, root_key: &[u8]) -> Result<String, DynamoDbStoreError> {
+        let namespace_root_key = NamespaceRootKey::new(namespace, root_key);
+        Ok(namespace_root_key.to_string()?)
+    }
+
     fn build_delete_transact(&self, key: Vec<u8>) -> Result<TransactWriteItem, DynamoDbStoreError> {
         ensure!(!key.is_empty(), DynamoDbStoreError::ZeroLengthKey);
         ensure!(key.len() <= MAX_KEY_SIZE, DynamoDbStoreError::KeyTooLong);
         let request = Delete::builder()
-            .table_name(&self.namespace)
+            .table_name(&self.combined_namespace)
             .set_key(Some(build_key(key)))
             .build()?;
         Ok(TransactWriteItem::builder().delete(request).build())
@@ -516,7 +528,7 @@ impl DynamoDbStoreInternal {
             DynamoDbStoreError::ValueLengthTooLarge
         );
         let request = Put::builder()
-            .table_name(&self.namespace)
+            .table_name(&self.combined_namespace)
             .set_item(Some(build_key_value(key, value)))
             .build()?;
         Ok(TransactWriteItem::builder().put(request).build())
@@ -540,7 +552,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .query()
-            .table_name(&self.namespace)
+            .table_name(&self.combined_namespace)
             .projection_expression(attribute_str)
             .key_condition_expression(format!(
                 "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
@@ -565,7 +577,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .get_item()
-            .table_name(&self.namespace)
+            .table_name(&self.combined_namespace)
             .set_key(Some(key_db))
             .send()
             .boxed()
@@ -588,7 +600,7 @@ impl DynamoDbStoreInternal {
         let response = self
             .client
             .get_item()
-            .table_name(&self.namespace)
+            .table_name(&self.combined_namespace)
             .set_key(Some(key_db))
             .projection_expression(PARTITION_ATTRIBUTE)
             .send()
@@ -982,9 +994,9 @@ impl AdminKeyValueStore for DynamoDbStore {
     type Error = DynamoDbStoreError;
     type Config = DynamoDbStoreConfig;
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self, DynamoDbStoreError> {
+    async fn connect(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<Self, DynamoDbStoreError> {
         let cache_size = config.common_config.cache_size;
-        let simple_store = DynamoDbStoreInternal::connect(config, namespace).await?;
+        let simple_store = DynamoDbStoreInternal::connect(config, namespace, root_key).await?;
         let store = JournalingKeyValueStore::new(simple_store);
         #[cfg(with_metrics)]
         let store = MeteredStore::new(&DYNAMO_DB_METRICS, store);
@@ -997,7 +1009,7 @@ impl AdminKeyValueStore for DynamoDbStore {
         Ok(Self { store })
     }
 
-    async fn list_all(config: &Self::Config) -> Result<Vec<String>, DynamoDbStoreError> {
+    async fn list_all(config: &Self::Config) -> Result<Vec<(String, Vec<u8>)>, DynamoDbStoreError> {
         DynamoDbStoreInternal::list_all(config).await
     }
 
@@ -1005,16 +1017,16 @@ impl AdminKeyValueStore for DynamoDbStore {
         DynamoDbStoreInternal::delete_all(config).await
     }
 
-    async fn exists(config: &Self::Config, namespace: &str) -> Result<bool, DynamoDbStoreError> {
-        DynamoDbStoreInternal::exists(config, namespace).await
+    async fn exists(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<bool, DynamoDbStoreError> {
+        DynamoDbStoreInternal::exists(config, namespace, root_key).await
     }
 
-    async fn create(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
-        DynamoDbStoreInternal::create(config, namespace).await
+    async fn create(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+        DynamoDbStoreInternal::create(config, namespace, root_key).await
     }
 
-    async fn delete(config: &Self::Config, namespace: &str) -> Result<(), DynamoDbStoreError> {
-        DynamoDbStoreInternal::delete(config, namespace).await
+    async fn delete(config: &Self::Config, namespace: &str, root_key: &[u8]) -> Result<(), DynamoDbStoreError> {
+        DynamoDbStoreInternal::delete(config, namespace, root_key).await
     }
 }
 
@@ -1152,6 +1164,10 @@ pub enum DynamoDbStoreError {
     #[error(transparent)]
     CreateTable(#[from] SdkError<CreateTableError>),
 
+    /// A view error.
+    #[error(transparent)]
+    ViewError(#[from] crate::views::ViewError),
+
     /// An error occurred while building an object
     #[error(transparent)]
     Build(#[from] Box<BuildError>),
@@ -1250,7 +1266,7 @@ pub async fn create_dynamo_db_test_config() -> DynamoDbStoreConfig {
 pub async fn create_dynamo_db_test_store() -> DynamoDbStore {
     let store_config = create_dynamo_db_test_config().await;
     let namespace = generate_test_namespace();
-    DynamoDbStore::recreate_and_connect(&store_config, &namespace)
+    DynamoDbStore::recreate_and_connect(&store_config, &namespace, &[])
         .await
         .expect("key_value_store")
 }

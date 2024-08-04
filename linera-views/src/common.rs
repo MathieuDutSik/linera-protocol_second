@@ -176,6 +176,13 @@ pub struct NamespaceRootKey {
 }
 
 impl NamespaceRootKey {
+    /// A constructor
+    pub fn new(namespace: &str, root_key: &[u8]) -> Self {
+        let namespace = namespace.to_string();
+        let root_key = root_key.to_vec();
+        Self { namespace, root_key }
+    }
+
     /// Convert to a `Vec<u8>` to process
     pub fn to_vec(&self) -> Result<Vec<u8>, ViewError> {
         Ok(bcs::to_bytes(self)?)
@@ -200,7 +207,6 @@ impl NamespaceRootKey {
         Ok((pair.namespace, pair.root_key))
     }
 }
-
 
 
 

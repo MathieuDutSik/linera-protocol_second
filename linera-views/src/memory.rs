@@ -383,16 +383,14 @@ impl<E> MemoryContext<E> {
 #[cfg(with_testing)]
 pub fn create_test_memory_context() -> MemoryContext<()> {
     let namespace = generate_test_namespace();
-    let root_key = Vec::new();
-    MemoryContext::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &root_key, ())
+    MemoryContext::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &[], ())
 }
 
 /// Creates a test memory store for working.
 #[cfg(with_testing)]
 pub fn create_test_memory_store() -> MemoryStore {
     let namespace = generate_test_namespace();
-    let root_key = Vec::new();
-    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &root_key).unwrap()
+    MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &[]).unwrap()
 }
 
 /// The error type for [`MemoryContext`].

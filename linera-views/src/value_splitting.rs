@@ -426,9 +426,8 @@ impl LimitedTestMemoryStore {
     /// Creates a `LimitedTestMemoryStore`
     pub fn new() -> Self {
         let namespace = generate_test_namespace();
-        let root_key = Vec::new();
         let store =
-            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &root_key).unwrap();
+            MemoryStore::new_for_testing(TEST_MEMORY_MAX_STREAM_QUERIES, &namespace, &[]).unwrap();
         LimitedTestMemoryStore { store }
     }
 }

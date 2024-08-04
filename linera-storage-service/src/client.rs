@@ -299,9 +299,7 @@ impl ServiceStoreClientInternal {
     }
 
     fn to_vec(namespace: &str, root_key: &[u8]) -> Result<Vec<u8>, ServiceStoreError> {
-        let namespace = namespace.to_string();
-        let root_key = root_key.to_vec();
-        let key = NamespaceRootKey { namespace, root_key };
+        let key = NamespaceRootKey::new(namespace, root_key);
         Ok(key.to_vec()?)
     }
 

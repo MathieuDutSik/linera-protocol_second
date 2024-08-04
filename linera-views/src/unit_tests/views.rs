@@ -258,7 +258,7 @@ impl TestContextFactory for DynamoDbContextFactory {
             config,
             common_config,
         };
-        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace).await?;
+        let store = DynamoDbStore::recreate_and_connect(&store_config, &namespace, &[]).await?;
         let dummy_key_prefix = vec![0];
         Ok(DynamoDbContext::new(store, dummy_key_prefix, ()))
     }
