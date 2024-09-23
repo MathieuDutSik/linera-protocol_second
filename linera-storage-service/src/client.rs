@@ -3,7 +3,7 @@
 
 use std::{mem, sync::Arc};
 
-use async_lock::{RwLock, RwLockWriteGuard, Semaphore, SemaphoreGuard};
+use async_lock::{Mutex, RwLock, RwLockWriteGuardArc, Semaphore, SemaphoreGuard};
 use linera_base::ensure;
 #[cfg(with_metrics)]
 use linera_views::metering::MeteredStore;
@@ -58,13 +58,33 @@ const MAX_KEY_SIZE: usize = 1000000;
 //   [KeyTag::Namespace] + [namespace]
 // is stored to indicate the existence of a namespace.
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct ServiceStoreClientInternal {
-    client: Arc<RwLock<StoreProcessorClient<Channel>>>,
+    endpoint: Endpoint,
+    clients: Arc<Mutex<Vec<Arc<RwLock<StoreProcessorClient<Channel>>>>>>,
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
     cache_size: usize,
     namespace: Vec<u8>,
     root_key: Vec<u8>,
+}
+
+impl ServiceStoreClientInternal {
+    pub async fn get_client(
+        &self,
+    ) -> Result<RwLockWriteGuardArc<StoreProcessorClient<Channel>>, ServiceStoreError> {
+        let mut clients = self.clients.lock_arc().await;
+        for client in clients.iter() {
+            if let Some(client) = client.clone().try_write_arc() {
+                return Ok(client);
+            }
+        }
+        let client = StoreProcessorClient::connect(self.endpoint.clone()).await?;
+        let client = Arc::new(RwLock::new(client));
+        clients.push(client.clone());
+        let client = client.try_write_arc().expect("new client is not locked");
+        Ok(client)
+    }
 }
 
 impl WithError for ServiceStoreClientInternal {
@@ -87,7 +107,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_read_value(request).await?;
         let response = response.into_inner();
@@ -99,7 +119,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(value)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -110,7 +130,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         full_key.extend(key);
         let query = RequestContainsKey { key: full_key };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_contains_key(request).await?;
         let response = response.into_inner();
@@ -129,7 +149,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         }
         let query = RequestContainsKeys { keys: full_keys };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_contains_keys(request).await?;
         let response = response.into_inner();
@@ -151,7 +171,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         }
         let query = RequestReadMultiValues { keys: full_keys };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_read_multi_values(request).await?;
         let response = response.into_inner();
@@ -164,7 +184,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             let values = values.into_iter().map(|x| x.value).collect::<Vec<_>>();
             Ok(values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -183,7 +203,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_find_keys_by_prefix(request).await?;
         let response = response.into_inner();
@@ -195,7 +215,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
         if num_chunks == 0 {
             Ok(keys)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 
@@ -214,7 +234,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
             key_prefix: full_key_prefix,
         };
         let request = tonic::Request::new(query);
-        let mut client = self.client.write().await;
+        let mut client = self.get_client().await?;
         let _guard = self.acquire().await;
         let response = client.process_find_key_values_by_prefix(request).await?;
         let response = response.into_inner();
@@ -230,7 +250,7 @@ impl ReadableKeyValueStore for ServiceStoreClientInternal {
                 .collect::<Vec<_>>();
             Ok(key_values)
         } else {
-            Self::read_entries(client, message_index, num_chunks).await
+            self.read_entries(message_index, num_chunks).await
         }
     }
 }
@@ -320,7 +340,7 @@ impl ServiceStoreClientInternal {
         if !statements.is_empty() {
             let query = RequestWriteBatchExtended { statements };
             let request = tonic::Request::new(query);
-            let mut client = self.client.write().await;
+            let mut client = self.get_client().await?;
             let _guard = self.acquire().await;
             let _response = client.process_write_batch_extended(request).await?;
         }
@@ -357,10 +377,11 @@ impl ServiceStoreClientInternal {
     }
 
     async fn read_entries<S: DeserializeOwned>(
-        mut client: RwLockWriteGuard<'_, StoreProcessorClient<Channel>>,
+        &self,
         message_index: i64,
         num_chunks: i32,
     ) -> Result<S, ServiceStoreError> {
+        let mut client = self.get_client().await?;
         let mut value = Vec::new();
         for index in 0..num_chunks {
             let query = RequestSpecificChunk {
@@ -387,8 +408,7 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     ) -> Result<Self, ServiceStoreError> {
         let endpoint = format!("http://{}", config.endpoint);
         let endpoint = Endpoint::from_shared(endpoint)?;
-        let client = StoreProcessorClient::connect(endpoint).await?;
-        let client = Arc::new(RwLock::new(client));
+        let clients = Arc::new(Mutex::new(Vec::new()));
         let semaphore = config
             .common_config
             .max_concurrent_queries
@@ -398,7 +418,8 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
         let namespace = Self::namespace_as_vec(namespace)?;
         let root_key = root_key.to_vec();
         Ok(Self {
-            client,
+            endpoint,
+            clients,
             semaphore,
             max_stream_queries,
             cache_size,
@@ -408,14 +429,16 @@ impl AdminKeyValueStore for ServiceStoreClientInternal {
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, ServiceStoreError> {
-        let client = self.client.clone();
+        let endpoint = self.endpoint.clone();
+        let clients = self.clients.clone();
         let semaphore = self.semaphore.clone();
         let max_stream_queries = self.max_stream_queries;
         let cache_size = self.cache_size;
         let namespace = self.namespace.clone();
         let root_key = root_key.to_vec();
         Ok(Self {
-            client,
+            endpoint,
+            clients,
             semaphore,
             max_stream_queries,
             cache_size,
