@@ -102,6 +102,8 @@ impl StorageConfigProvider {
             StorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
             #[cfg(feature = "scylladb")]
             StorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
+            #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
+            StorageConfig::DualRocksDbScyllaDb { .. } => Ok(Database::DualRocksDbScyllaDb),
         }
     }
 }

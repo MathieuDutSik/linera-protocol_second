@@ -629,6 +629,13 @@ impl PathWithGuard {
     }
 }
 
+impl PartialEq for PathWithGuard {
+    fn eq(&self, other: &Self) -> bool {
+        self.path_buf == other.path_buf
+    }
+}
+impl Eq for PathWithGuard {}
+
 /// Returns the test path for RocksDB without common config.
 pub fn create_rocks_db_test_path() -> PathWithGuard {
     let dir = TempDir::new().unwrap();
