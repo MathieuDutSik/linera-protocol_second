@@ -4371,6 +4371,7 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-indexer",
+ "linera-storage-service",
  "linera-views",
  "serde",
  "tokio",
