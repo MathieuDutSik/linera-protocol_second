@@ -208,7 +208,8 @@ social = { path = "./examples/social" }
 amm = { path = "./examples/amm" }
 
 [profile.release]
-debug = true
+lto = "fat"  # Use "thin" or "fat" depending on your needs
+debug = false
 
 [profile.bench]
 debug = true
