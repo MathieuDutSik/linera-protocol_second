@@ -1,8 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//use crate::test_utils::linera_alloy_sol_types;
-use linera_alloy::{
+use alloy::{
     network::{Ethereum, EthereumSigner},
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
@@ -46,13 +45,13 @@ pub struct AnvilTest {
     pub provider: FillProvider<
         JoinFill<
             JoinFill<
-                JoinFill<JoinFill<linera_alloy::providers::Identity, GasFiller>, NonceFiller>,
+                JoinFill<JoinFill<alloy::providers::Identity, GasFiller>, NonceFiller>,
                 ChainIdFiller,
             >,
             SignerFiller<EthereumSigner>,
         >,
-        RootProvider<linera_alloy::transports::http::Http<Client>>,
-        linera_alloy::transports::http::Http<Client>,
+        RootProvider<alloy::transports::http::Http<Client>>,
+        alloy::transports::http::Http<Client>,
         Ethereum,
     >,
 }
