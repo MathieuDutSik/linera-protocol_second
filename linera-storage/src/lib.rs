@@ -72,6 +72,10 @@ pub trait Storage: Sized {
     /// [`create_chain`][`Self::create_chain`].
     async fn load_chain(&self, id: ChainId) -> Result<ChainStateView<Self::Context>, ViewError>;
 
+
+    /// Load all chains ids of the storage.
+    async fn load_all_chain_ids(&self) -> Result<Vec<ChainId>, ViewError>;
+
     /// Tests the existence of a blob with the given blob ID.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
