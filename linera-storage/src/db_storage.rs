@@ -187,9 +187,9 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 /// The latency to load a chain state.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static LOAD_ALL_CHAINS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+pub static LOAD_ALL_CHAIN_IDS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "load_all_chains_latency",
+        "load_all_chain_ids_latency",
         "The latency to load all chain ids",
         &[],
         bucket_latencies(1.0),
@@ -221,7 +221,8 @@ const INDEX_CERTIFICATE: u8 = 1;
 const INDEX_CONFIRMED_BLOCK: u8 = 2;
 const INDEX_BLOB: u8 = 3;
 const INDEX_BLOB_STATE: u8 = 4;
-const CHAIN_STATE_LENGTH: usize = 32;
+const CHAIN_STATE_LENGTH: usize = std::mem::size_of::<CryptoHash>();
+
 
 impl BaseKey {
     /// We depend on the precise serialization to do queries and so we have to
@@ -419,7 +420,7 @@ where
 
     async fn load_all_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
         #[cfg(with_metrics)]
-        let _metric = LOAD_ALL_CHAINS_LATENCY.measure_latency();
+        let _metric = LOAD_ALL_CHAIN_IDS_LATENCY.measure_latency();
         let prefix = &[INDEX_CHAIN_STATE];
         let keys = self.store.find_keys_by_prefix(prefix).await?;
         let mut chain_ids = HashSet::new();
