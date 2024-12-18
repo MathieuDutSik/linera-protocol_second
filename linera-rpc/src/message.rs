@@ -38,6 +38,8 @@ pub enum RpcMessage {
     DownloadCertificates(Vec<CryptoHash>),
     BlobLastUsedBy(Box<BlobId>),
     MissingBlobIds(Box<Vec<BlobId>>),
+    ListAllBlobIds,
+    ListAllChainIds,
     VersionInfoQuery,
     GenesisConfigHashQuery,
 
@@ -52,6 +54,8 @@ pub enum RpcMessage {
     DownloadCertificatesResponse(Vec<ConfirmedBlockCertificate>),
     BlobLastUsedByResponse(Box<CryptoHash>),
     MissingBlobIdsResponse(Box<Vec<BlobId>>),
+    ListAllBlobIdsResponse(Box<Vec<BlobId>>),
+    ListAllChainIdsResponse(Box<Vec<ChainId>>),
 
     // Internal to a validator
     CrossChainRequest(Box<CrossChainRequest>),
@@ -88,6 +92,10 @@ impl RpcMessage {
             | BlobLastUsedByResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | ListAllBlobIds
+            | ListAllChainIds
+            | ListAllBlobIdsResponse(_)
+            | ListAllChainIdsResponse(_)
             | DownloadCertificatesResponse(_) => {
                 return None;
             }
@@ -108,6 +116,8 @@ impl RpcMessage {
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | MissingBlobIds(_)
+            | ListAllBlobIds
+            | ListAllChainIds
             | DownloadCertificates(_) => true,
             BlockProposal(_)
             | LiteCertificate(_)
@@ -125,6 +135,8 @@ impl RpcMessage {
             | DownloadConfirmedBlockResponse(_)
             | BlobLastUsedByResponse(_)
             | MissingBlobIdsResponse(_)
+            | ListAllBlobIdsResponse(_)
+            | ListAllChainIdsResponse(_)
             | DownloadCertificatesResponse(_) => false,
         }
     }

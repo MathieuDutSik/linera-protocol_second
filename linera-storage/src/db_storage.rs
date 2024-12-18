@@ -187,10 +187,22 @@ pub static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
 /// The latency to load a chain state.
 #[cfg(with_metrics)]
 #[doc(hidden)]
-pub static LOAD_ALL_CHAIN_IDS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+pub static LIST_ALL_CHAIN_IDS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec(
-        "load_all_chain_ids_latency",
-        "The latency to load all chain ids",
+        "list_all_chain_ids_latency",
+        "The latency to list all chain ids",
+        &[],
+        bucket_latencies(1.0),
+    )
+});
+
+/// The latency to load a chain state.
+#[cfg(with_metrics)]
+#[doc(hidden)]
+pub static LIST_ALL_BLOB_IDS_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec(
+        "list_all_blob_ids_latency",
+        "The latency to list all blob ids",
         &[],
         bucket_latencies(1.0),
     )
@@ -222,6 +234,7 @@ const INDEX_CONFIRMED_BLOCK: u8 = 2;
 const INDEX_BLOB: u8 = 3;
 const INDEX_BLOB_STATE: u8 = 4;
 const CHAIN_STATE_LENGTH: usize = std::mem::size_of::<CryptoHash>();
+const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
 
 
 impl BaseKey {
@@ -418,9 +431,9 @@ where
         ChainStateView::load(context).await
     }
 
-    async fn load_all_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
+    async fn list_all_chain_ids(&self) -> Result<Vec<ChainId>, ViewError> {
         #[cfg(with_metrics)]
-        let _metric = LOAD_ALL_CHAIN_IDS_LATENCY.measure_latency();
+        let _metric = LIST_ALL_CHAIN_IDS_LATENCY.measure_latency();
         let prefix = &[INDEX_CHAIN_STATE];
         let keys = self.store.find_keys_by_prefix(prefix).await?;
         let mut chain_ids = HashSet::new();
@@ -431,6 +444,21 @@ where
             chain_ids.insert(chain_id);
         }
         Ok(chain_ids.into_iter().collect::<Vec<_>>())
+    }
+
+    async fn list_all_blob_ids(&self) -> Result<Vec<BlobId>, ViewError> {
+        #[cfg(with_metrics)]
+        let _metric = LIST_ALL_BLOB_IDS_LATENCY.measure_latency();
+        let prefix = &[INDEX_BLOB];
+        let keys = self.store.find_keys_by_prefix(prefix).await?;
+        let mut blob_ids = HashSet::new();
+        for key in keys.iterator() {
+            let key = key?;
+            let key_red = &key[..BLOB_LENGTH];
+            let blob_id = bcs::from_bytes(key_red)?;
+            blob_ids.insert(blob_id);
+        }
+        Ok(blob_ids.into_iter().collect::<Vec<_>>())
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

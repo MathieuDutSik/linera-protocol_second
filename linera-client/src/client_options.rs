@@ -382,10 +382,6 @@ pub enum ClientCommand {
         chain_id: ChainId,
     },
 
-    /// List all the chains
-    ListChains {
-    },
-
     /// Read the current native-token balance of the given account directly from the local
     /// state.
     ///

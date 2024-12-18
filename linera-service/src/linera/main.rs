@@ -301,15 +301,6 @@ impl Runnable for Job {
                 debug!("{:?}", certificate);
             }
 
-            ListChains { } => {
-                info!("Listing all chains");
-                let time_start = Instant::now();
-                let chain_ids = storage.load_all_chain_ids().await?;
-                let time_total = time_start.elapsed();
-                info!("Listing chains done in {} ms", time_total.as_millis());
-                debug!("{:?}", chain_ids);
-            }
-
             LocalBalance { account } => {
                 let account = account.unwrap_or_else(|| context.default_account());
                 let chain_client = context.make_chain_client(account.chain_id)?;
@@ -1404,7 +1395,6 @@ fn log_file_name_for(command: &ClientCommand) -> Cow<'static, str> {
         | ClientCommand::ChangeOwnership { .. }
         | ClientCommand::ChangeApplicationPermissions { .. }
         | ClientCommand::CloseChain { .. }
-        | ClientCommand::ListChains { .. }
         | ClientCommand::LocalBalance { .. }
         | ClientCommand::QueryBalance { .. }
         | ClientCommand::SyncBalance { .. }
