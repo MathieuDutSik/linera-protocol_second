@@ -443,6 +443,24 @@ where
     }
 
     #[instrument(skip_all, err(Display))]
+    async fn get_list_all_chain_ids(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<ListAllChainIds>, Status> {
+        // We assume each shard is running the same version as the proxy
+        Ok(Response::new(linera_version::ListAllChainIds::default().into()))
+    }
+
+    #[instrument(skip_all, err(Display))]
+    async fn get_list_all_blob_ids(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<ListAllBlobIds>, Status> {
+        // We assume each shard is running the same version as the proxy
+        Ok(Response::new(linera_version::ListAllBlobIds::default().into()))
+    }
+
+    #[instrument(skip_all, err(Display))]
     async fn get_genesis_config_hash(
         &self,
         _request: Request<()>,
