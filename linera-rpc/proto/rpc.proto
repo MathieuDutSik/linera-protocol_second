@@ -59,10 +59,10 @@ service ValidatorNode {
   rpc GetVersionInfo(google.protobuf.Empty) returns (VersionInfo);
 
   // Request the list of chain ids.
-  rpc GetListAllChainIds(google.protobuf.Empty) returns (ListAllChainIds);
+  rpc GetListAllChainIds(google.protobuf.Empty) returns (ChainIds);
 
   // Request the list of blob ids.
-  rpc GetListAllBlobIds(google.protobuf.Empty) returns (ListAllBlobIds);
+  rpc GetListAllBlobIds(google.protobuf.Empty) returns (BlobIds);
 
   // Request the genesis configuration hash of the network this node is part of.
   rpc GetGenesisConfigHash(google.protobuf.Empty) returns (CryptoHash);
@@ -111,13 +111,8 @@ message VersionInfo {
 }
 
 // The list of the chain ids of the validator
-message ListAllChainIds {
+message ChainIds {
   repeated ChainId chain_ids = 1;
-}
-
-// The list of the blob ids of the validator
-message ListAllBlobIds {
-  repeated BlobId blob_ids = 1;
 }
 
 // A request for client to subscribe to notifications for a given `ChainId`

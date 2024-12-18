@@ -140,9 +140,9 @@ impl From<api::VersionInfo> for linera_version::VersionInfo {
     }
 }
 
-impl TryFrom<api::ListAllChainIds> for Vec<ChainId> {
+impl TryFrom<api::ChainIds> for Vec<ChainId> {
     type Error = GrpcProtoConversionError;
-    fn try_from(input: api::ListAllChainIds) -> Result<Vec<ChainId>, Self::Error> {
+    fn try_from(input: api::ChainIds) -> Result<Vec<ChainId>, Self::Error> {
         input
             .chain_ids
             .into_iter()
@@ -151,8 +151,8 @@ impl TryFrom<api::ListAllChainIds> for Vec<ChainId> {
     }
 }
 
-impl From<Vec<ChainId>> for api::ListAllChainIds {
-    fn from(chain_ids: Vec<ChainId>) -> api::ListAllChainIds {
+impl From<Vec<ChainId>> for api::ChainIds {
+    fn from(chain_ids: Vec<ChainId>) -> api::ChainIds {
         Self {
             chain_ids: chain_ids
                 .into_iter()
@@ -161,32 +161,6 @@ impl From<Vec<ChainId>> for api::ListAllChainIds {
         }
     }
 }
-
-
-impl TryFrom<api::ListAllBlobIds> for Vec<BlobId> {
-    type Error = GrpcProtoConversionError;
-    fn try_from(input: api::ListAllBlobIds) -> Result<Vec<BlobId>, Self::Error> {
-        input
-            .blob_ids
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_,_>>()
-    }
-}
-
-impl TryFrom<Vec<BlobId>> for api::ListAllBlobIds {
-    type Error = GrpcProtoConversionError;
-    fn try_from(blob_ids: Vec<BlobId>) -> Result<api::ListAllBlobIds, Self::Error> {
-        Ok(Self {
-            blob_ids: blob_ids
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_,_>>()?
-        })
-    }
-}
-
-
 
 impl TryFrom<Notification> for api::Notification {
     type Error = GrpcProtoConversionError;

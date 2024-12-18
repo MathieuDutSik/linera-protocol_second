@@ -32,7 +32,7 @@ use linera_rpc::{
             notifier_service_server::{NotifierService, NotifierServiceServer},
             validator_node_server::{ValidatorNode, ValidatorNodeServer},
             validator_worker_client::ValidatorWorkerClient,
-            BlobContent, BlobId, BlobIds, BlockProposal, Certificate, CertificatesBatchRequest,
+            BlobContent, BlobId, BlobIds, ChainIds, BlockProposal, Certificate, CertificatesBatchRequest,
             CertificatesBatchResponse, ChainInfoQuery, ChainInfoResult, CryptoHash,
             LiteCertificate, Notification, SubscriptionRequest, VersionInfo,
         },
@@ -446,18 +446,30 @@ where
     async fn get_list_all_chain_ids(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<ListAllChainIds>, Status> {
+    ) -> Result<Response<ChainIds>, Status> {
         // We assume each shard is running the same version as the proxy
-        Ok(Response::new(linera_version::ListAllChainIds::default().into()))
+        let chain_ids = self
+            .0
+            .storage
+            .list_all_chain_ids()
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(chain_ids.into()))
     }
 
     #[instrument(skip_all, err(Display))]
     async fn get_list_all_blob_ids(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<ListAllBlobIds>, Status> {
+    ) -> Result<Response<BlobIds>, Status> {
         // We assume each shard is running the same version as the proxy
-        Ok(Response::new(linera_version::ListAllBlobIds::default().into()))
+        let blob_ids = self
+            .0
+            .storage
+            .list_all_blob_ids()
+            .await
+            .map_err(|err| Status::from_error(Box::new(err)))?;
+        Ok(Response::new(blob_ids.try_into()?))
     }
 
     #[instrument(skip_all, err(Display))]
