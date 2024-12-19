@@ -176,11 +176,17 @@ where
     }
 
     async fn get_list_all_chain_ids(&self) -> Result<Vec<ChainId>, NodeError> {
-
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_list_all_chain_ids(sender)
+        })
+        .await
     }
 
     async fn get_list_all_blob_ids(&self) -> Result<Vec<BlobId>, NodeError> {
-
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_list_all_blob_ids(sender)
+        })
+        .await
     }
 
     async fn get_genesis_config_hash(&self) -> Result<CryptoHash, NodeError> {
@@ -492,7 +498,7 @@ where
         sender.send(chain_ids)
     }
 
-    async fn do_download_all_blob_ids(
+    async fn do_list_all_blob_ids(
         self,
         sender: oneshot::Sender<Result<Vec<BlobId>, NodeError>>,
     ) -> Result<(), Result<Vec<BlobId>, NodeError>> {
