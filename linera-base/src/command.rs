@@ -6,11 +6,13 @@
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
+    sync::Arc,
 };
 
 use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
 use tokio::process::Command;
+use tempfile::TempDir;
 use tracing::{debug, error};
 
 /// Attempts to resolve the path and test the version of the given binary against our
@@ -184,5 +186,33 @@ impl CommandExt for tokio::process::Command {
         );
 
         Ok(())
+    }
+}
+
+/// A path and the guard for the temporary directory if needed
+#[derive(Clone)]
+pub struct PathWithGuard {
+    /// The path to the data
+    pub path_buf: PathBuf,
+    /// The guard for the directory if one is needed
+    _dir: Option<Arc<TempDir>>,
+}
+
+impl PathWithGuard {
+    /// Create a PathWithGuard from an existing path.
+    pub fn new(path_buf: PathBuf) -> Self {
+        Self {
+            path_buf,
+            _dir: None,
+        }
+    }
+
+    /// Returns the test path for RocksDB without common config.
+    #[cfg(with_testing)]
+    pub fn new_testing() -> PathWithGuard {
+        let dir = TempDir::new().unwrap();
+        let path_buf = dir.path().to_path_buf();
+        let _dir = Some(Arc::new(dir));
+        PathWithGuard { path_buf, _dir }
     }
 }
