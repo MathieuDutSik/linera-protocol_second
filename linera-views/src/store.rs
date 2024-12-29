@@ -72,6 +72,69 @@ pub trait WithError {
     type Error: KeyValueStoreError;
 }
 
+/// Low-level, synchronous read key-value operations.
+pub trait SyncReadableKeyValueStore: WithError {
+    /// The maximal size of keys that can be stored.
+    const MAX_KEY_SIZE: usize;
+
+    /// Returns type for key search operations.
+    type Keys: KeyIterable<Self::Error>;
+
+    /// Returns type for key-value search operations.
+    type KeyValues: KeyValueIterable<Self::Error>;
+
+    /// Retrieve the number of stream queries.
+    fn max_stream_queries(&self) -> usize;
+
+    /// Retrieves a `Vec<u8>` from the database using the provided `key`.
+    fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
+
+    /// Tests whether a key exists in the database
+    fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
+
+    /// Tests whether a list of keys exist in the database
+    fn contains_keys(&self, keys: Vec<Vec<u8>>) -> Result<Vec<bool>, Self::Error>;
+
+    /// Retrieves multiple `Vec<u8>` from the database using the provided `keys`.
+    fn read_multi_values_bytes(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
+
+    /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
+    fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::Keys, Self::Error>;
+
+    /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
+    fn find_key_values_by_prefix(&self, key_prefix: &[u8]) -> Result<Self::KeyValues, Self::Error>;
+
+    // We can't use `async fn` here in the below implementations due to
+    // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
+    // we can revert them to `async fn` syntax, which is neater.
+
+    /// Reads a single `key` and deserializes the result if present.
+    fn read_value<V: DeserializeOwned>(&self, key: &[u8]) -> Result<Option<V>, Self::Error>
+    where
+        Self: Sync,
+    {
+        from_bytes_option(&self.read_value_bytes(key)?)
+    }
+
+    /// Reads multiple `keys` and deserializes the results if present.
+    fn read_multi_values<V: DeserializeOwned + Send>(
+        &self,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Option<V>>, Self::Error>
+    where
+        Self: Sync,
+    {
+        let mut values = Vec::with_capacity(keys.len());
+        for entry in self.read_multi_values_bytes(keys)? {
+            values.push(from_bytes_option::<_, bcs::Error>(&entry)?);
+        }
+        Ok(values)
+    }
+}
+
 /// Low-level, asynchronous read key-value operations. Useful for storage APIs not based on views.
 #[trait_variant::make(ReadableKeyValueStore: Send)]
 pub trait LocalReadableKeyValueStore: WithError {
