@@ -25,7 +25,7 @@ use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
     batch::Batch,
     context::ViewContext,
-    store::KeyValueStore,
+    store::{KeyIterable as _, KeyValueStore},
     views::{View, ViewError},
 };
 use serde::{Deserialize, Serialize};
@@ -205,45 +205,41 @@ enum BaseKey {
     BlobState(BlobId),
 }
 
-const INDEX_CHAIN_STATE: u8 = 0;
-const INDEX_CERTIFICATE: u8 = 1;
-const INDEX_CONFIRMED_BLOCK: u8 = 2;
 const INDEX_BLOB: u8 = 3;
-const INDEX_BLOB_STATE: u8 = 4;
 const BLOB_LENGTH: usize = std::mem::size_of::<BlobId>();
 
-impl BaseKey {
-    /// We depend on the precise serialization to do queries and so we have to
-    /// hardcode it.
-    fn to_bytes(&self) -> Result<Vec<u8>, ViewError> {
-        match self {
-            BaseKey::ChainState(chain_id) => {
-                let mut vec = vec![INDEX_CHAIN_STATE];
-                vec.extend(bcs::to_bytes(&chain_id)?);
-                Ok(vec)
-            }
-            BaseKey::Certificate(hash) => {
-                let mut vec = vec![INDEX_CERTIFICATE];
-                vec.extend(bcs::to_bytes(&hash)?);
-                Ok(vec)
-            }
-            BaseKey::ConfirmedBlock(hash) => {
-                let mut vec = vec![INDEX_CONFIRMED_BLOCK];
-                vec.extend(bcs::to_bytes(&hash)?);
-                Ok(vec)
-            }
-            BaseKey::Blob(blob_id) => {
-                let mut vec = vec![INDEX_BLOB];
-                vec.extend(bcs::to_bytes(&blob_id)?);
-                Ok(vec)
-            }
-            BaseKey::BlobState(blob_id) => {
-                let mut vec = vec![INDEX_BLOB_STATE];
-                vec.extend(bcs::to_bytes(&blob_id)?);
-                Ok(vec)
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        identifiers::{BlobId, BlobType},
+    };
+
+    use crate::db_storage::{BaseKey, INDEX_BLOB};
+
+    #[test]
+    fn test_base_key_serialization() {
+        let hash = CryptoHash::default();
+        let blob_type = BlobType::default();
+        let blob_id = BlobId::new(hash, blob_type);
+        let base_key = BaseKey::Blob(blob_id);
+        let key = bcs::to_bytes(&base_key).expect("a key");
+        assert_eq!(key[0], INDEX_BLOB);
     }
+}
+
+/// Lists the blobs of the storage.
+pub async fn list_all_blob_ids<S: KeyValueStore>(store: &S) -> Result<Vec<BlobId>, ViewError> {
+    let prefix = &[INDEX_BLOB];
+    let keys = store.find_keys_by_prefix(prefix).await?;
+    let mut blob_ids = Vec::new();
+    for key in keys.iterator() {
+        let key = key?;
+        let key_red = &key[..BLOB_LENGTH];
+        let blob_id = bcs::from_bytes(key_red)?;
+        blob_ids.push(blob_id);
+    }
+    Ok(blob_ids)
 }
 
 /// An implementation of [`DualStoreRootKeyAssignment`] that stores the
@@ -400,14 +396,14 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = BaseKey::ChainState(chain_id).to_bytes()?;
+        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
         let store = self.store.clone_with_root_key(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -417,7 +413,7 @@ where
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
         let mut keys = Vec::new();
         for blob_id in blob_ids {
-            let key = BaseKey::Blob(*blob_id).to_bytes()?;
+            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
             keys.push(key);
         }
         let results = self.store.contains_keys(keys).await?;
@@ -433,7 +429,7 @@ where
     }
 
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let blob_key = BaseKey::BlobState(blob_id).to_bytes()?;
+        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let test = self.store.contains_key(&blob_key).await?;
         #[cfg(with_metrics)]
         CONTAINS_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -444,7 +440,7 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Hashed<ConfirmedBlock>, ViewError> {
-        let value_key = BaseKey::ConfirmedBlock(hash).to_bytes()?;
+        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         let maybe_value = self.store.read_value::<ConfirmedBlock>(&value_key).await?;
         #[cfg(with_metrics)]
         READ_HASHED_CONFIRMED_BLOCK_COUNTER
@@ -455,7 +451,7 @@ where
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Blob, ViewError> {
-        let blob_key = BaseKey::Blob(blob_id).to_bytes()?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = self.store.read_value::<Vec<u8>>(&blob_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_COUNTER.with_label_values(&[]).inc();
@@ -469,7 +465,7 @@ where
         }
         let blob_keys = blob_ids
             .iter()
-            .map(|blob_id| BaseKey::Blob(*blob_id).to_bytes())
+            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
             .collect::<Result<Vec<_>, _>>()?;
         let maybe_blob_bytes = self.store.read_multi_values::<Vec<u8>>(blob_keys).await?;
         #[cfg(with_metrics)]
@@ -487,7 +483,7 @@ where
     }
 
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<BlobState, ViewError> {
-        let blob_state_key = BaseKey::BlobState(blob_id).to_bytes()?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         let maybe_blob_state = self.store.read_value::<BlobState>(&blob_state_key).await?;
         #[cfg(with_metrics)]
         READ_BLOB_STATE_COUNTER.with_label_values(&[]).inc();
@@ -502,7 +498,7 @@ where
         }
         let blob_state_keys = blob_ids
             .iter()
-            .map(|blob_id| BaseKey::BlobState(*blob_id).to_bytes())
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
         let maybe_blob_states = self
             .store
@@ -577,7 +573,7 @@ where
         }
         let blob_state_keys = blob_ids
             .iter()
-            .map(|blob_id| BaseKey::BlobState(*blob_id).to_bytes())
+            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
             .collect::<Result<_, _>>()?;
         let maybe_blob_states = self
             .store
@@ -701,8 +697,8 @@ where
         Ok(hashes
             .iter()
             .flat_map(|hash| {
-                let cert_key = BaseKey::Certificate(*hash).to_bytes();
-                let value_key = BaseKey::ConfirmedBlock(*hash).to_bytes();
+                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
+                let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
                 vec![cert_key, value_key]
             })
             .collect::<Result<_, _>>()?)
@@ -729,7 +725,7 @@ where
     fn add_blob_to_batch(blob: &Blob, batch: &mut Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = BaseKey::Blob(blob.id()).to_bytes()?;
+        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
         batch.put_key_value(blob_key.to_vec(), &blob.bytes())?;
         Ok(())
     }
@@ -739,7 +735,7 @@ where
         blob_state: &BlobState,
         batch: &mut Batch,
     ) -> Result<(), ViewError> {
-        let blob_state_key = BaseKey::BlobState(blob_id).to_bytes()?;
+        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         batch.put_key_value(blob_state_key.to_vec(), blob_state)?;
         Ok(())
     }
@@ -751,8 +747,8 @@ where
         #[cfg(with_metrics)]
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
-        let cert_key = BaseKey::Certificate(hash).to_bytes()?;
-        let value_key = BaseKey::ConfirmedBlock(hash).to_bytes()?;
+        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
+        let value_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
         batch.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
         batch.put_key_value(value_key.to_vec(), certificate.value())?;
         Ok(())
