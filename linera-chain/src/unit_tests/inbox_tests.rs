@@ -40,16 +40,15 @@ fn make_unskippable_bundle(
 }
 
 #[tokio::test]
-async fn test_inbox_add_then_remove_skippable() {
+async fn test_inbox_add_then_remove_skippable() -> anyhow::Result<()> {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add one bundle.
-    assert!(view.add_bundle(make_bundle(hash, 0, 0, [0])).await.unwrap());
+    assert!(view.add_bundle(make_bundle(hash, 0, 0, [0])).await?);
     // Remove the same bundle
     assert!(view
         .remove_bundle(&make_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to add an old bundle.
     assert_matches!(
         view.add_bundle(make_bundle(hash, 0, 0, [0])).await,
@@ -61,8 +60,8 @@ async fn test_inbox_add_then_remove_skippable() {
         Err(InboxError::IncorrectOrder { .. })
     );
     // Add two more bundles.
-    assert!(view.add_bundle(make_bundle(hash, 0, 1, [1])).await.unwrap());
-    assert!(view.add_bundle(make_bundle(hash, 1, 0, [2])).await.unwrap());
+    assert!(view.add_bundle(make_bundle(hash, 0, 1, [1])).await?);
+    assert!(view.add_bundle(make_bundle(hash, 1, 0, [2])).await?);
     // Fail to remove non-matching bundle.
     assert_matches!(
         view.remove_bundle(&make_bundle(hash, 0, 1, [0])).await,
@@ -77,24 +76,23 @@ async fn test_inbox_add_then_remove_skippable() {
     // OK to skip bundles.
     assert!(view
         .remove_bundle(&make_bundle(hash, 1, 0, [2]))
-        .await
-        .unwrap());
+        .await?);
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_inbox_remove_then_add_skippable() {
+async fn test_inbox_remove_then_add_skippable() -> anyhow::Result<()> {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Remove one bundle by anticipation.
     assert!(!view
         .remove_bundle(&make_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Add the same bundle
-    assert!(!view.add_bundle(make_bundle(hash, 0, 0, [0])).await.unwrap());
+    assert!(!view.add_bundle(make_bundle(hash, 0, 0, [0])).await?);
     // Fail to remove an old bundle.
     assert_matches!(
         view.remove_bundle(&make_bundle(hash, 0, 0, [0])).await,
@@ -108,12 +106,10 @@ async fn test_inbox_remove_then_add_skippable() {
     // Remove two more bundles.
     assert!(!view
         .remove_bundle(&make_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     assert!(!view
         .remove_bundle(&make_bundle(hash, 1, 1, [3]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to add non-matching bundle.
     assert_matches!(
         view.add_bundle(make_bundle(hash, 0, 1, [0])).await,
@@ -131,34 +127,33 @@ async fn test_inbox_remove_then_add_skippable() {
         Err(InboxError::UnexpectedBundle { .. })
     );
     // OK to backfill the two consumed bundles, with one skippable bundle in the middle.
-    assert!(!view.add_bundle(make_bundle(hash, 0, 1, [1])).await.unwrap());
+    assert!(!view.add_bundle(make_bundle(hash, 0, 1, [1])).await?);
     // Cannot add an unskippable bundle that was visibly skipped already.
     assert_matches!(
         view.add_bundle(make_unskippable_bundle(hash, 1, 0, [2]))
             .await,
         Err(InboxError::UnexpectedBundle { .. })
     );
-    assert!(!view.add_bundle(make_bundle(hash, 1, 0, [2])).await.unwrap());
-    assert!(!view.add_bundle(make_bundle(hash, 1, 1, [3])).await.unwrap());
+    assert!(!view.add_bundle(make_bundle(hash, 1, 0, [2])).await?);
+    assert!(!view.add_bundle(make_bundle(hash, 1, 1, [3])).await?);
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_inbox_add_then_remove_unskippable() {
+async fn test_inbox_add_then_remove_unskippable() -> anyhow::Result<()> {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add one bundle.
     assert!(view
         .add_bundle(make_unskippable_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Remove the same bundle
     assert!(view
         .remove_bundle(&make_unskippable_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to add an old bundle.
     assert_matches!(
         view.add_bundle(make_unskippable_bundle(hash, 0, 0, [0]))
@@ -174,12 +169,10 @@ async fn test_inbox_add_then_remove_unskippable() {
     // Add two more bundles.
     assert!(view
         .add_bundle(make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     assert!(view
         .add_bundle(make_unskippable_bundle(hash, 1, 0, [2]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to remove non-matching bundle.
     assert_matches!(
         view.remove_bundle(&make_unskippable_bundle(hash, 0, 1, [0]))
@@ -205,31 +198,28 @@ async fn test_inbox_add_then_remove_unskippable() {
     );
     assert!(view
         .remove_bundle(&make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     assert!(view
         .remove_bundle(&make_unskippable_bundle(hash, 1, 0, [2]))
-        .await
-        .unwrap());
+        .await?);
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_inbox_remove_then_add_unskippable() {
+async fn test_inbox_remove_then_add_unskippable() -> anyhow::Result<()> {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Remove one bundle by anticipation.
     assert!(!view
         .remove_bundle(&make_unskippable_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Add the same bundle
     assert!(!view
         .add_bundle(make_unskippable_bundle(hash, 0, 0, [0]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to remove an old bundle.
     assert_matches!(
         view.remove_bundle(&make_unskippable_bundle(hash, 0, 0, [0]))
@@ -245,12 +235,10 @@ async fn test_inbox_remove_then_add_unskippable() {
     // Remove two more bundles.
     assert!(!view
         .remove_bundle(&make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     assert!(!view
         .remove_bundle(&make_unskippable_bundle(hash, 1, 1, [3]))
-        .await
-        .unwrap());
+        .await?);
     // Fail to add non-matching bundle.
     assert_matches!(
         view.add_bundle(make_unskippable_bundle(hash, 0, 1, [0]))
@@ -277,8 +265,7 @@ async fn test_inbox_remove_then_add_unskippable() {
     // OK to add the two bundles.
     assert!(!view
         .add_bundle(make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     // Cannot add an unskippable bundle that was visibly skipped already.
     assert_matches!(
         view.add_bundle(make_unskippable_bundle(hash, 1, 0, [2]))
@@ -287,23 +274,22 @@ async fn test_inbox_remove_then_add_unskippable() {
     );
     assert!(!view
         .add_bundle(make_unskippable_bundle(hash, 1, 1, [3]))
-        .await
-        .unwrap());
+        .await?);
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_inbox_add_then_remove_mixed() {
+async fn test_inbox_add_then_remove_mixed() -> anyhow::Result<()> {
     let hash = CryptoHash::test_hash("1");
     let mut view = InboxStateView::new().await;
     // Add two bundles.
     assert!(view
         .add_bundle(make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
-    assert!(view.add_bundle(make_bundle(hash, 1, 0, [2])).await.unwrap());
+        .await?);
+    assert!(view.add_bundle(make_bundle(hash, 1, 0, [2])).await?);
     // Fail to remove non-matching bundle (skippability).
     assert_matches!(
         view.remove_bundle(&make_bundle(hash, 0, 1, [1])).await,
@@ -328,13 +314,12 @@ async fn test_inbox_add_then_remove_mixed() {
     );
     assert!(view
         .remove_bundle(&make_unskippable_bundle(hash, 0, 1, [1]))
-        .await
-        .unwrap());
+        .await?);
     assert!(view
         .remove_bundle(&make_bundle(hash, 1, 0, [2]))
-        .await
-        .unwrap());
+        .await?);
     // Inbox is empty again.
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
+    Ok(())
 }
