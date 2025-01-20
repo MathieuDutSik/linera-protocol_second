@@ -112,7 +112,7 @@ impl Runnable for Job {
         let Job(options) = self;
         let wallet = options.wallet().await?;
         let mut context = ClientContext::new(storage.clone(), options.clone(), wallet);
-        let command = options.command;
+        let command = options.command.clone();
 
         use ClientCommand::*;
         match command {
@@ -1212,6 +1212,37 @@ impl Runnable for Job {
                 );
             }
 
+            Wallet(WalletCommand::Show {
+                chain_id,
+                short,
+                owned,
+            }) => {
+                let start_time = Instant::now();
+                let chain_ids = if let Some(chain_id) = chain_id {
+                    ensure!(!owned, "Cannot specify both --owned and a chain ID");
+                    vec![chain_id]
+                } else if owned {
+                    options.wallet().await?.owned_chain_ids()
+                } else {
+                    options.wallet().await?.chain_ids()
+                };
+                let mut epoches = Vec::new();
+                for chain_id in &chain_ids {
+                    let chain = storage.load_chain(*chain_id).await?;
+                    let epoch = chain.execution_state.system.epoch.get().clone();
+                    epoches.push(epoch);
+                }
+                if short {
+                    for chain_id in chain_ids {
+                        println!("{chain_id}");
+                    }
+                } else {
+                    let chain_ids_epoches = chain_ids.into_iter().zip(epoches).collect::<Vec<_>>();
+                    wallet::pretty_print(&*options.wallet().await?, chain_ids_epoches);
+                }
+                info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
+            }
+
             CreateGenesisConfig { .. }
             | Keygen
             | Net(_)
@@ -1776,90 +1807,64 @@ async fn run(options: &ClientOptions) -> Result<i32, anyhow::Error> {
             Ok(0)
         }
 
-        ClientCommand::Wallet(wallet_command) => match wallet_command {
-            WalletCommand::Show {
-                chain_id,
-                short,
-                owned,
-            } => {
-                let start_time = Instant::now();
-                let chain_ids = if let Some(chain_id) = chain_id {
-                    ensure!(!owned, "Cannot specify both --owned and a chain ID");
-                    vec![*chain_id]
-                } else if *owned {
-                    options.wallet().await?.owned_chain_ids()
-                } else {
-                    options.wallet().await?.chain_ids()
-                };
-                if *short {
-                    for chain_id in chain_ids {
-                        println!("{chain_id}");
-                    }
-                } else {
-                    wallet::pretty_print(&*options.wallet().await?, chain_ids);
-                }
-                info!("Wallet shown in {} ms", start_time.elapsed().as_millis());
-                Ok(0)
-            }
+        ClientCommand::Wallet(WalletCommand::SetDefault { chain_id }) => {
+            let start_time = Instant::now();
+            options
+                .wallet()
+                .await?
+                .mutate(|w| w.set_default_chain(*chain_id))
+                .await??;
+            info!(
+                "Default chain set in {} ms",
+                start_time.elapsed().as_millis()
+            );
+            Ok(0)
+        }
 
-            WalletCommand::SetDefault { chain_id } => {
-                let start_time = Instant::now();
-                options
-                    .wallet()
-                    .await?
-                    .mutate(|w| w.set_default_chain(*chain_id))
-                    .await??;
-                info!(
-                    "Default chain set in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                Ok(0)
-            }
+        ClientCommand::Wallet(WalletCommand::ForgetKeys { chain_id }) => {
+            let start_time = Instant::now();
+            options
+                .wallet()
+                .await?
+                .mutate(|w| w.forget_keys(chain_id))
+                .await??;
+            info!(
+                "Chain keys forgotten in {} ms",
+                start_time.elapsed().as_millis()
+            );
+            Ok(0)
+        }
 
-            WalletCommand::ForgetKeys { chain_id } => {
-                let start_time = Instant::now();
-                options
-                    .wallet()
-                    .await?
-                    .mutate(|w| w.forget_keys(chain_id))
-                    .await??;
-                info!(
-                    "Chain keys forgotten in {} ms",
-                    start_time.elapsed().as_millis()
-                );
-                Ok(0)
-            }
+        ClientCommand::Wallet(WalletCommand::ForgetChain { chain_id }) => {
+            let start_time = Instant::now();
+            options
+                .wallet()
+                .await?
+                .mutate(|w| w.forget_chain(chain_id))
+                .await??;
+            info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
+            Ok(0)
+        }
 
-            WalletCommand::ForgetChain { chain_id } => {
-                let start_time = Instant::now();
-                options
-                    .wallet()
-                    .await?
-                    .mutate(|w| w.forget_chain(chain_id))
-                    .await??;
-                info!("Chain forgotten in {} ms", start_time.elapsed().as_millis());
-                Ok(0)
-            }
-
-            WalletCommand::Init {
-                genesis_config_path,
-                faucet,
-                with_new_chain,
-                with_other_chains,
-                testing_prng_seed,
-            } => {
-                let start_time = Instant::now();
-                let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
-                    (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
-                    (None, Some(url)) => {
-                        let faucet = cli_wrappers::Faucet::new(url.clone());
-                        let version_info = faucet
-                            .version_info()
-                            .await
-                            .context("Failed to obtain version information from the faucet")?;
-                        if !version_info.is_compatible_with(&linera_version::VERSION_INFO) {
-                            warn!(
-                                "\
+        ClientCommand::Wallet(WalletCommand::Init {
+            genesis_config_path,
+            faucet,
+            with_new_chain,
+            with_other_chains,
+            testing_prng_seed,
+        }) => {
+            let start_time = Instant::now();
+            let genesis_config: GenesisConfig = match (genesis_config_path, faucet) {
+                (Some(genesis_config_path), None) => util::read_json(genesis_config_path)?,
+                (None, Some(url)) => {
+                    let faucet = cli_wrappers::Faucet::new(url.clone());
+                    let version_info = faucet
+                        .version_info()
+                        .await
+                        .context("Failed to obtain version information from the faucet")?;
+                    if !version_info.is_compatible_with(&linera_version::VERSION_INFO) {
+                        warn!(
+                            "\
 Make sure to use a Linera client compatible with this network.
 --- Faucet info ---\
 {}\
@@ -1867,43 +1872,42 @@ Make sure to use a Linera client compatible with this network.
 --- This binary ---\
 {}\
 -------------------",
-                                version_info,
-                                linera_version::VERSION_INFO,
-                            );
-                        }
-                        faucet
-                            .genesis_config()
-                            .await
-                            .context("Failed to obtain the genesis configuration from the faucet")?
+                            version_info,
+                            linera_version::VERSION_INFO,
+                        );
                     }
-                    (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
-                };
-                let timestamp = genesis_config.timestamp;
-                options
-                    .create_wallet(genesis_config, *testing_prng_seed)?
-                    .mutate(|wallet| {
-                        wallet.extend(
-                            with_other_chains
-                                .iter()
-                                .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
-                        )
-                    })
-                    .await?;
-                options.initialize_storage().boxed().await?;
-                if *with_new_chain {
-                    ensure!(
-                        faucet.is_some(),
-                        "Using --with-new-chain requires --faucet to be set"
-                    );
-                    options.run_with_storage(Job(options.clone())).await??;
+                    faucet
+                        .genesis_config()
+                        .await
+                        .context("Failed to obtain the genesis configuration from the faucet")?
                 }
+                (_, _) => bail!("Either --faucet or --genesis must be specified, but not both"),
+            };
+            let timestamp = genesis_config.timestamp;
+            options
+                .create_wallet(genesis_config, *testing_prng_seed)?
+                .mutate(|wallet| {
+                    wallet.extend(
+                        with_other_chains
+                            .iter()
+                            .map(|chain_id| UserChain::make_other(*chain_id, timestamp)),
+                    )
+                })
+                .await?;
+            options.initialize_storage().boxed().await?;
+            if *with_new_chain {
+                ensure!(
+                    faucet.is_some(),
+                    "Using --with-new-chain requires --faucet to be set"
+                );
+                options.run_with_storage(Job(options.clone())).await??;
+            }
                 info!(
                     "Wallet initialized in {} ms",
                     start_time.elapsed().as_millis()
                 );
-                Ok(0)
-            }
-        },
+            Ok(0)
+        }
 
         _ => {
             options.run_with_storage(Job(options.clone())).await??;

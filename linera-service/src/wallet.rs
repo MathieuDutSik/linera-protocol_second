@@ -5,10 +5,11 @@ use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table,
 };
+use linera_execution::committee::Epoch;
 use linera_base::identifiers::{ChainId, Owner};
 pub use linera_client::wallet::*;
 
-pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId>) {
+pub fn pretty_print(wallet: &Wallet, chain_ids_epoches: impl IntoIterator<Item = (ChainId, Option<Epoch>)>) {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -18,7 +19,7 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
             Cell::new("Chain ID").add_attribute(Attribute::Bold),
             Cell::new("Latest Block").add_attribute(Attribute::Bold),
         ]);
-    for chain_id in chain_ids {
+    for (chain_id, epoch) in chain_ids_epoches {
         let Some(user_chain) = wallet.chains.get(&chain_id) else {
             panic!("Chain {} not found.", chain_id);
         };
@@ -26,6 +27,7 @@ pub fn pretty_print(wallet: &Wallet, chain_ids: impl IntoIterator<Item = ChainId
             &mut table,
             chain_id,
             user_chain,
+            epoch,
             Some(chain_id) == wallet.default,
         );
     }
@@ -36,6 +38,7 @@ fn update_table_with_chain(
     table: &mut Table,
     chain_id: ChainId,
     user_chain: &UserChain,
+    epoch: Option<Epoch>,
     is_default_chain: bool,
 ) {
     let chain_id_cell = if is_default_chain {
@@ -50,7 +53,8 @@ fn update_table_with_chain(
 Owner:              {}
 Block Hash:         {}
 Timestamp:          {}
-Next Block Height:  {}"#,
+Next Block Height:  {}
+Epoch:              {}"#,
             user_chain
                 .key_pair
                 .as_ref()
@@ -67,7 +71,11 @@ Next Block Height:  {}"#,
                 .map(|bh| bh.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             user_chain.timestamp,
-            user_chain.next_block_height
+            user_chain.next_block_height,
+            match epoch {
+                Some(epoch) => format!("{}", epoch),
+                None => "-".to_string()
+            }
         )),
     ]);
 }
