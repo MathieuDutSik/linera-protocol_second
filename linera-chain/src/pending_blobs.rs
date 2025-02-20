@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use async_graphql::SimpleObject;
 use linera_base::{
     data_types::{Blob, Round},
@@ -60,7 +58,7 @@ where
         &mut self,
         round: Round,
         validated: bool,
-        maybe_blobs: BTreeMap<BlobId, Option<Blob>>,
+        maybe_blobs: Vec<(BlobId, Option<Blob>)>,
     ) -> Result<(), ChainError> {
         let existing_round = *self.round.get();
         ensure!(

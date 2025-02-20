@@ -356,8 +356,8 @@ where
     async fn maybe_get_required_blobs(
         &self,
         blob_ids: impl IntoIterator<Item = BlobId>,
-    ) -> Result<BTreeMap<BlobId, Option<Blob>>, WorkerError> {
-        let mut maybe_blobs = BTreeMap::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
+    ) -> Result<Vec<(BlobId, Option<Blob>)>, WorkerError> {
+        let mut maybe_blobs = Vec::from_iter(blob_ids.into_iter().zip(iter::repeat(None)));
 
         for (blob_id, maybe_blob) in &mut maybe_blobs {
             if let Some(blob) = self.chain.manager.pending_blob(blob_id).await? {
@@ -380,10 +380,10 @@ where
         }
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
         let blobs_from_storage = self.storage.read_blobs(&missing_blob_ids).await?;
-        for (blob_id, maybe_blob) in missing_blob_ids.into_iter().zip(blobs_from_storage) {
-            maybe_blobs.insert(blob_id, maybe_blob);
-        }
-        Ok(maybe_blobs)
+        Ok(missing_blob_ids
+            .into_iter()
+            .zip(blobs_from_storage)
+            .collect())
     }
 
     /// Adds any newly created chains to the set of `tracked_chains`, if the parent chain is
@@ -563,7 +563,7 @@ where
 }
 
 /// Returns the keys whose value is `None`.
-fn missing_blob_ids(maybe_blobs: &BTreeMap<BlobId, Option<Blob>>) -> Vec<BlobId> {
+fn missing_blob_ids(maybe_blobs: &[(BlobId, Option<Blob>)]) -> Vec<BlobId> {
     maybe_blobs
         .iter()
         .filter(|(_, maybe_blob)| maybe_blob.is_none())
