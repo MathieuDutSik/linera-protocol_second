@@ -689,7 +689,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
 }
 
 impl BytecodeId {
-    /// Creates a bytecode ID from contract/service hashes.
+    /// Creates a bytecode ID from contract/service hashes and the VM runtime to use.
     pub fn new(
         contract_blob_hash: CryptoHash,
         service_blob_hash: CryptoHash,

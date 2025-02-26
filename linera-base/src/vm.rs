@@ -44,7 +44,7 @@ impl FromStr for VmRuntime {
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match string {
             "wasm" => Ok(VmRuntime::Wasm),
-            "revm" => Ok(VmRuntime::Evm),
+            "evm" => Ok(VmRuntime::Evm),
             unknown => Err(InvalidVmRuntime(unknown.to_owned())),
         }
     }

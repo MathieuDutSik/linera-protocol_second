@@ -280,7 +280,8 @@ pub trait Storage: Sized {
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: contract_blob.into_bytes().to_vec(),
         };
-        let _contract_bytecode =
+        #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
+        let contract_bytecode =
             linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
                 move |_| async move { compressed_contract_bytecode.decompress() },
             )
@@ -294,7 +295,7 @@ pub trait Storage: Sized {
                         let Some(wasm_runtime) = self.wasm_runtime() else {
                             panic!("A Wasm runtime is required to load user applications.");
                         };
-                        Ok(WasmContractModule::new(_contract_bytecode, wasm_runtime)
+                        Ok(WasmContractModule::new(contract_bytecode, wasm_runtime)
                            .await?
                            .into())
                     } else {
@@ -310,13 +311,13 @@ pub trait Storage: Sized {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;
-                        Ok(EvmContractModule::new(_contract_bytecode, evm_runtime)
+                        Ok(EvmContractModule::new(contract_bytecode, evm_runtime)
                            .await?
                            .into())
                     } else {
                         panic!(
                             "An Evm runtime is required to load user applications. \
-                             Please enable the `revm` feature flags \
+                             Please enable the `revm` feature flag \
                              when compiling `linera-storage`."
                         );
                     }
@@ -339,13 +340,13 @@ pub trait Storage: Sized {
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: service_blob.into_bytes().to_vec(),
         };
-        let _service_bytecode =
-            linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
-                move |_| async move { compressed_service_bytecode.decompress() },
-            )
-            .await
-            .join()
-            .await?;
+        #[cfg_attr(not(any(with_wasm_runtime, with_revm)), allow(unused_variables))]
+        let service_bytecode = linera_base::task::Blocking::<linera_base::task::NoInput, _>::spawn(
+            move |_| async move { compressed_service_bytecode.decompress() },
+        )
+        .await
+        .join()
+        .await?;
         match application_description.bytecode_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
@@ -353,7 +354,7 @@ pub trait Storage: Sized {
                         let Some(wasm_runtime) = self.wasm_runtime() else {
                             panic!("A Wasm runtime is required to load user applications.");
                         };
-                        Ok(WasmServiceModule::new(_service_bytecode, wasm_runtime)
+                        Ok(WasmServiceModule::new(service_bytecode, wasm_runtime)
                            .await?
                            .into())
                     } else {
@@ -369,7 +370,7 @@ pub trait Storage: Sized {
                 cfg_if::cfg_if! {
                     if #[cfg(with_revm)] {
                         let evm_runtime = EvmRuntime::Revm;
-                        Ok(EvmServiceModule::new(_service_bytecode, evm_runtime)
+                        Ok(EvmServiceModule::new(service_bytecode, evm_runtime)
                            .await?
                            .into())
                     } else {
