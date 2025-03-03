@@ -18,6 +18,7 @@ use guard::INTEGRATION_TEST_GUARD;
 use linera_base::{
     data_types::{Amount, BlockHeight},
     identifiers::{Account, AccountOwner, ChainId},
+    vm::VmRuntime,
 };
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use linera_execution::committee::Epoch;
@@ -755,11 +756,13 @@ async fn test_end_to_end_benchmark(mut config: LocalNetConfig) -> Result<()> {
     let accounts = BTreeMap::from([(account_owner, Amount::from_tokens(1_000_000))]);
     let state = InitialState { accounts };
     let (contract, service) = client.build_example("fungible").await?;
+    let vm_runtime = VmRuntime::Wasm;
     let params = Parameters::new("FUN");
     let application_id = client
         .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
             contract,
             service,
+            vm_runtime,
             &params,
             &state,
             &[],
