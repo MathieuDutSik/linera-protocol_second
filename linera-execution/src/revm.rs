@@ -6,21 +6,29 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    str::FromStr,
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{data_types::Bytecode, ensure, identifiers::StreamName};
+use linera_base::{crypto::CryptoHash, data_types::Bytecode, ensure, identifiers::{ApplicationId, StreamName, UserApplicationId}};
 use linera_views::common::from_bytes_option;
 use revm::{
-    db::AccountState,
+    db::{AccountState, WrapDatabaseRef},
+    inspector_handle_register,
     primitives::{
         keccak256,
         state::{Account, AccountInfo},
         Bytes,
     },
-    Database, DatabaseCommit, DatabaseRef, Evm,
+    ContextPrecompile,
+    ContextStatefulPrecompile,
+    Database, DatabaseCommit, DatabaseRef, Evm, EvmContext,
+    InnerEvmContext, Inspector,
 };
-use revm_primitives::{ExecutionResult, HaltReason, Log, Output, TxKind};
+use revm_primitives::{address, ExecutionResult, HaltReason, Log, Output, SuccessReason, TxKind};
+use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
+use revm_precompile::{PrecompileOutput, PrecompileResult, PrecompileErrors};
+use core::ops::Range;
 use thiserror::Error;
 #[cfg(with_metrics)]
 use {
@@ -38,7 +46,13 @@ use crate::{
     UserServiceInstance, UserServiceModule, ViewError,
 };
 
+/// This is the selector of the `execute_message` that should be called
+/// only from a submitted message
 const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
+
+/// This the selector when calling for `InterpreterResult` this is a fictional
+/// selector that does not correspond to a real function.
+const INTERPRETER_RESULT_SELECTOR: &[u8] = &[1, 2, 3, 4];
 
 #[cfg(test)]
 mod tests {
@@ -144,7 +158,7 @@ impl UserContractModule for EvmContractModule {
         let instance: UserContractInstance = match self {
             #[cfg(with_revm)]
             EvmContractModule::Revm { module } => {
-                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime))
+                Box::new(RevmContractInstance::prepare(module.to_vec(), runtime)?)
             }
         };
 
@@ -207,7 +221,7 @@ impl UserServiceModule for EvmServiceModule {
         let instance: UserServiceInstance = match self {
             #[cfg(with_revm)]
             EvmServiceModule::Revm { module } => {
-                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime))
+                Box::new(RevmServiceInstance::prepare(module.to_vec(), runtime)?)
             }
         };
 
@@ -223,10 +237,17 @@ impl EvmServiceModule {
     }
 }
 
+//#[derive(Clone)]
 struct DatabaseRuntime<Runtime> {
-    contract_address: Address,
-    commit_error: Option<ExecutionError>,
+    application_id: ApplicationId,
+    commit_error: Option<Arc<ExecutionError>>,
     runtime: Arc<Mutex<Runtime>>,
+}
+
+impl<Runtime> Clone for DatabaseRuntime<Runtime> {
+    fn clone(&self) -> Self {
+        Self { application_id: self.application_id, commit_error: self.commit_error.clone(), runtime: self.runtime.clone() }
+    }
 }
 
 #[repr(u8)]
@@ -244,7 +265,113 @@ pub enum KeyCategory {
     Storage,
 }
 
-impl<Runtime> DatabaseRuntime<Runtime> {
+fn precompile_address() -> Address {
+    address!("000000000000000000000000000000000000000b")
+}
+
+struct GeneralContractCall;
+
+impl<Runtime: ContractRuntime> ContextStatefulPrecompile<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>> for GeneralContractCall {
+    fn call(
+        &self,
+        input: &Bytes,
+        _gas_limit: u64,
+        context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+    ) -> PrecompileResult {
+        let argument: Vec<u8> = input.to_vec();
+        let result = {
+            let mut runtime = context.db.0.runtime.lock().expect("The lock should be possible");
+            let authenticated = true;
+            let callee_id = runtime.application_id().map_err(|error| {
+                PrecompileErrors::Fatal { msg: format!("{}", error) }
+            })?;
+            runtime.try_call_application(authenticated, callee_id, argument)
+        }.map_err(|error| {
+            PrecompileErrors::Fatal { msg: format!("{}", error) }
+        })?;
+        // We do not know how much gas was used.
+        let gas_used = 0;
+        let bytes = Bytes::copy_from_slice(&result);
+        let result = PrecompileOutput { gas_used, bytes };
+        Ok(result)
+    }
+}
+
+
+
+struct CallInterceptorContract<Runtime> {
+    db: DatabaseRuntime<Runtime>,
+}
+
+
+fn address_to_user_application_id(address: Address) -> UserApplicationId {
+    let address : Vec<u8> = address.to_vec();
+    let mut hash = [0_u8; 32];
+    for i in 0..20 {
+        hash[i] = address[i];
+    }
+    let strout: String = hex::encode(&hash);
+    let application_description_hash = CryptoHash::from_str(&strout).unwrap();
+    UserApplicationId::new(application_description_hash)
+}
+
+fn failing_outcome() -> CallOutcome {
+    let result = InstructionResult::Revert;
+    let output = Bytes::default();
+    let gas = Gas::default();
+    let result = InterpreterResult { result, output, gas };
+    let memory_offset = Range::default();
+    CallOutcome { result, memory_offset }
+}
+
+impl<Runtime: ContractRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>> for CallInterceptorContract<Runtime> {
+    fn call(
+        &mut self,
+        context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        inputs: &mut CallInputs,
+    ) -> Option<CallOutcome> {
+        let result = self.call_or_fail(context, inputs);
+        match result {
+            Err(_error) => {
+                // An alternative way would be to return None, which would induce
+                // REVM to call the smart contract in its database, where it is
+                // non-existent.
+                Some(failing_outcome())
+            }
+            Ok(result) => {
+                result
+            }
+        }
+    }
+}
+
+impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
+    fn call_or_fail(
+        &mut self,
+        _context: &mut EvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
+        inputs: &mut CallInputs,
+    ) -> Result<Option<CallOutcome>, ExecutionError> {
+        let contract_address = Address::ZERO.create(0);
+
+        if inputs.target_address != precompile_address() && inputs.target_address != contract_address {
+            let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+            argument.extend(inputs.input.to_vec());
+            let authenticated = true;
+            let callee_id = address_to_user_application_id(inputs.caller);
+            let result = {
+                let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+                runtime.try_call_application(authenticated, callee_id, argument)?
+            };
+            let result = bcs::from_bytes::<InterpreterResult>(&result)?;
+            let call_outcome = CallOutcome { result, memory_offset: inputs.return_memory_offset.clone() };
+            Ok(Some(call_outcome))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     fn get_uint256_key(val: u8, index: U256) -> Result<Vec<u8>, ExecutionError> {
         let mut key = vec![val, KeyCategory::Storage as u8];
         bcs::serialize_into(&mut key, &index)?;
@@ -255,20 +382,19 @@ impl<Runtime> DatabaseRuntime<Runtime> {
         if address == &Address::ZERO {
             return Some(KeyTag::ZeroContractAddress as u8);
         }
-        if address == &self.contract_address {
+        if address == &Address::ZERO.create(0) {
             return Some(KeyTag::ContractAddress as u8);
         }
         None
     }
 
-    fn new(runtime: Runtime) -> Self {
-        let nonce = 0;
-        let contract_address = Address::ZERO.create(nonce);
-        Self {
-            contract_address,
+    fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
+        let application_id = runtime.application_id()?;
+        Ok(Self {
+            application_id,
             commit_error: None,
             runtime: Arc::new(Mutex::new(runtime)),
-        }
+        })
     }
 
     fn throw_error(&self) -> Result<(), ExecutionError> {
@@ -315,7 +441,7 @@ where
     fn commit(&mut self, changes: HashMap<Address, Account>) {
         let result = self.commit_with_error(changes);
         if let Err(error) = result {
-            self.commit_error = Some(error);
+            self.commit_error = Some(error.into());
         }
     }
 }
@@ -457,13 +583,13 @@ where
         let mut vec = self.module.clone();
         vec.extend_from_slice(&argument);
         let tx_data = Bytes::copy_from_slice(&vec);
-        let (output, logs) = self.transact_commit_tx_data(Choice::Create, tx_data)?;
-        let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs, "deploy")?;
-        let Output::Create(_, Some(contract_address_used)) = output else {
+        let result = self.transact_commit_tx_data(Choice::Create, tx_data)?;
+        let result = process_execution_result(result)?;
+        let application_id = self.db.application_id;
+        self.write_logs(&application_id, result.logs, "deploy")?;
+        let Output::Create(_, _) = result.output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
         };
-        assert_eq!(contract_address_used, contract_address);
         Ok(())
     }
 
@@ -480,14 +606,23 @@ where
             &operation[..4] != EXECUTE_MESSAGE_SELECTOR,
             ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
         );
-        let tx_data = Bytes::copy_from_slice(&operation);
-        let (output, logs) = self.transact_commit_tx_data(Choice::Call, tx_data)?;
-        let contract_address = self.db.contract_address;
-        self.write_logs(&contract_address, logs, "operation")?;
-        let Output::Call(output) = output else {
-            unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
+        let application_id = self.db.application_id;
+        let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
+            ensure!(
+                &operation[4..8] != EXECUTE_MESSAGE_SELECTOR,
+                ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
+            );
+            let tx_data = Bytes::copy_from_slice(&operation[4..]);
+            let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
+            let result = process_execution_result(result)?;
+            result.to_interpreter_result_and_logs()?
+        } else {
+            let tx_data = Bytes::copy_from_slice(&operation);
+            let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
+            let result = process_execution_result(result)?;
+            result.to_output_and_logs()
         };
-        let output = output.as_ref().to_vec();
+        self.write_logs(&application_id, logs, "operation")?;
         Ok(output)
     }
 
@@ -504,15 +639,45 @@ where
     }
 }
 
-fn process_execution_result(result: ExecutionResult) -> Result<(Output, Vec<Log>), ExecutionError> {
+struct ExecutionResultSuccess {
+    reason: SuccessReason,
+    logs: Vec<Log>,
+    output: Output,
+}
+
+impl ExecutionResultSuccess {
+    fn to_interpreter_result_and_logs(self) -> Result<(Vec<u8>, Vec<Log>), ExecutionError> {
+        let result: InstructionResult = self.reason.into();
+        let Output::Call(output) = self.output else {
+            unreachable!("The Output is not a call which is impossible");
+        };
+        let gas = Gas::new(u64::MAX);
+        let result = InterpreterResult { result, output, gas };
+        let result = bcs::to_bytes(&result)?;
+        Ok((result, self.logs))
+    }
+
+    fn to_output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
+        let Output::Call(output) = self.output else {
+            unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
+        };
+        let output = output.as_ref().to_vec();
+        (output, self.logs)
+    }
+
+}
+
+
+
+fn process_execution_result(result: ExecutionResult) -> Result<ExecutionResultSuccess, ExecutionError> {
     match result {
         ExecutionResult::Success {
-            reason: _,
-            gas_used: _,
+            reason,
+            gas_used: _, 
             gas_refunded: _,
             logs,
             output,
-        } => Ok((output, logs)),
+        } => Ok(ExecutionResultSuccess { reason, logs, output }),
         ExecutionResult::Revert { gas_used, output } => {
             let error = EvmExecutionError::Revert { gas_used, output };
             Err(ExecutionError::EvmError(error))
@@ -528,40 +693,55 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
-    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
-        let db = DatabaseRuntime::new(runtime);
-        Self { module, db }
+    pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
+        let db = DatabaseRuntime::new(runtime)?;
+        Ok(Self { module, db })
     }
 
     fn transact_commit_tx_data(
         &mut self,
         ch: Choice,
         tx_data: Bytes,
-    ) -> Result<(Output, Vec<Log>), ExecutionError> {
+    ) -> Result<ExecutionResult, ExecutionError> {
+        // We use a fictional smart contract
+        let contract_address = Address::ZERO.create(0);
         let kind = match ch {
             Choice::Create => TxKind::Create,
-            Choice::Call => TxKind::Call(self.db.contract_address),
+            Choice::Call => TxKind::Call(contract_address),
         };
-        let mut evm: Evm<'_, (), _> = Evm::builder()
+        let mut inspector = CallInterceptorContract { db: self.db.clone() };
+        let mut evm: Evm<'_, _, _> = Evm::builder()
             .with_ref_db(&mut self.db)
+            .with_external_context(&mut inspector)
             .modify_tx_env(|tx| {
                 tx.clear();
                 tx.transact_to = kind;
                 tx.data = tx_data;
             })
+            .append_handler_register(|handler| {
+                inspector_handle_register(handler);
+                let precompiles = handler.pre_execution.load_precompiles();
+                handler.pre_execution.load_precompiles = Arc::new(move || {
+                    let mut precompiles = precompiles.clone();
+                    precompiles.extend([(
+                        precompile_address(),
+                        ContextPrecompile::ContextStateful(Arc::new(GeneralContractCall)),
+                    )]);
+                    precompiles
+                });
+            })
             .build();
 
-        let result = evm.transact_commit().map_err(|error| {
+        evm.transact_commit().map_err(|error| {
             let error = format!("{:?}", error);
             let error = EvmExecutionError::TransactCommitError(error);
             ExecutionError::EvmError(error)
-        })?;
-        process_execution_result(result)
+        })
     }
 
     fn write_logs(
         &mut self,
-        contract_address: &Address,
+        application_id: &ApplicationId,
         logs: Vec<Log>,
         origin: &str,
     ) -> Result<(), ExecutionError> {
@@ -570,7 +750,7 @@ where
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
             for (log, index) in logs.iter().enumerate() {
-                let mut key = bcs::to_bytes(&contract_address)?;
+                let mut key = bcs::to_bytes(&application_id)?;
                 bcs::serialize_into(&mut key, origin)?;
                 bcs::serialize_into(&mut key, index)?;
                 let value = bcs::to_bytes(&log)?;
@@ -589,9 +769,9 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    pub fn prepare(_module: Vec<u8>, runtime: Runtime) -> Self {
-        let db = DatabaseRuntime::new(runtime);
-        Self { db }
+    pub fn prepare(_module: Vec<u8>, runtime: Runtime) -> Result<Self, ExecutionError> {
+        let db = DatabaseRuntime::new(runtime)?;
+        Ok(Self { db })
     }
 }
 
@@ -618,7 +798,7 @@ where
         let argument = argument[10..argument.len() - 3].to_string();
         let argument = hex::decode(&argument).unwrap();
         let tx_data = Bytes::copy_from_slice(&argument);
-        let address = self.db.contract_address;
+        let address = Address::ZERO.create(0);
         let mut evm: Evm<'_, (), _> = Evm::builder()
             .with_ref_db(&mut self.db)
             .modify_tx_env(|tx| {
@@ -633,13 +813,10 @@ where
             let error = EvmExecutionError::TransactCommitError(error);
             ExecutionError::EvmError(error)
         })?;
-        let (output, _logs) = process_execution_result(result_state.result)?;
+        let result = process_execution_result(result_state.result)?;
+        let (output, _logs) = result.to_output_and_logs();
         // We drop the logs since the "eth_call" execution does not return any log.
-        let Output::Call(output) = output else {
-            unreachable!("It is impossible for a Choice::Call to lead to a Output::Create");
-        };
-        let answer = output.as_ref().to_vec();
-        let answer = hex::encode(&answer);
+        let answer = hex::encode(&output);
         let answer: serde_json::Value = serde_json::json!({"data": answer});
         let answer = serde_json::to_vec(&answer).unwrap();
         Ok(answer)

@@ -53,7 +53,29 @@ impl CryptoHash {
 
         CryptoHash::new(&TestString::new(s))
     }
+
+    /// returns whether the address is EVM or not.
+    pub fn is_evm_kind(&self) -> bool {
+        for index in 20..32 {
+            let val = self.0.0[index];
+            if val != 0 {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// set the hash as the one from EVM by setting the last 12 bytes to zero.
+    pub fn set_as_evm(&mut self) {
+        for index in 20..32 {
+            self.0.0[index] = 0;
+        }
+    }
+
 }
+
+
+
 
 /// Temporary struct to extend `Keccak256` with `io::Write`.
 struct Keccak256Ext(Keccak256);

@@ -39,6 +39,7 @@ use crate::{
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
+    vm::VmRuntime,
 };
 
 /// A non-negative amount of tokens.
@@ -845,9 +846,14 @@ pub struct UserApplicationDescription {
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId::new(CryptoHash::new(&BlobContent::new_application_description(
+        let vm_runtime = description.module_id.vm_runtime;
+        let mut hash = CryptoHash::new(&BlobContent::new_application_description(
             description,
-        )))
+        ));
+        if vm_runtime == VmRuntime::Evm && false {
+            hash.set_as_evm();
+        }
+        UserApplicationId::new(hash)
     }
 }
 
