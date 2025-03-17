@@ -62,7 +62,7 @@ macro_rules! contract {
                     move |contract| {
                         let operation: <$contract as $crate::abi::ContractAbi>::Operation =
                             $crate::bcs::from_bytes(&operation)
-                                .expect("Failed to deserialize operation");
+                            .expect(&format!("Failed to deserialize operation={:?}", operation));
 
                         let response = contract.execute_operation(operation).blocking_wait();
 

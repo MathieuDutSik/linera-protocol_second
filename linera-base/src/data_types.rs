@@ -845,9 +845,9 @@ pub struct UserApplicationDescription {
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        UserApplicationId::new(CryptoHash::new(&BlobContent::new_application_description(
-            description,
-        )))
+        let mut hash = CryptoHash::new(&BlobContent::new_application_description(description));
+        hash.set_as_evm();
+        UserApplicationId::new(hash)
     }
 }
 
@@ -1078,7 +1078,10 @@ pub struct Blob {
 impl Blob {
     /// Computes the hash and returns the hashed blob for the given content.
     pub fn new(content: BlobContent) -> Self {
-        let hash = CryptoHash::new(&content);
+        let mut hash = CryptoHash::new(&content);
+        if matches!(content.blob_type, BlobType::ApplicationDescription) {
+            hash.set_as_evm();
+        }
         Blob { hash, content }
     }
 

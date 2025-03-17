@@ -142,10 +142,10 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-revm = "19.4.0"
-revm-interpreter = { version = "15.1.0", features = ["serde"] }
-revm-precompile = "16.0.0"
-revm-primitives = "15.1.0"
+revm = "19.6.0"
+revm-interpreter = { version = "15.2.0", features = ["serde"] }
+revm-precompile = "16.2.0"
+revm-primitives = "15.2.0"
 rocksdb = "0.21.0"
 ruzstd = "0.7.1"
 scylla = "0.15.1"
@@ -251,6 +251,7 @@ linera-witty-macros = { version = "0.14.0", path = "./linera-witty-macros" }
 amm = { path = "./examples/amm" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
+call-evm-counter = { path = "./examples/call-evm-counter" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }

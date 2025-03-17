@@ -53,6 +53,18 @@ impl CryptoHash {
 
         CryptoHash::new(&TestString::new(s))
     }
+
+    /// set the hash as the one from EVM by setting the last 12 bytes to zero.
+    pub fn set_as_evm(&mut self) {
+        for index in 20..32 {
+            self.0 .0[index] = 0;
+        }
+    }
+
+    /// Build a raw CryptoHash
+    pub fn build_from_b256(v: B256) -> Self {
+        Self(v)
+    }
 }
 
 /// Temporary struct to extend `Keccak256` with `io::Write`.

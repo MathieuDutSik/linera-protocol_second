@@ -332,6 +332,24 @@ impl AmmApp {
     }
 }
 
+fn value_to_vec_u8(value: Value) -> Vec<u8> {
+    let mut vec: Vec<u8> = Vec::new();
+    for val in value.as_array().unwrap() {
+        let val = val.as_u64().unwrap();
+        let val = val as u8;
+        vec.push(val);
+    }
+    vec
+}
+
+fn read_evm_u64_entry(value: Value) -> Result<u64> {
+    let vec = value_to_vec_u8(value);
+    let mut arr = [0_u8; 8];
+    arr.copy_from_slice(&vec[24..]);
+    let counter_value = u64::from_be_bytes(arr);
+    Ok(counter_value)
+}
+
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -340,9 +358,11 @@ impl AmmApp {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy::primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::get_example_counter;
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{
+        get_contract_service_paths, get_evm_example_counter,
+    };
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -351,38 +371,28 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_value;
+            uint64 initial_value;
         }
-        function increment(uint256 input);
+        function increment(uint64 input);
         function get_value();
     }
 
-    let original_counter_value = U256::from(35);
+    let original_counter_value = 35;
     let instantiation_argument = ConstructorArgs {
         initial_value: original_counter_value,
     };
     let instantiation_argument = instantiation_argument.abi_encode();
 
-    let increment = U256::from(5);
+    let increment = 5;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
-    let module = get_example_counter()?;
+    let module = get_evm_example_counter()?;
 
-    let dir = tempfile::tempdir()?;
-    let path = dir.path();
-    let app_file = "app.json";
-    let app_path = path.join(app_file);
-    {
-        std::fs::write(app_path.clone(), &module)?;
-    }
-
-    let contract = app_path.to_path_buf();
-    let service = app_path.to_path_buf();
-    type Parameter = ();
+    let (contract, service, _dir) = get_contract_service_paths(module)?;
     type InstantiationArgument = Vec<u8>;
 
     let application_id = client
-        .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
+        .publish_and_create::<EvmAbi, (), InstantiationArgument>(
             contract,
             service,
             VmRuntime::Evm,
@@ -402,34 +412,335 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let query = get_valueCall {};
     let query = query.abi_encode();
-    let query = hex::encode(&query);
-    let query = format!("query {{ v{} }}", query);
+    tracing::info!("test_evm_end_to_end_counter, query={:?}", query);
+    let query = EvmQuery::Query(query);
 
-    let result = application.run_graphql_query(query).await?;
-    let result = result.to_string();
-    let result = hex::decode(&result[1..result.len() - 1])?;
-
-    let counter_value = U256::from_be_slice(&result);
+    let result = application.run_json_query(query.clone()).await?;
+    tracing::info!("test_evm_end_to_end_counter, result={:?}", result);
+    let counter_value = read_evm_u64_entry(result)?;
+    tracing::info!(
+        "test_evm_end_to_end_counter, counter_value={}",
+        counter_value
+    );
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = incrementCall { input: increment };
     let mutation = mutation.abi_encode();
-    let mutation = hex::encode(&mutation);
-    let mutation = format!("mutation {{ v{} }}", mutation);
+    tracing::info!("test_evm_end_to_end_counter, mutation={:?}", mutation);
+    let mutation = EvmQuery::Operation(mutation);
+    application.run_json_query(mutation).await?;
 
-    application.run_graphql_query(mutation).await?;
-
-    let query = get_valueCall {};
-    let query = query.abi_encode();
-    let query = hex::encode(&query);
-    let query = format!("query {{ v{} }}", query);
-
-    let result = application.run_graphql_query(query).await?;
-    let result = result.to_string();
-    let result = hex::decode(&result[1..result.len() - 1])?;
-
-    let counter_value = U256::from_be_slice(&result);
+    let result = application.run_json_query(query).await?;
+    let counter_value = read_evm_u64_entry(result)?;
     assert_eq!(counter_value, original_counter_value + increment);
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolValue};
+    use call_evm_counter::{CallCounterAbi, CallCounterRequest};
+    use linera_execution::test_utils::solidity::{
+        get_contract_service_paths, get_evm_example_counter,
+    };
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Creating the EVM contract
+
+    let module = get_evm_example_counter()?;
+
+    sol! {
+        struct ConstructorArgs {
+            uint64 initial_value;
+        }
+    }
+
+    let original_counter_value = 35;
+    let evm_instantiation_argument = ConstructorArgs {
+        initial_value: original_counter_value,
+    };
+    let evm_instantiation_argument = evm_instantiation_argument.abi_encode();
+
+    let (evm_contract, evm_service, _dir) = get_contract_service_paths(module)?;
+    type InstantiationArgument = Vec<u8>;
+
+    let evm_application_id = client
+        .publish_and_create::<EvmAbi, (), InstantiationArgument>(
+            evm_contract,
+            evm_service,
+            VmRuntime::Evm,
+            &(),
+            &evm_instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Creating the WASM contract
+
+    let (wasm_contract, wasm_service) = client.build_example("call-evm-counter").await?;
+    type WasmParameter = ApplicationId<EvmAbi>;
+    let wasm_application_id = client
+        .publish_and_create::<CallCounterAbi, WasmParameter, ()>(
+            wasm_contract,
+            wasm_service,
+            VmRuntime::Wasm,
+            &evm_application_id,
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let wasm_application = node_service
+        .make_application(&chain, &wasm_application_id)
+        .await?;
+
+    let query = CallCounterRequest::Query;
+    let counter_value = wasm_application.run_json_query(&query).await?;
+    assert_eq!(counter_value, original_counter_value);
+
+    let increment = 5;
+    let query_increment = CallCounterRequest::Increment(increment);
+    wasm_application.run_json_query(&query_increment).await?;
+
+    let counter_value = wasm_application.run_json_query(&query).await?;
+    assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_evm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{
+        get_contract_service_paths, get_evm_call_evm_example_counter, get_evm_example_counter,
+    };
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let original_counter_value = 35;
+    let increment = 5;
+
+    // Creating the EVM contract
+
+    let module = get_evm_example_counter()?;
+    let (contract, service, _dir) = get_contract_service_paths(module)?;
+
+    let evm_instantiation_argument = {
+        sol! {
+            struct ConstructorArgs {
+                uint64 initial_value;
+            }
+        }
+
+        let evm_instantiation_argument = ConstructorArgs {
+            initial_value: original_counter_value,
+        };
+        evm_instantiation_argument.abi_encode()
+    };
+
+    type InstantiationArgument = Vec<u8>;
+
+    let evm_application_id = client
+        .publish_and_create::<EvmAbi, (), InstantiationArgument>(
+            contract,
+            service,
+            VmRuntime::Evm,
+            &(),
+            &evm_instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Creating the nesting contract
+
+    sol! {
+        struct ConstructorArgs {
+            address evm_contract;
+        }
+        function nest_increment(uint64 input);
+        function nest_get_value();
+    }
+
+    let evm_contract = evm_application_id.evm_address();
+    let nest_instantiation_argument = ConstructorArgs { evm_contract };
+    let nest_instantiation_argument = nest_instantiation_argument.abi_encode();
+
+    let module = get_evm_call_evm_example_counter()?;
+    let (nest_contract, nest_service, _dir) = get_contract_service_paths(module)?;
+
+    type NestInstantiationArgument = Vec<u8>;
+    let nest_application_id = client
+        .publish_and_create::<EvmAbi, (), NestInstantiationArgument>(
+            nest_contract,
+            nest_service,
+            VmRuntime::Evm,
+            &(),
+            &nest_instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let nest_application = node_service
+        .make_application(&chain, &nest_application_id)
+        .await?;
+
+    let query = nest_get_valueCall {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+    let result = nest_application.run_json_query(query.clone()).await?;
+    let counter_value = read_evm_u64_entry(result)?;
+    assert_eq!(counter_value, original_counter_value);
+
+    let mutation = nest_incrementCall { input: increment };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Operation(mutation);
+    nest_application.run_json_query(mutation).await?;
+
+    let result = nest_application.run_json_query(query).await?;
+    let counter_value = read_evm_u64_entry(result)?;
+    assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
+    use alloy_sol_types::{sol, SolCall, SolValue};
+    use counter_no_graphql::CounterNoGraphQlAbi;
+    use linera_base::vm::EvmQuery;
+    use linera_execution::test_utils::solidity::{
+        get_contract_service_paths, get_evm_call_wasm_example_counter,
+    };
+    use linera_sdk::abis::evm::EvmAbi;
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Creating the WASM smart contract
+
+    let original_counter_value = 35;
+    let increment = 5;
+    let (contract, service) = client.build_example("counter-no-graphql").await?;
+    let wasm_application_id = client
+        .publish_and_create::<CounterNoGraphQlAbi, (), u64>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &original_counter_value,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Creating the EVM smart contract
+
+    sol! {
+        struct ConstructorArgs {
+            bytes32 wasm_contract;
+        }
+        function nest_increment(uint64 input);
+        function nest_get_value();
+    }
+
+    let wasm_contract = wasm_application_id.bytes32();
+    let nest_instantiation_argument = ConstructorArgs { wasm_contract };
+    let nest_instantiation_argument = nest_instantiation_argument.abi_encode();
+
+    let module = get_evm_call_wasm_example_counter()?;
+    let (nest_contract, nest_service, _dir) = get_contract_service_paths(module)?;
+
+    type NestInstantiationArgument = Vec<u8>;
+    let nest_application_id = client
+        .publish_and_create::<EvmAbi, (), NestInstantiationArgument>(
+            nest_contract,
+            nest_service,
+            VmRuntime::Evm,
+            &(),
+            &nest_instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let nest_application = node_service
+        .make_application(&chain, &nest_application_id)
+        .await?;
+
+    let query = nest_get_valueCall {};
+    let query = query.abi_encode();
+    let query = EvmQuery::Query(query);
+    let result = nest_application.run_json_query(query.clone()).await?;
+
+    let counter_value = read_evm_u64_entry(result)?;
+    assert_eq!(counter_value, original_counter_value);
+
+    let mutation = nest_incrementCall { input: increment };
+    let mutation = mutation.abi_encode();
+    let mutation = EvmQuery::Operation(mutation);
+    nest_application.run_json_query(mutation).await?;
+
+    let result = nest_application.run_json_query(query).await?;
+    let counter_value = read_evm_u64_entry(result)?;
+    assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
