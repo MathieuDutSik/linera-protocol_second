@@ -378,11 +378,10 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     let contract = app_path.to_path_buf();
     let service = app_path.to_path_buf();
-    type Parameter = ();
     type InstantiationArgument = Vec<u8>;
 
     let application_id = client
-        .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
+        .publish_and_create::<EvmAbi, (), InstantiationArgument>(
             contract,
             service,
             VmRuntime::Evm,
@@ -452,7 +451,7 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let (mut net, client) = config.instantiate().await?;
     let chain = client.load_wallet()?.default_chain().unwrap();
     let port = get_node_port().await;
-    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
     // Creating the EVM contract
 
@@ -482,11 +481,10 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     let evm_contract = app_path.to_path_buf();
     let evm_service = app_path.to_path_buf();
-    type Parameter = ();
     type InstantiationArgument = Vec<u8>;
 
     let evm_application_id = client
-        .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
+        .publish_and_create::<EvmAbi, (), InstantiationArgument>(
             evm_contract,
             evm_service,
             VmRuntime::Evm,
@@ -500,9 +498,9 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
     // Creating the WASM contract
 
     let (wasm_contract, wasm_service) = client.build_example("call-evm-counter").await?;
-
+    type WasmParameter = ApplicationId<EvmAbi>;
     let wasm_application_id = client
-        .publish_and_create::<CallCounterAbi, (), u64>(
+        .publish_and_create::<CallCounterAbi, WasmParameter, ()>(
             wasm_contract,
             wasm_service,
             VmRuntime::Wasm,
