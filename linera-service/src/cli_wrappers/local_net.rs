@@ -267,7 +267,7 @@ impl Validator {
 #[cfg(with_testing)]
 impl LocalNetConfig {
     pub fn new_test(database: Database, network: Network) -> Self {
-        let num_shards = 4;
+        let num_shards = 1;
         let storage_config_builder = StorageConfigBuilder::TestConfig;
         let path_provider = PathProvider::create_temporary_directory().unwrap();
         let internal = network.drop_tls();
@@ -281,7 +281,7 @@ impl LocalNetConfig {
             policy_config: ResourceControlPolicyConfig::Testnet,
             testing_prng_seed: Some(37),
             namespace: linera_views::random::generate_test_namespace(),
-            num_initial_validators: 4,
+            num_initial_validators: 1,
             num_shards,
             storage_config_builder,
             path_provider,

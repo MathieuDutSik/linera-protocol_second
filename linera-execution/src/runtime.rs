@@ -570,6 +570,7 @@ impl<UserInstance> From<SyncRuntimeInternal<UserInstance>> for SyncRuntimeHandle
 
 impl<UserInstance> SyncRuntimeHandle<UserInstance> {
     fn inner(&self) -> std::sync::MutexGuard<'_, SyncRuntimeInternal<UserInstance>> {
+        tracing::info!("Passing by inner");
         self.0
             .try_lock()
             .expect("Synchronous runtimes run on a single execution thread")
@@ -890,30 +891,40 @@ impl<UserInstance> BaseRuntime for SyncRuntimeHandle<UserInstance> {
     }
 
     fn read_data_blob(&mut self, hash: &CryptoHash) -> Result<Vec<u8>, ExecutionError> {
+        tracing::info!("read_data_blob, step 1");
         let mut this = self.inner();
+        tracing::info!("read_data_blob, step 2");
         let blob_id = BlobId::new(*hash, BlobType::Data);
+        tracing::info!("read_data_blob, step 3");
         let (blob_content, is_new) = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
             .recv_response()?;
+        tracing::info!("read_data_blob, step 4");
         if is_new {
             this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
+        tracing::info!("read_data_blob, step 5");
         Ok(blob_content.into_bytes().into_vec())
     }
 
     fn assert_data_blob_exists(&mut self, hash: &CryptoHash) -> Result<(), ExecutionError> {
+        tracing::info!("assert_data_blob_exists, step 1");
         let mut this = self.inner();
+        tracing::info!("assert_data_blob_exists, step 2");
         let blob_id = BlobId::new(*hash, BlobType::Data);
+        tracing::info!("assert_data_blob_exists, step 3");
         let is_new = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::AssertBlobExists { blob_id, callback })?
             .recv_response()?;
+        tracing::info!("assert_data_blob_exists, step 4");
         if is_new {
             this.transaction_tracker
                 .replay_oracle_response(OracleResponse::Blob(blob_id))?;
         }
+        tracing::info!("assert_data_blob_exists, step 5");
         Ok(())
     }
 }

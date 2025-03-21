@@ -998,6 +998,7 @@ impl Runnable for Job {
                     .publish_module(&chain_client, contract, service, vm_runtime)
                     .await?;
 
+                info!("PublishAndCreate, step 1");
                 let (application_id, _) = context
                     .apply_client_command(&chain_client, move |chain_client| {
                         let parameters = parameters.clone();
@@ -1017,6 +1018,8 @@ impl Runnable for Job {
                     })
                     .await
                     .context("Failed to create application")?;
+                info!("PublishAndCreate, step 2");
+                info!("PublishAndCreate, application_id={:?}", application_id);
                 info!("{}", "Application published successfully!".green().bold());
                 info!(
                     "Application published and created in {} ms",

@@ -221,6 +221,7 @@ trait BatchExt {
 
 impl BatchExt for Batch {
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
+        tracing::info!("add_blob, step 1");
         #[cfg(with_metrics)]
         WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
@@ -229,6 +230,7 @@ impl BatchExt for Batch {
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
+        tracing::info!("add_blob_state, step 1");
         let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
         self.put_key_value(blob_state_key.to_vec(), blob_state)?;
         Ok(())
@@ -238,6 +240,7 @@ impl BatchExt for Batch {
         &mut self,
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
+        tracing::info!("add_certificate, step 1");
         #[cfg(with_metrics)]
         WRITE_CERTIFICATE_COUNTER.with_label_values(&[]).inc();
         let hash = certificate.hash();
@@ -249,6 +252,7 @@ impl BatchExt for Batch {
     }
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
+        tracing::info!("add_event, step 1");
         #[cfg(with_metrics)]
         WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
         let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;

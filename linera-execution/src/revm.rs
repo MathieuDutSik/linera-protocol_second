@@ -152,6 +152,7 @@ impl UserContractModule for EvmContractModule {
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
+//        panic!("Abort running fn instantiate");
         #[cfg(with_metrics)]
         let _instantiation_latency = CONTRACT_INSTANTIATION_LATENCY.measure_latency();
 
@@ -239,14 +240,13 @@ impl EvmServiceModule {
 
 //#[derive(Clone)]
 struct DatabaseRuntime<Runtime> {
-    application_id: ApplicationId,
     commit_error: Option<Arc<ExecutionError>>,
     runtime: Arc<Mutex<Runtime>>,
 }
 
 impl<Runtime> Clone for DatabaseRuntime<Runtime> {
     fn clone(&self) -> Self {
-        Self { application_id: self.application_id, commit_error: self.commit_error.clone(), runtime: self.runtime.clone() }
+        Self { commit_error: self.commit_error.clone(), runtime: self.runtime.clone() }
     }
 }
 
@@ -389,9 +389,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
     }
 
     fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
-        let application_id = runtime.application_id()?;
         Ok(Self {
-            application_id,
             commit_error: None,
             runtime: Arc::new(Mutex::new(runtime)),
         })
@@ -579,17 +577,26 @@ where
         _context: OperationContext,
         argument: Vec<u8>,
     ) -> Result<(), ExecutionError> {
+//        panic!("Abort running instantiate");
+        tracing::info!("instantiate, step 1");
         let argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
+        tracing::info!("instantiate, step 2");
         let mut vec = self.module.clone();
+        tracing::info!("instantiate, step 3");
         vec.extend_from_slice(&argument);
+        tracing::info!("instantiate, step 4");
         let tx_data = Bytes::copy_from_slice(&vec);
+        tracing::info!("instantiate, step 5");
         let result = self.transact_commit_tx_data(Choice::Create, tx_data)?;
+        tracing::info!("instantiate, step 6");
         let result = process_execution_result(result)?;
-        let application_id = self.db.application_id;
-        self.write_logs(&application_id, result.logs, "deploy")?;
+        tracing::info!("instantiate, step 7");
+        self.write_logs(result.logs, "deploy")?;
+        tracing::info!("instantiate, step 9");
         let Output::Create(_, _) = result.output else {
             unreachable!("It is impossible for a Choice::Create to lead to an Output::Call");
         };
+        tracing::info!("instantiate, step 10");
         Ok(())
     }
 
@@ -598,15 +605,18 @@ where
         _context: OperationContext,
         operation: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+//        panic!("Abort running execute_operation");
+        tracing::info!("execute_operation, step 1");
         ensure!(
             operation.len() >= 4,
             ExecutionError::EvmError(EvmExecutionError::OperationIsTooShort)
         );
+        tracing::info!("execute_operation, step 2");
         ensure!(
             &operation[..4] != EXECUTE_MESSAGE_SELECTOR,
             ExecutionError::EvmError(EvmExecutionError::OperationCallExecuteMessage)
         );
-        let application_id = self.db.application_id;
+        tracing::info!("execute_operation, step 3");
         let (output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure!(
                 &operation[4..8] != EXECUTE_MESSAGE_SELECTOR,
@@ -622,7 +632,9 @@ where
             let result = process_execution_result(result)?;
             result.to_output_and_logs()
         };
-        self.write_logs(&application_id, logs, "operation")?;
+        tracing::info!("execute_operation, step 5");
+        self.write_logs(logs, "operation")?;
+        tracing::info!("execute_operation, step 6");
         Ok(output)
     }
 
@@ -673,7 +685,7 @@ fn process_execution_result(result: ExecutionResult) -> Result<ExecutionResultSu
     match result {
         ExecutionResult::Success {
             reason,
-            gas_used: _, 
+            gas_used: _,
             gas_refunded: _,
             logs,
             output,
@@ -703,13 +715,18 @@ where
         ch: Choice,
         tx_data: Bytes,
     ) -> Result<ExecutionResult, ExecutionError> {
+//        panic!("Abort running transact_commit_tx_data");
+        tracing::info!("transact_commit_tx_data, step 1");
         // We use a fictional smart contract
         let contract_address = Address::ZERO.create(0);
+        tracing::info!("transact_commit_tx_data, step 2");
         let kind = match ch {
             Choice::Create => TxKind::Create,
             Choice::Call => TxKind::Call(contract_address),
         };
+        tracing::info!("transact_commit_tx_data, step 3");
         let mut inspector = CallInterceptorContract { db: self.db.clone() };
+        tracing::info!("transact_commit_tx_data, step 4");
         let mut evm: Evm<'_, _, _> = Evm::builder()
             .with_ref_db(&mut self.db)
             .with_external_context(&mut inspector)
@@ -731,6 +748,7 @@ where
                 });
             })
             .build();
+        tracing::info!("transact_commit_tx_data, step 5");
 
         evm.transact_commit().map_err(|error| {
             let error = format!("{:?}", error);
@@ -741,12 +759,12 @@ where
 
     fn write_logs(
         &mut self,
-        application_id: &ApplicationId,
         logs: Vec<Log>,
         origin: &str,
     ) -> Result<(), ExecutionError> {
         if !logs.is_empty() {
             let mut runtime = self.db.runtime.lock().expect("The lock should be possible");
+            let application_id = runtime.application_id()?;
             let stream_name = bcs::to_bytes("ethereum_event")?;
             let stream_name = StreamName(stream_name);
             for (log, index) in logs.iter().enumerate() {
@@ -784,8 +802,12 @@ where
         _context: QueryContext,
         argument: Vec<u8>,
     ) -> Result<Vec<u8>, ExecutionError> {
+//        panic!("Abort running handle_query");
+        tracing::info!("handle_query, step 1");
         let argument: serde_json::Value = serde_json::from_slice(&argument)?;
+        tracing::info!("handle_query, step 2");
         let argument = argument["query"].to_string();
+        tracing::info!("handle_query, step 3");
         if let Some(residual) = argument.strip_prefix("\"mutation { v") {
             let operation = &residual[0..residual.len() - 3];
             let operation = hex::decode(operation).unwrap();
@@ -795,10 +817,15 @@ where
             let answer = serde_json::to_vec(&answer).unwrap();
             return Ok(answer);
         }
+        tracing::info!("handle_query, step 4");
         let argument = argument[10..argument.len() - 3].to_string();
+        tracing::info!("handle_query, step 5");
         let argument = hex::decode(&argument).unwrap();
+        tracing::info!("handle_query, step 6");
         let tx_data = Bytes::copy_from_slice(&argument);
+        tracing::info!("handle_query, step 7");
         let address = Address::ZERO.create(0);
+        tracing::info!("handle_query, step 8");
         let mut evm: Evm<'_, (), _> = Evm::builder()
             .with_ref_db(&mut self.db)
             .modify_tx_env(|tx| {
@@ -807,18 +834,25 @@ where
                 tx.data = tx_data;
             })
             .build();
+        tracing::info!("handle_query, step 9");
 
         let result_state = evm.transact().map_err(|error| {
             let error = format!("{:?}", error);
             let error = EvmExecutionError::TransactCommitError(error);
             ExecutionError::EvmError(error)
         })?;
+        tracing::info!("handle_query, step 10");
         let result = process_execution_result(result_state.result)?;
+        tracing::info!("handle_query, step 11");
         let (output, _logs) = result.to_output_and_logs();
+        tracing::info!("handle_query, step 12");
         // We drop the logs since the "eth_call" execution does not return any log.
         let answer = hex::encode(&output);
+        tracing::info!("handle_query, step 13");
         let answer: serde_json::Value = serde_json::json!({"data": answer});
+        tracing::info!("handle_query, step 14");
         let answer = serde_json::to_vec(&answer).unwrap();
+        tracing::info!("handle_query, step 15");
         Ok(answer)
     }
 }

@@ -2980,14 +2980,16 @@ where
         required_application_ids: Vec<UserApplicationId>,
     ) -> Result<ClientOutcome<(UserApplicationId, ConfirmedBlockCertificate)>, ChainClientError>
     {
-        self.execute_operation(Operation::System(SystemOperation::CreateApplication {
+        tracing::info!("create_application_untyped, step 1");
+        let result = self.execute_operation(Operation::System(SystemOperation::CreateApplication {
             module_id,
             parameters,
             instantiation_argument,
             required_application_ids,
         }))
-        .await?
-        .try_map(|certificate| {
+            .await?;
+        tracing::info!("create_application_untyped, step 2");
+        result.try_map(|certificate| {
             // The first message of the only operation created the application.
             let mut creation: Vec<_> = certificate
                 .block()

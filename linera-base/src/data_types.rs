@@ -846,13 +846,11 @@ pub struct UserApplicationDescription {
 
 impl From<&UserApplicationDescription> for UserApplicationId {
     fn from(description: &UserApplicationDescription) -> Self {
-        let vm_runtime = description.module_id.vm_runtime;
         let mut hash = CryptoHash::new(&BlobContent::new_application_description(
             description,
         ));
-        if vm_runtime == VmRuntime::Evm && false {
-            hash.set_as_evm();
-        }
+        hash.set_as_evm();
+        tracing::info!("UserApplicationId::from, hash={:?}", hash);
         UserApplicationId::new(hash)
     }
 }
@@ -1084,7 +1082,11 @@ pub struct Blob {
 impl Blob {
     /// Computes the hash and returns the hashed blob for the given content.
     pub fn new(content: BlobContent) -> Self {
-        let hash = CryptoHash::new(&content);
+        let mut hash = CryptoHash::new(&content);
+        if matches!(content.blob_type, BlobType::ApplicationDescription) {
+            hash.set_as_evm();
+        }
+        tracing::info!("Blob::new hash={:?}", hash);
         Blob { hash, content }
     }
 
