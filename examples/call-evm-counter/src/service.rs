@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use linera_sdk::abis::evm::EvmAbi;
-use alloy::primitives::U256;
+use alloy::primitives::U64;
 use alloy_sol_types::{sol, SolCall};
 use call_evm_counter::{CallCounterOperation, CallCounterRequest};
 use linera_sdk::{linera_base_types::{ApplicationId, WithServiceAbi}, Service, ServiceRuntime};
@@ -18,7 +18,7 @@ pub struct CallCounterService {
 linera_sdk::service!(CallCounterService);
 
 impl WithServiceAbi for CallCounterService {
-    type Abi = call_evm_counter::CallCounter;
+    type Abi = call_evm_counter::CallCounterAbi;
 }
 
 impl Service for CallCounterService {
@@ -40,7 +40,7 @@ impl Service for CallCounterService {
                 let request = request.abi_encode().into();
                 let evm_counter_id = self.runtime.application_parameters();
                 let result = self.runtime.query_application(evm_counter_id, &request);
-                let result = U256::from_be_slice(result.as_ref());
+                let result = U64::from_be_slice(result.as_ref());
                 let (result, _) = result.most_significant_bits();
                 result
             },

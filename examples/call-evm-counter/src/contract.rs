@@ -4,8 +4,8 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use linera_sdk::abis::evm::EvmAbi;
-use alloy::primitives::U256;
-use call_evm_counter::{CallCounter, CallCounterOperation};
+use alloy::primitives::U64;
+use call_evm_counter::{CallCounterAbi, CallCounterOperation};
 use alloy_sol_types::{sol, SolCall};
 use linera_sdk::{
     linera_base_types::{ApplicationId, WithContractAbi},
@@ -19,7 +19,7 @@ pub struct CallCounterContract {
 linera_sdk::contract!(CallCounterContract);
 
 impl WithContractAbi for CallCounterContract {
-    type Abi = CallCounter;
+    type Abi = CallCounterAbi;
 }
 
 impl Contract for CallCounterContract {
@@ -39,14 +39,13 @@ impl Contract for CallCounterContract {
     async fn execute_operation(&mut self, operation: CallCounterOperation) -> u64 {
         let CallCounterOperation::Increment(increment) = operation;
         sol! {
-            function increment(uint256 input);
+            function increment(uint64 input);
         }
-        let input = U256::from(increment);
-        let fct_args = incrementCall { input };
+        let fct_args = incrementCall { input: increment };
         let fct_args = fct_args.abi_encode().into();
         let evm_counter_id = self.runtime.application_parameters();
         let result = self.runtime.call_application(true, evm_counter_id, &fct_args);
-        let result = U256::from_be_slice(result.as_ref());
+        let result = U64::from_be_slice(result.as_ref());
 	let (result, _) = result.most_significant_bits();
         result
     }

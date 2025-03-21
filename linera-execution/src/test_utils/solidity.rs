@@ -84,23 +84,23 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     get_bytecode_path(path, file_name, contract_name)
 }
 
-pub fn get_example_counter() -> anyhow::Result<Vec<u8>> {
+pub fn get_evm_example_counter() -> anyhow::Result<Vec<u8>> {
     let source_code = r#"
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 contract ExampleCounter {
-  uint256 value;
-  constructor(uint256 start_value) {
+  uint64 value;
+  constructor(uint64 start_value) {
     value = start_value;
   }
 
-  function increment(uint256 input) external returns (uint256) {
+  function increment(uint64 input) external returns (uint64) {
     value = value + input;
     return value;
   }
 
-  function get_value() external view returns (uint256) {
+  function get_value() external view returns (uint64) {
     return value;
   }
 
@@ -108,4 +108,90 @@ contract ExampleCounter {
 "#
     .to_string();
     get_bytecode(&source_code, "ExampleCounter")
+}
+
+
+
+
+
+
+
+pub fn get_evm_example_call_wasm_counter() -> anyhow::Result<Vec<u8>> {
+    let source_code = r#"
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+function bcs_serialize_uint64(uint64 input) internal pure returns (bytes memory) {
+  bytes memory result = new bytes(8);
+  uint64 value = input;
+  result[0] = bytes1(uint8(value));
+  for (uint i=1; i<8; i++) {
+    value = value >> 8;
+    result[i] = bytes1(uint8(value));
+  }
+  return result;
+}
+
+function bcs_deserialize_offset_uint64(uint256 pos, bytes memory input) internal pure returns (uint256, uint64) {
+  require(pos + 7 < input.length, "Position out of bound");
+  uint64 value = uint8(input[pos + 7]);
+  for (uint256 i=0; i<7; i++) {
+    value = value << 8;
+    value += uint8(input[pos + 6 - i]);
+  }
+  return (pos + 8, value);
+}
+
+contract ExampleCallWasmCounter {
+  bytes32 universal_address;
+  constructor(bytes32 _universal_address) {
+    universal_address = _universal_address
+  }
+
+  function increment(uint64 input) external returns (uint64) {
+    value = value + input;
+    return value;
+  }
+
+  function get_value() external view returns (uint64) {
+    return value;
+  }
+
+}
+"#
+    .to_string();
+    get_bytecode(&source_code, "ExampleCallWasmCounter")
+}
+
+
+
+
+pub fn get_evm_example_call_evm_counter() -> anyhow::Result<Vec<u8>> {
+    let source_code = r#"
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IExternalContract {
+  function increment(uint64 value) external returns (uint64);
+  function get_value() external returns (uint64);
+}
+
+
+contract ExampleCallEvmCounter {
+  address evm_address;
+  constructor(address _evm_address) {
+    evm_address = _evm_address;
+  }
+  function nest_increment(uint64 input) external returns (uint64) {
+    IExternalContract externalContract = IExternalContract(evm_address);
+    return externalContract.increment(input);
+  }
+  function nest_get_value() external view returns (uint64) {
+    IExternalContract externalContract = IExternalContract(evm_address);
+    return externalContract.get_value();
+  }
+}
+"#
+    .to_string();
+    get_bytecode(&source_code, "ExampleCallEvmCounter")
 }

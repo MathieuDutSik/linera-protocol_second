@@ -340,9 +340,8 @@ impl AmmApp {
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy::primitives::U256;
     use alloy_sol_types::{sol, SolCall, SolValue};
-    use linera_execution::test_utils::solidity::get_example_counter;
+    use linera_execution::test_utils::solidity::get_evm_example_counter;
     use linera_sdk::abis::evm::EvmAbi;
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
@@ -351,22 +350,22 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_value;
+            uint64 initial_value;
         }
-        function increment(uint256 input);
+        function increment(uint64 input);
         function get_value();
     }
 
-    let original_counter_value = U256::from(35);
+    let original_counter_value = 35;
     let instantiation_argument = ConstructorArgs {
         initial_value: original_counter_value,
     };
     let instantiation_argument = instantiation_argument.abi_encode();
 
-    let increment = U256::from(5);
+    let increment = 5;
 
     let chain = client.load_wallet()?.default_chain().unwrap();
-    let module = get_example_counter()?;
+    let module = get_evm_example_counter()?;
 
     let dir = tempfile::tempdir()?;
     let path = dir.path();
@@ -408,8 +407,9 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let result = application.run_graphql_query(query.clone()).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
-
-    let counter_value = U256::from_be_slice(&result);
+    let mut arr = [0_u8; 8];
+    arr.copy_from_slice(&result[..8]);
+    let counter_value = u64::from_be_bytes(arr);
     assert_eq!(counter_value, original_counter_value);
 
     let mutation = incrementCall { input: increment };
@@ -422,8 +422,9 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let result = application.run_graphql_query(query).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
-
-    let counter_value = U256::from_be_slice(&result);
+    let mut arr = [0_u8; 8];
+    arr.copy_from_slice(&result[..8]);
+    let counter_value = u64::from_be_bytes(arr);
     assert_eq!(counter_value, original_counter_value + increment);
 
     net.ensure_is_running().await?;
@@ -440,8 +441,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
-    use alloy::primitives::U256;
-    use linera_execution::test_utils::solidity::get_example_counter;
+    use linera_execution::test_utils::solidity::get_evm_example_counter;
     use linera_sdk::abis::evm::EvmAbi;
     use call_evm_counter::{CallCounterAbi, CallCounterRequest};
     use alloy_sol_types::{sol, SolValue};
@@ -455,19 +455,19 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     // Creating the EVM contract
 
-    let module = get_example_counter()?;
+    let module = get_evm_example_counter()?;
 
     sol! {
         struct ConstructorArgs {
-            uint256 initial_value;
+            uint64 initial_value;
         }
-        function increment(uint256 input);
+        function increment(uint64 input);
         function get_value();
     }
 
     let original_counter_value = 35;
     let evm_instantiation_argument = ConstructorArgs {
-        initial_value: U256::from(original_counter_value),
+        initial_value: original_counter_value,
     };
     let evm_instantiation_argument = evm_instantiation_argument.abi_encode();
 
@@ -533,6 +533,15 @@ async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> 
 
     Ok(())
 }
+
+
+
+
+
+
+
+
+
 
 
 
