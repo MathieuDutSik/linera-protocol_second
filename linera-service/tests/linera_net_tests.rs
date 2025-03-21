@@ -393,7 +393,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
         )
         .await?;
 
-/*
 
     let port = get_node_port().await;
     let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
@@ -433,8 +432,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let counter_value = U256::from_be_slice(&result);
     assert_eq!(counter_value, original_counter_value + increment);
 
-*/
-    
     net.ensure_is_running().await?;
     net.terminate().await?;
 

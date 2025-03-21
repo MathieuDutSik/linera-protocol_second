@@ -39,7 +39,6 @@ use crate::{
     },
     limited_writer::{LimitedWriter, LimitedWriterError},
     time::{Duration, SystemTime},
-    vm::VmRuntime,
 };
 
 /// A non-negative amount of tokens.

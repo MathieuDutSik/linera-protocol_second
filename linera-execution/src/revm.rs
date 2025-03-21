@@ -10,7 +10,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::{crypto::CryptoHash, data_types::Bytecode, ensure, identifiers::{ApplicationId, StreamName, UserApplicationId}};
+use linera_base::{crypto::CryptoHash, data_types::Bytecode, ensure, identifiers::{StreamName, UserApplicationId}};
 use linera_views::common::from_bytes_option;
 use revm::{
     db::{AccountState, WrapDatabaseRef},
@@ -388,7 +388,7 @@ impl<Runtime: BaseRuntime> DatabaseRuntime<Runtime> {
         None
     }
 
-    fn new(mut runtime: Runtime) -> Result<Self, ExecutionError> {
+    fn new(runtime: Runtime) -> Result<Self, ExecutionError> {
         Ok(Self {
             commit_error: None,
             runtime: Arc::new(Mutex::new(runtime)),
