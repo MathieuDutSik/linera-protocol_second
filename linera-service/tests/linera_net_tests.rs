@@ -406,7 +406,7 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
     let query = hex::encode(&query);
     let query = format!("query {{ v{} }}", query);
 
-    let result = application.run_graphql_query(query).await?;
+    let result = application.run_graphql_query(query.clone()).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
 
@@ -420,11 +420,6 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     application.run_graphql_query(mutation).await?;
 
-    let query = get_valueCall {};
-    let query = query.abi_encode();
-    let query = hex::encode(&query);
-    let query = format!("query {{ v{} }}", query);
-
     let result = application.run_graphql_query(query).await?;
     let result = result.to_string();
     let result = hex::decode(&result[1..result.len() - 1])?;
@@ -437,6 +432,112 @@ async fn test_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()>
 
     Ok(())
 }
+
+#[cfg(with_revm)]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_call_evm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()> {
+    use alloy::primitives::U256;
+    use linera_execution::test_utils::solidity::get_example_counter;
+    use linera_sdk::abis::evm::EvmAbi;
+    use call_evm_counter::{CallCounterAbi, CallCounterRequest};
+    use alloy_sol_types::{sol, SolValue};
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    // Creating the EVM contract
+
+    let module = get_example_counter()?;
+
+    sol! {
+        struct ConstructorArgs {
+            uint256 initial_value;
+        }
+        function increment(uint256 input);
+        function get_value();
+    }
+
+    let original_counter_value = 35;
+    let evm_instantiation_argument = ConstructorArgs {
+        initial_value: U256::from(original_counter_value),
+    };
+    let evm_instantiation_argument = evm_instantiation_argument.abi_encode();
+
+    let dir = tempfile::tempdir()?;
+    let path = dir.path();
+    let app_file = "app.json";
+    let app_path = path.join(app_file);
+    {
+        std::fs::write(app_path.clone(), &module)?;
+    }
+
+    let evm_contract = app_path.to_path_buf();
+    let evm_service = app_path.to_path_buf();
+    type Parameter = ();
+    type InstantiationArgument = Vec<u8>;
+
+    let evm_application_id = client
+        .publish_and_create::<EvmAbi, Parameter, InstantiationArgument>(
+            evm_contract,
+            evm_service,
+            VmRuntime::Evm,
+            &(),
+            &evm_instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Creating the WASM contract
+
+    let (wasm_contract, wasm_service) = client.build_example("call-evm-counter").await?;
+
+    let wasm_application_id = client
+        .publish_and_create::<CallCounterAbi, (), u64>(
+            wasm_contract,
+            wasm_service,
+            VmRuntime::Wasm,
+            &evm_application_id,
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    let wasm_application = node_service
+        .make_application(&chain, &wasm_application_id)
+        .await?;
+
+    let query = CallCounterRequest::Query;
+    let counter_value = wasm_application.run_json_query(&query).await?;
+    assert_eq!(counter_value, original_counter_value);
+
+    let increment = 5;
+    let query_increment = CallCounterRequest::Increment(increment);
+    wasm_application.run_json_query(&query_increment).await?;
+
+    let counter_value = wasm_application.run_json_query(&query).await?;
+    assert_eq!(counter_value, original_counter_value + increment);
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+
+
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

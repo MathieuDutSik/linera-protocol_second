@@ -6,14 +6,14 @@
 use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
 use serde::{Deserialize, Serialize};
 
-pub struct CallCounter;
+pub struct CallCounterAbi;
 
-impl ContractAbi for CallCounter {
+impl ContractAbi for CallCounterAbi {
     type Operation = CallCounterOperation;
     type Response = u64;
 }
 
-impl ServiceAbi for CallCounter {
+impl ServiceAbi for CallCounterAbi {
     type Query = CallCounterRequest;
     type QueryResponse = u64;
 }

@@ -307,10 +307,8 @@ struct CallInterceptorContract<Runtime> {
 fn address_to_user_application_id(address: Address) -> UserApplicationId {
     let address : Vec<u8> = address.to_vec();
     let mut hash = [0_u8; 32];
-    for i in 0..20 {
-        hash[i] = address[i];
-    }
-    let strout: String = hex::encode(&hash);
+    hash[..20].copy_from_slice(&address[..20]);
+    let strout: String = hex::encode(hash);
     let application_description_hash = CryptoHash::from_str(&strout).unwrap();
     UserApplicationId::new(application_description_hash)
 }
@@ -625,12 +623,12 @@ where
             let tx_data = Bytes::copy_from_slice(&operation[4..]);
             let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
             let result = process_execution_result(result)?;
-            result.to_interpreter_result_and_logs()?
+            result.interpreter_result_and_logs()?
         } else {
             let tx_data = Bytes::copy_from_slice(&operation);
             let result = self.transact_commit_tx_data(Choice::Call, tx_data)?;
             let result = process_execution_result(result)?;
-            result.to_output_and_logs()
+            result.output_and_logs()
         };
         tracing::info!("execute_operation, step 5");
         self.write_logs(logs, "operation")?;
@@ -658,7 +656,7 @@ struct ExecutionResultSuccess {
 }
 
 impl ExecutionResultSuccess {
-    fn to_interpreter_result_and_logs(self) -> Result<(Vec<u8>, Vec<Log>), ExecutionError> {
+    fn interpreter_result_and_logs(self) -> Result<(Vec<u8>, Vec<Log>), ExecutionError> {
         let result: InstructionResult = self.reason.into();
         let Output::Call(output) = self.output else {
             unreachable!("The Output is not a call which is impossible");
@@ -669,7 +667,7 @@ impl ExecutionResultSuccess {
         Ok((result, self.logs))
     }
 
-    fn to_output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
+    fn output_and_logs(self) -> (Vec<u8>, Vec<Log>) {
         let Output::Call(output) = self.output else {
             unreachable!("It is impossible for a Choice::Call to lead to an Output::Create");
         };
@@ -844,7 +842,7 @@ where
         tracing::info!("handle_query, step 10");
         let result = process_execution_result(result_state.result)?;
         tracing::info!("handle_query, step 11");
-        let (output, _logs) = result.to_output_and_logs();
+        let (output, _logs) = result.output_and_logs();
         tracing::info!("handle_query, step 12");
         // We drop the logs since the "eth_call" execution does not return any log.
         let answer = hex::encode(&output);
