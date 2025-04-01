@@ -113,13 +113,13 @@ struct LruPrefixCache {
 
 impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
-    pub fn new(storage_cache_config: StorageCacheConfig) -> Self {
+    pub fn new(storage_cache_config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
         Self {
             map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
             storage_cache_config,
             total_size: 0,
-            has_exclusive_access: false,
+            has_exclusive_access,
         }
     }
 
@@ -457,13 +457,13 @@ where
         Ok(LruCachingStore::new(
             store,
             config.storage_cache_config.clone(),
+            false,
         ))
     }
 
     fn clone_with_root_key(&self, root_key: &[u8]) -> Result<Self, Self::Error> {
         let store = self.store.clone_with_root_key(root_key)?;
-        let store = LruCachingStore::new(store, self.storage_cache_config());
-        store.enable_exclusive_access();
+        let store = LruCachingStore::new(store, self.storage_cache_config(), true);
         Ok(store)
     }
 
@@ -502,25 +502,21 @@ where
 {
     async fn new_test_config() -> Result<LruCachingConfig<K::Config>, K::Error> {
         let inner_config = K::new_test_config().await?;
-        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
         Ok(LruCachingConfig {
             inner_config,
-            storage_cache_config,
+            storage_cache_config: DEFAULT_STORAGE_CACHE_CONFIG,
         })
     }
 }
 
 impl<K> LruCachingStore<K> {
     /// Creates a new key-value store that provides LRU caching at top of the given store.
-    pub fn new(store: K, storage_cache_config: StorageCacheConfig) -> Self {
-        let cache = {
-            if storage_cache_config.max_cache_entries == 0 {
-                None
-            } else {
-                Some(Arc::new(Mutex::new(LruPrefixCache::new(
-                    storage_cache_config,
-                ))))
-            }
+    pub fn new(store: K, storage_cache_config: StorageCacheConfig, has_exclusive_access: bool) -> Self {
+        let cache = if storage_cache_config.max_cache_entries == 0 {
+            None
+        } else {
+            let cache = LruPrefixCache::new(storage_cache_config, has_exclusive_access);
+            Some(Arc::new(Mutex::new(cache)))
         };
         Self { store, cache }
     }
@@ -537,14 +533,6 @@ impl<K> LruCachingStore<K> {
                 let cache = cache.lock().unwrap();
                 cache.storage_cache_config.clone()
             }
-        }
-    }
-
-    /// Sets the value `has_exclusive_access` to `true`, if applicable.
-    pub fn enable_exclusive_access(&self) {
-        if let Some(cache) = &self.cache {
-            let mut cache = cache.lock().unwrap();
-            cache.has_exclusive_access = true;
         }
     }
 }
