@@ -83,18 +83,83 @@ pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig 
     max_cache_entries: 1000,
 };
 
+#[derive(Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 enum CacheEntry {
+    Find,
+    Value,
+}
+
+enum ValueCacheEntry {
     DoesNotExist,
     Exists,
     Value(Vec<u8>),
 }
 
-impl CacheEntry {
+impl ValueCacheEntry {
     fn size(&self) -> usize {
         match self {
-            CacheEntry::Value(vec) => vec.len(),
+            ValueCacheEntry::Value(vec) => vec.len(),
             _ => 0,
         }
+    }
+}
+
+struct FindCacheEntry {
+    map: BTreeMap<Vec<u8>, Vec<u8>>,
+}
+
+impl FindCacheEntry {
+    fn get_find_keys(&self, key_prefix: &[u8]) -> Vec<Vec<u8>> {
+        let key_prefix = key_prefix.to_vec();
+        let delta = key_prefix.len();
+        self.map
+            .range(get_interval(key_prefix))
+            .map(|(key, _)| key[delta..].to_vec())
+            .collect::<Vec<_>>()
+    }
+
+    fn get_find_key_values(&self, key_prefix: &[u8]) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+        let key_prefix = key_prefix.to_vec();
+        let delta = key_prefix.len();
+        Some(
+            self.map
+                .range(get_interval(key_prefix))
+                .map(|(key, value)| (key[delta..].to_vec(), value.to_vec()))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn get_contains_key(&self, key: &[u8]) -> bool {
+        self.map.contains_key(key)
+    }
+
+    fn get_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
+        Some(self.map.get(key).cloned())
+    }
+
+    fn update_cache_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+        match new_value {
+            None => self.map.remove(key),
+            Some(new_value) => self.map.insert(key.to_vec(), new_value),
+        };
+    }
+
+    fn delete_prefix(&mut self, key_prefix: &[u8]) {
+        let keys = self.map
+            .range(get_interval(key_prefix.to_vec()))
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        for key in keys {
+            self.map.remove(&key);
+        }
+    }
+
+    fn size(&self) -> usize {
+        let mut total_size = 0;
+        for (key, value) in &self.map {
+            total_size += key.len() + value.len();
+        }
+        total_size
     }
 }
 
@@ -103,8 +168,9 @@ impl CacheEntry {
 /// This data structure is inspired by the crate `lru-cache` but was modified to support
 /// range deletions.
 struct LruPrefixCache {
-    map: BTreeMap<Vec<u8>, CacheEntry>,
-    queue: LinkedHashMap<Vec<u8>, usize, RandomState>,
+    map_find: BTreeMap<Vec<u8>, FindCacheEntry>,
+    map_value: BTreeMap<Vec<u8>, ValueCacheEntry>,
+    queue: LinkedHashMap<(Vec<u8>, CacheEntry), usize, RandomState>,
     storage_cache_config: StorageCacheConfig,
     total_size: usize,
     /// Whether we have exclusive R/W access to the keys under the root key of the store.
@@ -115,11 +181,26 @@ impl LruPrefixCache {
     /// Creates an `LruPrefixCache`.
     pub fn new(storage_cache_config: StorageCacheConfig) -> Self {
         Self {
-            map: BTreeMap::new(),
+            map_find: BTreeMap::new(),
+            map_value: BTreeMap::new(),
             queue: LinkedHashMap::new(),
             storage_cache_config,
             total_size: 0,
             has_exclusive_access: false,
+        }
+    }
+
+    /// Find the lower bound for the key if existing.
+    fn get_lower_bound_mut(&mut self, key: &[u8]) -> Option<(&Vec<u8>, &mut FindCacheEntry)> {
+        match self.map_find.range_mut(..=key.to_vec()).next_back() {
+            None => None,
+            Some((key_store, value)) => {
+                if key.starts_with(key_store) {
+                    Some((key_store, value))
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -128,83 +209,102 @@ impl LruPrefixCache {
         while self.total_size > self.storage_cache_config.max_cache_size
             || self.queue.len() > self.storage_cache_config.max_cache_entries
         {
-            let Some((key, key_value_size)) = self.queue.pop_front() else {
+            let Some(((key, nature), key_value_size)) = self.queue.pop_front() else {
                 break;
             };
-            self.map.remove(&key);
+            match nature {
+                CacheEntry::Find => {
+                    self.map_find.remove(&key);
+                }
+                CacheEntry::Value => {
+                    self.map_value.remove(&key);
+                }
+            }
             self.total_size -= key_value_size;
         }
     }
 
     /// Inserts an entry into the cache.
-    pub fn insert(&mut self, key: Vec<u8>, cache_entry: CacheEntry) {
+    pub fn insert_value(&mut self, key: Vec<u8>, cache_entry: ValueCacheEntry) {
         let key_value_size = key.len() + cache_entry.size();
-        if (matches!(cache_entry, CacheEntry::DoesNotExist) && !self.has_exclusive_access)
+        let full_key = (key.clone(), CacheEntry::Value);
+        if (matches!(cache_entry, ValueCacheEntry::DoesNotExist) && !self.has_exclusive_access)
             || key_value_size > self.storage_cache_config.max_entry_size
         {
             // Just forget about the entry.
-            if let Some(old_key_value_size) = self.queue.remove(&key) {
+            if let Some(old_key_value_size) = self.queue.remove(&full_key) {
                 self.total_size -= old_key_value_size;
-                self.map.remove(&key);
+                self.map_value.remove(&key);
             };
             return;
         }
-        match self.map.entry(key.clone()) {
+        match self.map_value.entry(key) {
             btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(cache_entry);
                 // Put it on first position for LRU
-                let Some(old_key_value_size) = self.queue.remove(&key) else {
+                let Some(old_key_value_size) = self.queue.remove(&full_key) else {
                     unreachable!("The entry should be present in the queue");
                 };
                 self.total_size -= old_key_value_size;
-                self.queue.insert(key, key_value_size);
+                self.queue.insert(full_key, key_value_size);
                 self.total_size += key_value_size;
             }
             btree_map::Entry::Vacant(entry) => {
                 entry.insert(cache_entry);
-                self.queue.insert(key, key_value_size);
+                self.queue.insert(full_key, key_value_size);
                 self.total_size += key_value_size;
             }
         }
         self.trim_cache();
     }
 
+    /// Correct the find entries
+    pub fn correct_find_entry(&mut self, key: &[u8], new_value: Option<Vec<u8>>) {
+        let lower_bound = self.get_lower_bound_mut(key);
+        if let Some((lower_bound, cache_entry)) = lower_bound {
+            let key_red = &key[lower_bound.len()..];
+            cache_entry.update_cache_entry(key_red, new_value);
+        }
+    }
+
     /// Inserts a read_value entry into the cache.
     pub fn insert_read_value(&mut self, key: Vec<u8>, value: &Option<Vec<u8>>) {
         let cache_entry = match value {
-            None => CacheEntry::DoesNotExist,
-            Some(vec) => CacheEntry::Value(vec.to_vec()),
+            None => ValueCacheEntry::DoesNotExist,
+            Some(vec) => ValueCacheEntry::Value(vec.to_vec()),
         };
-        self.insert(key, cache_entry)
+        self.insert_value(key, cache_entry)
     }
 
     /// Inserts a read_value entry into the cache.
     pub fn insert_contains_key(&mut self, key: Vec<u8>, result: bool) {
         let cache_entry = match result {
-            false => CacheEntry::DoesNotExist,
-            true => CacheEntry::Exists,
+            false => ValueCacheEntry::DoesNotExist,
+            true => ValueCacheEntry::Exists,
         };
-        self.insert(key, cache_entry)
+        self.insert_value(key, cache_entry)
     }
 
     /// Marks cached keys that match the prefix as deleted. Importantly, this does not
     /// create new entries in the cache.
     pub fn delete_prefix(&mut self, key_prefix: &[u8]) {
         if self.has_exclusive_access {
-            for (key, value) in self.map.range_mut(get_interval(key_prefix.to_vec())) {
-                *self.queue.get_mut(key).unwrap() = key.len();
+            for (key, value) in self.map_value.range_mut(get_interval(key_prefix.to_vec())) {
+                let full_key = (key.clone(), CacheEntry::Value);
+                *self.queue.get_mut(&full_key).unwrap() = key.len();
                 self.total_size -= value.size();
-                *value = CacheEntry::DoesNotExist;
+                *value = ValueCacheEntry::DoesNotExist;
             }
         } else {
             // Just forget about the entries.
             let mut keys = Vec::new();
-            for (key, _) in self.map.range(get_interval(key_prefix.to_vec())) {
+            for (key, _) in self.map_value.range(get_interval(key_prefix.to_vec())) {
                 keys.push(key.to_vec());
             }
             for key in keys {
-                self.map.remove(&key);
-                let Some(key_value_size) = self.queue.remove(&key) else {
+                self.map_value.remove(&key);
+                let full_key = (key, CacheEntry::Value);
+                let Some(key_value_size) = self.queue.remove(&full_key) else {
                     unreachable!("The key should be in the queue");
                 };
                 self.total_size -= key_value_size;
@@ -216,12 +316,26 @@ impl LruPrefixCache {
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
     pub fn query_read_value(&self, key: &[u8]) -> Option<Option<Vec<u8>>> {
-        match self.map.get(key) {
+        let result = match self.map_value.get(key) {
+            None => None,
+            Some(entry) => entry.get_read_value(),
+        };
+        if let Some(result) = result {
+            let full_key = (key.to_vec(), CacheEntry::Value);
+            let entry = self.queue.remove(&full_key).unwrap();
+            self.queue.insert(full_key, entry);
+            return Some(result);
+        }
+
+
+
+        
+        match self.map_value.get(key) {
             None => None,
             Some(entry) => match entry {
-                CacheEntry::DoesNotExist => Some(None),
-                CacheEntry::Exists => None,
-                CacheEntry::Value(vec) => Some(Some(vec.clone())),
+                ValueCacheEntry::DoesNotExist => Some(None),
+                ValueCacheEntry::Exists => None,
+                ValueCacheEntry::Value(vec) => Some(Some(vec.clone())),
             },
         }
     }
@@ -229,9 +343,9 @@ impl LruPrefixCache {
     /// Returns `Some(true)` or `Some(false)` if we know that the entry does or does not
     /// exist in the database. Returns `None` if that information is not in the cache.
     pub fn query_contains_key(&self, key: &[u8]) -> Option<bool> {
-        self.map
+        self.map_value
             .get(key)
-            .map(|entry| !matches!(entry, CacheEntry::DoesNotExist))
+            .map(|entry| !matches!(entry, ValueCacheEntry::DoesNotExist))
     }
 }
 
@@ -412,12 +526,14 @@ where
             for operation in &batch.operations {
                 match operation {
                     WriteOperation::Put { key, value } => {
-                        let cache_entry = CacheEntry::Value(value.to_vec());
-                        cache.insert(key.to_vec(), cache_entry);
+                        cache.correct_find_entry(key, Some(value.to_vec()));
+                        let cache_entry = ValueCacheEntry::Value(value.to_vec());
+                        cache.insert_value(key.to_vec(), cache_entry);
                     }
                     WriteOperation::Delete { key } => {
-                        let cache_entry = CacheEntry::DoesNotExist;
-                        cache.insert(key.to_vec(), cache_entry);
+                        cache.correct_find_entry(key, None);
+                        let cache_entry = ValueCacheEntry::DoesNotExist;
+                        cache.insert_value(key.to_vec(), cache_entry);
                     }
                     WriteOperation::DeletePrefix { key_prefix } => {
                         cache.delete_prefix(key_prefix);
