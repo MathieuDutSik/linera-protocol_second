@@ -110,6 +110,7 @@ num-bigint = "0.4.3"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
+ouroboros = "0.18.5"
 port-selector = "0.1.6"
 prettyplease = "0.2.16"
 prometheus = "0.13.3"
@@ -129,7 +130,7 @@ rcgen = "0.12.1"
 reqwest = { version = "0.11.24", default-features = false, features = [
     "rustls-tls",
 ] }
-rocksdb = "0.21.0"
+rocksdb = "0.23.0"
 scylla = "0.15.1"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }

@@ -27,6 +27,7 @@ web-default = ["web", "indexeddb"]
 
 dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
+rocksdb = ["dep:hex", "dep:rocksdb"]
 
 [dependencies]
 anyhow.workspace = true
@@ -45,6 +46,7 @@ linera-base.workspace = true
 linera-views-derive.workspace = true
 linera-witty.workspace = true
 linked-hash-map.workspace = true
+ouroboros.workspace = true
 prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
 rocksdb = { workspace = true, optional = true }
