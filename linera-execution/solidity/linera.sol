@@ -7,6 +7,7 @@ pragma solidity ^0.8.0;
 // 1: message_id
 // 2: is_bouncing
 // 3: try_call_application
+// 4: try_query_application
 
 library Linera {
   struct MessageId {
@@ -53,5 +54,14 @@ library Linera {
     require(success);
     return output;
   }
-}
 
+  function try_query_application(bytes32 address, bytes memory argument) internal pure returns (bytes) {
+    address precompile = address(0x0b);
+    bytes1 input1 = bytes1(4);
+    bytes memory input2 = abi.encodePacked(input1, address, argument);
+    (bool success, bytes memory output) = precompile.call(input2);
+    require(success);
+    return output;
+  }
+
+}
