@@ -240,12 +240,18 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 }
 
 #[repr(u8)]
-#[derive(TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive)]
 enum PrecompileTag {
-    /// Key prefix for the try_call_application
+    /// Key prefix for try_call_application
     TryCallApplication,
-    /// Key prefix for the try_query_application
+    /// Key prefix for try_query_application
     TryQueryApplication,
+    /// Key prefix for send_message
+    SendMessage,
+    /// Key prefix for message_id
+    MessageId,
+    /// Key prefix for message_is_bouncing
+    MessageIsBouncing,
 }
 
 struct GeneralContractCall;
@@ -288,9 +294,8 @@ impl<Runtime: ContractRuntime>
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
             }
-            PrecompileTag::TryQueryApplication => Err(PrecompileErrors::Fatal {
-                msg: "try_query_application is not available in the GeneralContractCall"
-                    .to_string(),
+            _ => Err(PrecompileErrors::Fatal {
+                msg: format!("{tag:?} is not available in GeneralContractCall"),
             }),
         }
     }
@@ -314,9 +319,6 @@ impl<Runtime: ServiceRuntime>
             msg: format!("{error} when trying to convert tag={tag}"),
         })?;
         match tag {
-            PrecompileTag::TryCallApplication => Err(PrecompileErrors::Fatal {
-                msg: "try_call_application is not available in the GeneralServiceCall".to_string(),
-            }),
             PrecompileTag::TryQueryApplication => {
                 let target = u8_slice_to_application_id(&vec[1..33]);
                 let argument = vec[33..].to_vec();
@@ -337,7 +339,10 @@ impl<Runtime: ServiceRuntime>
                 let bytes = Bytes::copy_from_slice(&result);
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
-            }
+            },
+            _ => Err(PrecompileErrors::Fatal {
+                msg: format!("{tag:?} is not available in GeneralServiceCall"),
+            }),
         }
     }
 }
