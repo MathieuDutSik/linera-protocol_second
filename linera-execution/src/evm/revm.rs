@@ -515,10 +515,15 @@ where
     fn execute_message(
         &mut self,
         _context: MessageContext,
-        _message: Vec<u8>,
+        message: Vec<u8>,
     ) -> Result<(), ExecutionError> {
-        // TODO(#3760): Implement execute_message for EVM
-        todo!("The execute_message part of the Ethereum smart contract has not yet been coded");
+        let mut operation = EXECUTE_MESSAGE_SELECTOR.to_vec();
+        operation.extend(message);
+        let result = self.transact_commit_tx_data(Choice::Call, &operation)?;
+        let (output, logs) = result.output_and_logs();
+        self.write_logs(logs, "message")?;
+        assert_eq!(output.len(), 0);
+        Ok(())
     }
 
     fn finalize(&mut self, _context: FinalizeContext) -> Result<(), ExecutionError> {
