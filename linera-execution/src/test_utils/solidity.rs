@@ -80,7 +80,7 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
     let dir = tempdir().unwrap();
     let path = dir.path();
     if source_code.contains("linera.sol") {
-        let file_name = "test_code.sol";
+        let file_name = "linera.sol";
         let test_code_path = path.join(file_name);
         let mut test_code_file = File::create(&test_code_path)?;
         writeln!(test_code_file, "{}", LINERA_SOL)?;

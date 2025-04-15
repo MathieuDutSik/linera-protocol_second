@@ -133,7 +133,6 @@ contract ExampleCallWasmCounter {
     CounterRequest memory input2 = CounterRequest({choice:0, increment: 0});
     bytes memory input3 = serde_json_serialize_CounterRequest(input2);
     bytes memory return1 = Linera.try_query_application(universal_address, input3);
-    require(success);
     uint64 return2 = serde_json_deserialize_u64(return1);
     return return2;
   }

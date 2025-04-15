@@ -19,46 +19,48 @@ library Linera {
 
   enum MessageIsBouncing { NONE, IS_BOUNCING, NOT_BOUNCING }
 
-  function send_message(bytes32 chain_id, bytes message) internal {
+  function send_message(bytes32 chain_id, bytes memory message) internal {
     address precompile = address(0x0b);
-    bytes1 input1 = bytes1(0);
+    bytes1 input1 = bytes1(uint8(0));
     bytes memory input2 = abi.encodePacked(input1, chain_id, message);
     (bool success, bytes memory output) = precompile.call(input2);
     require(success);
     require(output.length == 0);
   }
 
-  function message_id() internal returns (MessageId) {
+  function message_id() internal returns (MessageId memory) {
     address precompile = address(0x0b);
-    bytes1 input1 = bytes1(1);
+    bytes memory input1 = new bytes(1);
+    input1[0] = bytes1(uint8(1));
     (bool success, bytes memory output1) = precompile.call(input1);
     require(success);
-    MessageId output2 = abi.decode(output1, (MessageId));
+    MessageId memory output2 = abi.decode(output1, (MessageId));
     return output2;
   }
 
   function message_is_bouncing() internal returns (MessageIsBouncing) {
     address precompile = address(0x0b);
-    bytes1 input1 = bytes1(2);
+    bytes memory input1 = new bytes(1);
+    input1[0] = bytes1(uint8(2));
     (bool success, bytes memory output1) = precompile.call(input1);
     require(success);
     MessageIsBouncing output2 = abi.decode(output1, (MessageIsBouncing));
     return output2;
   }
 
-  function try_call_application(bytes32 address, bytes memory operation) internal pure returns (bytes) {
+  function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
     address precompile = address(0x0b);
-    bytes1 input1 = bytes1(3);
-    bytes memory input2 = abi.encodePacked(input1, address, operation);
+    bytes1 input1 = bytes1(uint8(3));
+    bytes memory input2 = abi.encodePacked(universal_address, operation);
     (bool success, bytes memory output) = precompile.call(input2);
     require(success);
     return output;
   }
 
-  function try_query_application(bytes32 address, bytes memory argument) internal pure returns (bytes) {
+  function try_query_application(bytes32 universal_address, bytes memory argument) internal returns (bytes memory) {
     address precompile = address(0x0b);
-    bytes1 input1 = bytes1(4);
-    bytes memory input2 = abi.encodePacked(input1, address, argument);
+    bytes1 input1 = bytes1(uint8(4));
+    bytes memory input2 = abi.encodePacked(universal_address, argument);
     (bool success, bytes memory output) = precompile.call(input2);
     require(success);
     return output;
