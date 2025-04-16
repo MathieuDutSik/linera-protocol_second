@@ -15,9 +15,16 @@ version.workspace = true
 test = ["tokio/macros", "linera-base/test", "linera-views/test", "proptest"]
 revm = [
     "dep:revm",
+    "dep:revm-bytecode",
+    "dep:revm-context",
+    "dep:revm-database",
+    "dep:revm-database-interface",
+    "dep:revm-handler",
+    "dep:revm-inspector",
+    "dep:revm-interpreter",
     "dep:revm-primitives",
     "dep:revm-precompile",
-    "dep:revm-interpreter",
+    "dep:revm-state",
     "dep:alloy",
     "dep:alloy-sol-types",
     "dep:hex",
@@ -58,9 +65,16 @@ prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
 revm = { workspace = true, optional = true, features = ["serde"] }
+revm-bytecode = { workspace = true, optional = true }
+revm-context = { workspace = true, optional = true }
+revm-database = { workspace = true, optional = true }
+revm-database-interface = { workspace = true, optional = true }
+revm-handler = { workspace = true, optional = true }
+revm-inspector = { workspace = true, optional = true }
 revm-interpreter = { workspace = true, optional = true, features = ["serde"] }
 revm-precompile = { workspace = true, optional = true }
 revm-primitives = { workspace = true, optional = true }
+revm-state = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
 serde_json.workspace = true

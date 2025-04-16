@@ -53,6 +53,8 @@ use thiserror::Error;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
+#[cfg(with_revm)]
+use revm_database_interface::DBErrorMarker;
 use crate::runtime::ContractSyncRuntime;
 #[cfg(all(with_testing, with_wasm_runtime))]
 pub use crate::wasm::test as wasm_test;
@@ -331,6 +333,9 @@ pub enum ExecutionError {
     #[error("Internal error: {0}")]
     InternalError(&'static str),
 }
+
+#[cfg(with_revm)]
+impl DBErrorMarker for ExecutionError {}
 
 impl From<ViewError> for ExecutionError {
     fn from(error: ViewError) -> Self {

@@ -14,14 +14,23 @@ use linera_base::{
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
+use revm_database_interface::WrapDatabaseRef;
+
+
+use revm_precompile::PrecompileOutput;
+use revm_context::result::SuccessReason;
+use revm_context::result::ExecutionResult;
+use revm_precompile::PrecompileError;
+use revm_context::result::Output;
 use revm::{
-    db::WrapDatabaseRef, inspector_handle_register, primitives::Bytes, ContextPrecompile,
-    ContextStatefulPrecompile, Evm, EvmContext, InnerEvmContext, Inspector,
+    inspector_handle_register, primitives::Bytes, ContextPrecompile,
+    ContextStatefulPrecompile, EvmContext, InnerEvmContext, Inspector,
 };
 use revm_interpreter::{CallInputs, CallOutcome, Gas, InstructionResult, InterpreterResult};
 use revm_precompile::PrecompileResult;
+use revm_context::Evm;
 use revm_primitives::{
-    address, ExecutionResult, Log, Output, PrecompileErrors, PrecompileOutput, SuccessReason,
+    address, Log,
     TxKind,
 };
 #[cfg(with_metrics)]
@@ -262,7 +271,7 @@ impl<Runtime: ContractRuntime>
     ) -> PrecompileResult {
         let vec = input.to_vec();
         let tag = vec[0];
-        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
+        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileError::Fatal {
             msg: format!("{error} when trying to convert tag={tag}"),
         })?;
         match tag {
@@ -279,7 +288,7 @@ impl<Runtime: ContractRuntime>
                         .expect("The lock should be possible");
                     runtime.try_call_application(authenticated, target, argument)
                 }
-                .map_err(|error| PrecompileErrors::Fatal {
+                .map_err(|error| PrecompileError::Fatal {
                     msg: format!("{}", error),
                 })?;
                 // We do not know how much gas was used.
@@ -288,7 +297,7 @@ impl<Runtime: ContractRuntime>
                 let result = PrecompileOutput { gas_used, bytes };
                 Ok(result)
             }
-            PrecompileTag::TryQueryApplication => Err(PrecompileErrors::Fatal {
+            PrecompileTag::TryQueryApplication => Err(PrecompileError::Fatal {
                 msg: "try_query_application is not available in the GeneralContractCall"
                     .to_string(),
             }),
@@ -310,11 +319,11 @@ impl<Runtime: ServiceRuntime>
     ) -> PrecompileResult {
         let vec = input.to_vec();
         let tag = vec[0];
-        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileErrors::Fatal {
+        let tag = PrecompileTag::try_from(tag).map_err(|error| PrecompileError::Fatal {
             msg: format!("{error} when trying to convert tag={tag}"),
         })?;
         match tag {
-            PrecompileTag::TryCallApplication => Err(PrecompileErrors::Fatal {
+            PrecompileTag::TryCallApplication => Err(PrecompileError::Fatal {
                 msg: "try_call_application is not available in the GeneralServiceCall".to_string(),
             }),
             PrecompileTag::TryQueryApplication => {
@@ -329,7 +338,7 @@ impl<Runtime: ServiceRuntime>
                         .expect("The lock should be possible");
                     runtime.try_query_application(target, argument)
                 }
-                .map_err(|error| PrecompileErrors::Fatal {
+                .map_err(|error| PrecompileError::Fatal {
                     msg: format!("{}", error),
                 })?;
                 // We do not know how much gas was used.

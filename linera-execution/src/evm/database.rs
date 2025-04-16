@@ -11,11 +11,13 @@ use std::{
 
 use alloy::primitives::{Address, B256, U256};
 use linera_views::common::from_bytes_option;
+
+
+use revm_database::AccountState;
+use revm_state::{Account, AccountInfo};
 use revm::{
-    db::AccountState,
     primitives::{
         keccak256,
-        state::{Account, AccountInfo},
     },
     Database, DatabaseCommit, DatabaseRef,
 };
@@ -98,7 +100,7 @@ where
     fn code_by_hash(
         &mut self,
         _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    ) -> Result<revm_bytecode::Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash not implemented");
     }
 
@@ -217,7 +219,7 @@ where
     fn code_by_hash_ref(
         &self,
         _code_hash: B256,
-    ) -> Result<revm::primitives::Bytecode, ExecutionError> {
+    ) -> Result<revm_bytecode::Bytecode, ExecutionError> {
         panic!("Functionality code_by_hash_ref not implemented");
     }
 
