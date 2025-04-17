@@ -8,9 +8,10 @@ use std::{convert::TryFrom, sync::Arc};
 
 use alloy::primitives::Address;
 use linera_base::{
-    data_types::Bytecode,
+    crypto::CryptoHash,
+    data_types::{Bytecode, Resources, SendMessageRequest},
     ensure,
-    identifiers::{ApplicationId, StreamName},
+    identifiers::{ApplicationId, ChainId, Destination, StreamName},
     vm::EvmQuery,
 };
 use num_enum::TryFromPrimitive;
@@ -224,12 +225,16 @@ impl UserServiceModule for EvmServiceModule {
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
+fn u8_slice_to_cryptohash(vec: &[u8]) -> CryptoHash {
     let mut output = [0u64; 4];
     for (i, chunk) in vec.chunks_exact(8).enumerate() {
         output[i] = u64::from_be_bytes(chunk.try_into().unwrap());
     }
-    let hash = output.into();
+    output.into()
+}
+
+fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
+    let hash = u8_slice_to_cryptohash(vec);
     ApplicationId::new(hash)
 }
 
@@ -302,6 +307,21 @@ impl GeneralContractCall {
                         .map_err(|error| format!("TryCallApplication error: {error}"))
                 }
                 PrecompileTag::SendMessage => {
+                    let chain_id = ChainId(u8_slice_to_cryptohash(&vec[1..33]));
+                    let destination = Destination::Recipient(chain_id);
+                    let authenticated = true;
+                    let is_tracked = true;
+                    let grant = Resources::default();
+                    let message = vec[33..].to_vec();
+                    let send_message_request = SendMessageRequest {
+                        destination,
+                        authenticated,
+                        is_tracked,
+                        grant,
+                        message,
+                    };
+                    runtime.send_message(send_message_request)
+                        .map_err(|error| format!("SendMessage error: {error}"))?;
                     Ok(vec![])
                 },
                 PrecompileTag::MessageId => {
