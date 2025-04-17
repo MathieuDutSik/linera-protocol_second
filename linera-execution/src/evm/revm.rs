@@ -286,54 +286,48 @@ impl GeneralContractCall {
         let vec = input.to_vec();
         let tag = vec[0];
         let tag = PrecompileTag::try_from(tag).map_err(|error| format!("{error} when trying to convert tag={tag}"))?;
-        let gas_used = 0;
-        match tag {
-            PrecompileTag::TryCallApplication => {
-                let target = u8_slice_to_application_id(&vec[1..33]);
-                let argument = vec[33..].to_vec();
-                let result = {
+        let result = {
+            let mut runtime = context
+                .db
+                .0
+                .runtime
+                .lock()
+                .expect("The lock should be possible");
+            match tag {
+                PrecompileTag::TryCallApplication => {
+                    let target = u8_slice_to_application_id(&vec[1..33]);
+                    let argument = vec[33..].to_vec();
                     let authenticated = true;
-                    let mut runtime = context
-                        .db
-                        .0
-                        .runtime
-                        .lock()
-                        .expect("The lock should be possible");
                     runtime.try_call_application(authenticated, target, argument)
+                        .map_err(|error| format!("TryCallApplication error: {error}"))
                 }
-                .map_err(|error| format!("TryCallApplication error: {error}"))?;
-                // We do not know how much gas was used.
-                let bytes = Bytes::copy_from_slice(&result);
-                let result = PrecompileOutput { gas_used, bytes };
-                Ok(result)
+                PrecompileTag::SendMessage => {
+                    Ok(vec![])
+                },
+                PrecompileTag::MessageId => {
+                    let message_id = runtime.message_id()
+                        .map_err(|error| format!("MessageId error {error}"))?;
+                    bcs::to_bytes(&message_id)
+                        .map_err(|error| format!("MessageId serialization error {error}"))
+                },
+                PrecompileTag::MessageIsBouncing => {
+                    let message_is_bouncing = runtime.message_is_bouncing()
+                        .map_err(|error| format!("MessageIsBouncing error {error}"))?;
+                    let value = match message_is_bouncing {
+                        None => MESSAGE_IS_BOUNCING_NONE,
+                        Some(true) => MESSAGE_IS_BOUNCING_SOME_TRUE,
+                        Some(false) => MESSAGE_IS_BOUNCING_SOME_FALSE,
+                    };
+                    Ok(vec![value])
+                }
+                _ => Err(format!("{tag:?} is not available in GeneralContractCall")),
             }
-/*
-            PrecompileTag::SendMessage => {
-            },
-            PrecompileTag::MessageId => {
-        },
-*/
-            PrecompileTag::MessageIsBouncing => {
-                let mut runtime = context
-                    .db
-                    .0
-                    .runtime
-                    .lock()
-                    .expect("The lock should be possible");
-                let message_is_bouncing = runtime.message_is_bouncing()
-                    .map_err(|error| format!("MessageIsBouncing error {error}"))?;
-                let value = match message_is_bouncing {
-                    None => MESSAGE_IS_BOUNCING_NONE,
-                    Some(true) => MESSAGE_IS_BOUNCING_SOME_TRUE,
-                    Some(false) => MESSAGE_IS_BOUNCING_SOME_FALSE,
-                };
-                let result = &[value];
-                let bytes = Bytes::copy_from_slice(result);
-                let result = PrecompileOutput { gas_used, bytes };
-                Ok(result)
-            },
-            _ => Err(format!("{tag:?} is not available in GeneralContractCall")),
-        }
+        }?;
+        // We do not know how much gas was used.
+        let gas_used = 0;
+        let bytes = Bytes::copy_from_slice(&result);
+        let result = PrecompileOutput { gas_used, bytes };
+        Ok(result)
     }
 }
 
