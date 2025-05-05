@@ -257,6 +257,7 @@ counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
+infinite-loop = { path = "./examples/infinite-loop" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }

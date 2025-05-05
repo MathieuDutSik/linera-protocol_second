@@ -4270,6 +4270,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "infinite-loop"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "insta"
 version = "1.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5173,6 +5182,7 @@ dependencies = [
  "futures",
  "heck 0.4.1",
  "http 1.2.0",
+ "infinite-loop",
  "k8s-openapi",
  "kube",
  "linera-base",

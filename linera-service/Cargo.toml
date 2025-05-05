@@ -144,6 +144,7 @@ linera-sdk = { workspace = true, features = ["wasmer", "test"] }
 linera-service = { path = ".", default-features = false, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
+infinite-loop.workspace = true
 matching-engine.workspace = true
 native-fungible.workspace = true
 non-fungible.workspace = true

@@ -18,7 +18,7 @@ assert_matches.workspace = true
 linera-sdk = { workspace = true, features = ["test"] }
 
 [[bin]]
-name = "infinity_loop_contract"
+name = "infinite_loop_contract"
 path = "src/contract.rs"
 
 [[bin]]
