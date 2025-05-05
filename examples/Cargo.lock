@@ -3419,6 +3419,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "infinite-loop"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
