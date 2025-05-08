@@ -55,9 +55,9 @@ oneshot.workspace = true
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["blocking", "json", "stream"] }
-revm = { workspace = true, optional = true, features = ["serde"] }
+revm = { workspace = true, optional = true, default-features = false, features = [ "std", "secp256k1", "portable", "blst", "kzg-rs", "serde" ] }
 revm-interpreter = { workspace = true, optional = true, features = ["serde"] }
-revm-precompile = { workspace = true, optional = true }
+revm-precompile = { workspace = true, optional = true, default-features = false, features = [ "std", "secp256k1", "portable", "blst", "kzg-rs" ] }
 revm-primitives = { workspace = true, optional = true }
 serde.workspace = true
 serde_bytes.workspace = true
