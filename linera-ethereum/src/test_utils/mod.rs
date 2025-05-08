@@ -5,15 +5,23 @@ use alloy::{
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, U256},
     providers::{ProviderBuilder, RootProvider},
+    network::Ethereum,
     sol,
-    transports::http::reqwest::Client,
+//    transports::http::reqwest::Client,
 };
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+
 use linera_base::port::get_free_port;
 use url::Url;
 
 use crate::{
     client::EthereumQueries,
-    provider::{EthereumClient, EthereumClientSimplified, HttpProvider},
+    provider::{EthereumClient, EthereumClientSimplified},
 };
 
 sol!(
@@ -33,9 +41,9 @@ sol!(
 pub struct AnvilTest {
     pub anvil_instance: AnvilInstance,
     pub endpoint: String,
-    pub ethereum_client: EthereumClient<HttpProvider>,
+    pub ethereum_client: EthereumClient,
     pub rpc_url: Url,
-    pub provider: RootProvider<alloy::transports::http::Http<Client>>,
+    pub provider: FillProvider<JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, RootProvider<Ethereum>>,
 }
 
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {

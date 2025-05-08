@@ -4,19 +4,27 @@
 use alloy::{
     primitives::{Address, Bytes, U256},
     providers::{Provider, ProviderBuilder, RootProvider},
+    network::Ethereum,
     rpc::types::eth::{
         request::{TransactionInput, TransactionRequest},
         Filter,
     },
     transports::http::reqwest::{header::CONTENT_TYPE, Client},
 };
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+
 use async_lock::Mutex;
 use async_trait::async_trait;
 use url::Url;
 
 use crate::client::{EthereumQueries, JsonRpcClient};
 
-pub type HttpProvider = RootProvider<alloy::transports::http::Http<Client>>;
+pub type HttpProvider = RootProvider<Ethereum>;
 
 use crate::{
     client::get_block_id,
@@ -61,12 +69,12 @@ impl EthereumClientSimplified {
 }
 
 #[derive(Clone)]
-pub struct EthereumClient<M> {
-    pub provider: M,
+pub struct EthereumClient {
+    pub provider: FillProvider<JoinFill<alloy::providers::Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, RootProvider<Ethereum>>,
 }
 
 #[async_trait]
-impl EthereumQueries for EthereumClient<HttpProvider> {
+impl EthereumQueries for EthereumClient {
     type Error = EthereumServiceError;
 
     async fn get_accounts(&self) -> Result<Vec<String>, EthereumServiceError> {
@@ -130,12 +138,12 @@ impl EthereumQueries for EthereumClient<HttpProvider> {
             .to(contract_address)
             .input(input);
         let block_id = get_block_id(block);
-        let eth_call = self.provider.call(&tx).block(block_id);
+        let eth_call = self.provider.call(tx).block(block_id);
         Ok(eth_call.await?)
     }
 }
 
-impl EthereumClient<HttpProvider> {
+impl EthereumClient {
     /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
     pub fn new(url: String) -> Result<Self, EthereumServiceError> {
