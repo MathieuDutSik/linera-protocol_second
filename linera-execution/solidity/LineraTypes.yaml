@@ -71,3 +71,103 @@ OptionMessageId:
   NEWTYPESTRUCT:
     OPTION:
       TYPENAME: MessageId
+StreamName:
+  NEWTYPESTRUCT: BYTES
+BaseRuntimePrecompile:
+  ENUM:
+    0:
+      ChainId: UNIT
+    1:
+      ApplicationCreatorChainId: UNIT
+    2:
+      ChainOwnership: UNIT
+    3:
+      ReadDataBlob:
+        STRUCT:
+          - hash:
+              TYPENAME: CryptoHash
+    3:
+      AssertDataBlobExists:
+        STRUCT:
+          - hash:
+              TYPENAME: CryptoHash
+ContractRuntimePrecompile:
+  ENUM:
+    0:
+      TryCallApplication:
+        STRUCT:
+          - target:
+              TYPENAME: ApplicationId
+          - argument:
+              SEQ: U8
+    1:
+      ValidationRound: UNIT
+    2:
+      SendMessage:
+        STRUCT:
+          - destination:
+              TYPENAME: ChainId
+          - message:
+              SEQ: U8
+    3:
+      MessageId: UNIT
+    4:
+      MessageIsBouncing: UNIT
+    5:
+      ReadEvent:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - stream_name:
+              TYPENAME: StreamName
+          - index: U32
+    6:
+      SubscribeToEvents:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: ApplicationId
+          - stream_name:
+              TYPENAME: StreamName
+
+    7:
+      UnsubscribeFromEvents:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - application_id:
+              TYPENAME: ApplicationId
+          - stream_name:
+              TYPENAME: StreamName
+ServiceRuntimePrecompile:
+  ENUM:
+    0:
+      TryQueryApplication:
+        STRUCT:
+          - target:
+              TYPENAME: ApplicationId
+          - argument:
+              SEQ: U8
+BaseRuntimePrecompile:
+  ENUM:
+    0:
+      Base:
+        NEWTYPE:
+          TYPENAME: BaseRuntimePrecompile
+    1:
+      Contract:
+        NEWTYPE:
+          TYPENAME: ContractRuntimePrecompile
+    2:
+      Service:
+        NEWTYPE:
+          TYPENAME: ServiceRuntimePrecompile
+
+
+
+
+
+
+
+
