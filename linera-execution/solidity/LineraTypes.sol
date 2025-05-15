@@ -13,8 +13,7 @@ library LineraTypes {
         while (true) {
             if (x < 128) {
                 entry = bytes1(uint8(x));
-                result = abi.encodePacked(result, entry);
-                return result;
+                return abi.encodePacked(result, entry);
             } else {
                 uint256 xb = x >> 7;
                 uint256 remainder = x - (xb << 7);
@@ -44,191 +43,12 @@ library LineraTypes {
                     power *= 128;
                 }
                 result += power * uint8(input[pos + idx]);
-                uint256 new_pos = pos + idx + 1;
-                return (new_pos, result);
+                return (pos + idx + 1, result);
             }
             idx += 1;
         }
         require(false, "This line is unreachable");
         return (0,0);
-    }
-
-    struct TimeoutConfig {
-        opt_TimeDelta fast_round_duration;
-        TimeDelta base_timeout;
-        TimeDelta timeout_increment;
-        TimeDelta fallback_duration;
-    }
-
-    function bcs_serialize_TimeoutConfig(TimeoutConfig memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_opt_TimeDelta(input.fast_round_duration);
-        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.base_timeout));
-        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.timeout_increment));
-        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.fallback_duration));
-        return result;
-    }
-
-    function bcs_deserialize_offset_TimeoutConfig(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, TimeoutConfig memory)
-    {
-        uint256 new_pos = pos;
-        opt_TimeDelta memory fast_round_duration;
-        (new_pos, fast_round_duration) = bcs_deserialize_offset_opt_TimeDelta(new_pos, input);
-        TimeDelta memory base_timeout;
-        (new_pos, base_timeout) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        TimeDelta memory timeout_increment;
-        (new_pos, timeout_increment) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        TimeDelta memory fallback_duration;
-        (new_pos, fallback_duration) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        return (new_pos, TimeoutConfig(fast_round_duration, base_timeout, timeout_increment, fallback_duration));
-    }
-
-    function bcs_deserialize_TimeoutConfig(bytes memory input)
-        internal
-        pure
-        returns (TimeoutConfig memory)
-    {
-        uint256 new_pos;
-        TimeoutConfig memory value;
-        (new_pos, value) = bcs_deserialize_offset_TimeoutConfig(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    enum OptionBool { None, True, False }
-
-    function bcs_serialize_OptionBool(OptionBool input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint8 value0;
-        uint8 value1;
-        if (input == OptionBool.None) {
-            value0 = 0;
-            return abi.encodePacked(value0);
-        }
-        value0 = 1;
-        if (input == OptionBool.False) {
-            value1 = 0;
-            return abi.encodePacked(value0, value1);
-        }
-        value1 = 1;
-        return abi.encodePacked(value0, value1);
-    }
-
-    function bcs_deserialize_offset_OptionBool(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OptionBool)
-    {
-        uint8 choice = uint8(input[pos]);
-        if (choice == 0) {
-           return (pos + 1, OptionBool.None);
-        } else {
-            require(choice == 1);
-            uint8 value = uint8(input[pos + 1]);
-            if (value == 0) {
-                return (pos + 2, OptionBool.False);
-            } else {
-                require(value == 1);
-                return (pos + 2, OptionBool.True);
-            }
-        }
-    }
-
-    function bcs_deserialize_OptionBool(bytes memory input)
-        internal
-        pure
-        returns (OptionBool)
-    {
-        uint256 new_pos;
-        OptionBool value;
-        (new_pos, value) = bcs_deserialize_offset_OptionBool(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct TimeDelta {
-        uint64 value;
-    }
-
-    function bcs_serialize_TimeDelta(TimeDelta memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_uint64(input.value);
-        return result;
-    }
-
-    function bcs_deserialize_offset_TimeDelta(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, TimeDelta memory)
-    {
-        uint256 new_pos = pos;
-        uint64 value;
-        (new_pos, value) = bcs_deserialize_offset_uint64(new_pos, input);
-        return (new_pos, TimeDelta(value));
-    }
-
-    function bcs_deserialize_TimeDelta(bytes memory input)
-        internal
-        pure
-        returns (TimeDelta memory)
-    {
-        uint256 new_pos;
-        TimeDelta memory value;
-        (new_pos, value) = bcs_deserialize_offset_TimeDelta(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct key_values_AccountOwner_uint64 {
-        AccountOwner key;
-        uint64 value;
-    }
-
-    function bcs_serialize_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64 memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_AccountOwner(input.key);
-        result = abi.encodePacked(result, bcs_serialize_uint64(input.value));
-        return result;
-    }
-
-    function bcs_deserialize_offset_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_AccountOwner_uint64 memory)
-    {
-        uint256 new_pos = pos;
-        AccountOwner memory key;
-        (new_pos, key) = bcs_deserialize_offset_AccountOwner(new_pos, input);
-        uint64 value;
-        (new_pos, value) = bcs_deserialize_offset_uint64(new_pos, input);
-        return (new_pos, key_values_AccountOwner_uint64(key, value));
-    }
-
-    function bcs_deserialize_key_values_AccountOwner_uint64(bytes memory input)
-        internal
-        pure
-        returns (key_values_AccountOwner_uint64 memory)
-    {
-        uint256 new_pos;
-        key_values_AccountOwner_uint64 memory value;
-        (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
     }
 
     function bcs_serialize_uint32(uint32 input)
@@ -259,7 +79,7 @@ library LineraTypes {
         return (pos + 4, value);
     }
 
-    function bcs_serialize_bool(bool input)
+    function bcs_serialize_bytes32(bytes32 input)
         internal
         pure
         returns (bytes memory)
@@ -267,19 +87,361 @@ library LineraTypes {
         return abi.encodePacked(input);
     }
 
-    function bcs_deserialize_offset_bool(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, bool)
+        returns (uint256, bytes32)
     {
-        uint8 val = uint8(input[pos]);
-        bool result = false;
-        if (val == 1) {
-            result = true;
-        } else {
-            require(val == 0);
+        bytes32 dest;
+        assembly {
+            dest := mload(add(add(input, 0x20), pos))
         }
-        return (pos + 1, result);
+        return (pos + 32, dest);
+    }
+
+    function bcs_serialize_seq_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i=0; i<len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_key_values_AccountOwner_uint64(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, key_values_AccountOwner_uint64[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        key_values_AccountOwner_uint64[] memory result;
+        result = new key_values_AccountOwner_uint64[](len);
+        key_values_AccountOwner_uint64 memory value;
+        for (uint256 i=0; i<len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_key_values_AccountOwner_uint64(bytes memory input)
+        internal
+        pure
+        returns (key_values_AccountOwner_uint64[] memory)
+    {
+        uint256 new_pos;
+        key_values_AccountOwner_uint64[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct OptionU32 {
+        opt_uint32 value;
+    }
+
+    function bcs_serialize_OptionU32(OptionU32 memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_uint32(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionU32(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionU32 memory)
+    {
+        uint256 new_pos;
+        opt_uint32 memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_uint32(pos, input);
+        return (new_pos, OptionU32(value));
+    }
+
+    function bcs_deserialize_OptionU32(bytes memory input)
+        internal
+        pure
+        returns (OptionU32 memory)
+    {
+        uint256 new_pos;
+        OptionU32 memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionU32(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ServiceRuntimePrecompile {
+        uint8 choice;
+        // choice=0 corresponds to TryQueryApplication
+        ServiceRuntimePrecompile_TryQueryApplication try_query_application;
+    }
+
+    function bcs_serialize_ServiceRuntimePrecompile(ServiceRuntimePrecompile memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.choice == 0) {
+            return abi.encodePacked(input.choice, bcs_serialize_ServiceRuntimePrecompile_TryQueryApplication(input.try_query_application));
+        }
+        return abi.encodePacked(input.choice);
+    }
+
+    function bcs_deserialize_offset_ServiceRuntimePrecompile(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ServiceRuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        ServiceRuntimePrecompile_TryQueryApplication memory try_query_application;
+        if (choice == 0) {
+            (new_pos, try_query_application) = bcs_deserialize_offset_ServiceRuntimePrecompile_TryQueryApplication(new_pos, input);
+        }
+        require(choice < 1);
+        return (new_pos, ServiceRuntimePrecompile(choice, try_query_application));
+    }
+
+    function bcs_deserialize_ServiceRuntimePrecompile(bytes memory input)
+        internal
+        pure
+        returns (ServiceRuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        ServiceRuntimePrecompile memory value;
+        (new_pos, value) = bcs_deserialize_offset_ServiceRuntimePrecompile(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct TimeoutConfig {
+        opt_TimeDelta fast_round_duration;
+        TimeDelta base_timeout;
+        TimeDelta timeout_increment;
+        TimeDelta fallback_duration;
+    }
+
+    function bcs_serialize_TimeoutConfig(TimeoutConfig memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_opt_TimeDelta(input.fast_round_duration);
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_TimeDelta(input.base_timeout)));
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_TimeDelta(input.timeout_increment)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_TimeDelta(input.fallback_duration)));
+    }
+
+    function bcs_deserialize_offset_TimeoutConfig(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, TimeoutConfig memory)
+    {
+        uint256 new_pos;
+        opt_TimeDelta memory fast_round_duration;
+        (new_pos, fast_round_duration) = bcs_deserialize_offset_opt_TimeDelta(pos, input);
+        TimeDelta memory base_timeout;
+        (new_pos, base_timeout) = bcs_deserialize_offset_TimeDelta(new_pos, input);
+        TimeDelta memory timeout_increment;
+        (new_pos, timeout_increment) = bcs_deserialize_offset_TimeDelta(new_pos, input);
+        TimeDelta memory fallback_duration;
+        (new_pos, fallback_duration) = bcs_deserialize_offset_TimeDelta(new_pos, input);
+        return (new_pos, TimeoutConfig(fast_round_duration, base_timeout, timeout_increment, fallback_duration));
+    }
+
+    function bcs_deserialize_TimeoutConfig(bytes memory input)
+        internal
+        pure
+        returns (TimeoutConfig memory)
+    {
+        uint256 new_pos;
+        TimeoutConfig memory value;
+        (new_pos, value) = bcs_deserialize_offset_TimeoutConfig(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ContractRuntimePrecompile_SubscribeToEvents {
+        ChainId chain_id;
+        ApplicationId application_id;
+        StreamName stream_name;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile_SubscribeToEvents(ContractRuntimePrecompile_SubscribeToEvents memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ChainId(input.chain_id);
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_ApplicationId(input.application_id)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_StreamName(input.stream_name)));
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile_SubscribeToEvents(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile_SubscribeToEvents memory)
+    {
+        uint256 new_pos;
+        ChainId memory chain_id;
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
+        ApplicationId memory application_id;
+        (new_pos, application_id) = bcs_deserialize_offset_ApplicationId(new_pos, input);
+        StreamName memory stream_name;
+        (new_pos, stream_name) = bcs_deserialize_offset_StreamName(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_SubscribeToEvents(chain_id, application_id, stream_name));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_SubscribeToEvents(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_SubscribeToEvents memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_SubscribeToEvents memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_SubscribeToEvents(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_TimeDelta {
+        bool has_value;
+        TimeDelta value;
+    }
+
+    function bcs_serialize_opt_TimeDelta(opt_TimeDelta memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_TimeDelta(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_TimeDelta(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_TimeDelta memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        TimeDelta memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_TimeDelta(new_pos, input);
+        }
+        return (new_pos, opt_TimeDelta(has_value, value));
+    }
+
+    function bcs_deserialize_opt_TimeDelta(bytes memory input)
+        internal
+        pure
+        returns (opt_TimeDelta memory)
+    {
+        uint256 new_pos;
+        opt_TimeDelta memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_TimeDelta(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ContractRuntimePrecompile_ReadEvent {
+        ChainId chain_id;
+        StreamName stream_name;
+        uint32 index;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile_ReadEvent(ContractRuntimePrecompile_ReadEvent memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ChainId(input.chain_id);
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_StreamName(input.stream_name)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_uint32(input.index)));
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile_ReadEvent(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile_ReadEvent memory)
+    {
+        uint256 new_pos;
+        ChainId memory chain_id;
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
+        StreamName memory stream_name;
+        (new_pos, stream_name) = bcs_deserialize_offset_StreamName(new_pos, input);
+        uint32 index;
+        (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_ReadEvent(chain_id, stream_name, index));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_ReadEvent(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_ReadEvent memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_ReadEvent memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_ReadEvent(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_bytes20(bytes20 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, bytes20)
+    {
+        bytes20 dest;
+        assembly {
+            dest := mload(add(add(input, 0x20), pos))
+        }
+        return (pos + 20, dest);
+    }
+
+    function bcs_serialize_bytes(bytes memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        return abi.encodePacked(result, input);
+    }
+
+    function bcs_deserialize_offset_bytes(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, bytes memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        bytes memory result = new bytes(len);
+        for (uint256 u=0; u<len; u++) {
+            result[u] = input[new_pos + u];
+        }
+        return (new_pos + len, result);
     }
 
     struct ChainOwnership {
@@ -296,11 +458,10 @@ library LineraTypes {
         returns (bytes memory)
     {
         bytes memory result = bcs_serialize_seq_AccountOwner(input.super_owners);
-        result = abi.encodePacked(result, bcs_serialize_seq_key_values_AccountOwner_uint64(input.owners));
-        result = abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds));
-        result = abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds));
-        result = abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config));
-        return result;
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_seq_key_values_AccountOwner_uint64(input.owners)));
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds)));
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config)));
     }
 
     function bcs_deserialize_offset_ChainOwnership(uint256 pos, bytes memory input)
@@ -308,9 +469,9 @@ library LineraTypes {
         pure
         returns (uint256, ChainOwnership memory)
     {
-        uint256 new_pos = pos;
+        uint256 new_pos;
         AccountOwner[] memory super_owners;
-        (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(new_pos, input);
+        (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
         key_values_AccountOwner_uint64[] memory owners;
         (new_pos, owners) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(new_pos, input);
         uint32 multi_leader_rounds;
@@ -334,208 +495,156 @@ library LineraTypes {
         return value;
     }
 
-    struct BlockHeight {
-        uint64 value;
+    struct ContractRuntimePrecompile_UnsubscribeFromEvents {
+        ChainId chain_id;
+        ApplicationId application_id;
+        StreamName stream_name;
     }
 
-    function bcs_serialize_BlockHeight(BlockHeight memory input)
+    function bcs_serialize_ContractRuntimePrecompile_UnsubscribeFromEvents(ContractRuntimePrecompile_UnsubscribeFromEvents memory input)
         internal
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_uint64(input.value);
-        return result;
+        bytes memory result = bcs_serialize_ChainId(input.chain_id);
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_ApplicationId(input.application_id)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_StreamName(input.stream_name)));
     }
 
-    function bcs_deserialize_offset_BlockHeight(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_ContractRuntimePrecompile_UnsubscribeFromEvents(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, BlockHeight memory)
-    {
-        uint256 new_pos = pos;
-        uint64 value;
-        (new_pos, value) = bcs_deserialize_offset_uint64(new_pos, input);
-        return (new_pos, BlockHeight(value));
-    }
-
-    function bcs_deserialize_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (BlockHeight memory)
+        returns (uint256, ContractRuntimePrecompile_UnsubscribeFromEvents memory)
     {
         uint256 new_pos;
-        BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_BlockHeight(0, input);
+        ChainId memory chain_id;
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
+        ApplicationId memory application_id;
+        (new_pos, application_id) = bcs_deserialize_offset_ApplicationId(new_pos, input);
+        StreamName memory stream_name;
+        (new_pos, stream_name) = bcs_deserialize_offset_StreamName(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_UnsubscribeFromEvents(chain_id, application_id, stream_name));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_UnsubscribeFromEvents(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_UnsubscribeFromEvents memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_UnsubscribeFromEvents(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
 
-    struct CryptoHash {
-        bytes32 value;
+    struct BaseRuntimePrecompile_AssertDataBlobExists {
+        CryptoHash hash;
     }
 
-    function bcs_serialize_CryptoHash(CryptoHash memory input)
+    function bcs_serialize_BaseRuntimePrecompile_AssertDataBlobExists(BaseRuntimePrecompile_AssertDataBlobExists memory input)
         internal
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_bytes32(input.value);
-        return result;
+        return bcs_serialize_CryptoHash(input.hash);
     }
 
-    function bcs_deserialize_offset_CryptoHash(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, CryptoHash memory)
+        returns (uint256, BaseRuntimePrecompile_AssertDataBlobExists memory)
     {
-        uint256 new_pos = pos;
-        bytes32 value;
-        (new_pos, value) = bcs_deserialize_offset_bytes32(new_pos, input);
-        return (new_pos, CryptoHash(value));
+        uint256 new_pos;
+        CryptoHash memory hash;
+        (new_pos, hash) = bcs_deserialize_offset_CryptoHash(pos, input);
+        return (new_pos, BaseRuntimePrecompile_AssertDataBlobExists(hash));
     }
 
-    function bcs_deserialize_CryptoHash(bytes memory input)
+    function bcs_deserialize_BaseRuntimePrecompile_AssertDataBlobExists(bytes memory input)
         internal
         pure
-        returns (CryptoHash memory)
+        returns (BaseRuntimePrecompile_AssertDataBlobExists memory)
+    {
+        uint256 new_pos;
+        BaseRuntimePrecompile_AssertDataBlobExists memory value;
+        (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ContractRuntimePrecompile_SendMessage {
+        ChainId destination;
+        bytes message;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile_SendMessage(ContractRuntimePrecompile_SendMessage memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ChainId(input.destination);
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_bytes(input.message)));
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile_SendMessage(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile_SendMessage memory)
+    {
+        uint256 new_pos;
+        ChainId memory destination;
+        (new_pos, destination) = bcs_deserialize_offset_ChainId(pos, input);
+        bytes memory message;
+        (new_pos, message) = bcs_deserialize_offset_bytes(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_SendMessage(destination, message));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_SendMessage(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_SendMessage memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_SendMessage memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_SendMessage(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ChainId {
+        CryptoHash value;
+    }
+
+    function bcs_serialize_ChainId(ChainId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_CryptoHash(input.value);
+    }
+
+    function bcs_deserialize_offset_ChainId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ChainId memory)
     {
         uint256 new_pos;
         CryptoHash memory value;
-        (new_pos, value) = bcs_deserialize_offset_CryptoHash(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
+        (new_pos, value) = bcs_deserialize_offset_CryptoHash(pos, input);
+        return (new_pos, ChainId(value));
     }
 
-    struct MessageIsBouncing {
-        OptionBool value;
-    }
-
-    function bcs_serialize_MessageIsBouncing(MessageIsBouncing memory input)
+    function bcs_deserialize_ChainId(bytes memory input)
         internal
         pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_OptionBool(input.value);
-        return result;
-    }
-
-    function bcs_deserialize_offset_MessageIsBouncing(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, MessageIsBouncing memory)
-    {
-        uint256 new_pos = pos;
-        OptionBool value;
-        (new_pos, value) = bcs_deserialize_offset_OptionBool(new_pos, input);
-        return (new_pos, MessageIsBouncing(value));
-    }
-
-    function bcs_deserialize_MessageIsBouncing(bytes memory input)
-        internal
-        pure
-        returns (MessageIsBouncing memory)
+        returns (ChainId memory)
     {
         uint256 new_pos;
-        MessageIsBouncing memory value;
-        (new_pos, value) = bcs_deserialize_offset_MessageIsBouncing(0, input);
+        ChainId memory value;
+        (new_pos, value) = bcs_deserialize_offset_ChainId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
-    }
-
-    function bcs_serialize_bytes20(bytes20 input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodePacked(input);
-    }
-
-    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, bytes20)
-    {
-        bytes20 dest;
-        assembly {
-            dest := mload(add(add(input, 0x20), pos))
-        }
-        uint256 new_pos = pos + 20;
-        return (new_pos, dest);
-    }
-
-    struct opt_MessageId {
-        bool has_value;
-        MessageId value;
-    }
-
-    function bcs_serialize_opt_MessageId(opt_MessageId memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bool has_value = input.has_value;
-        bytes memory block1 = bcs_serialize_bool(has_value);
-        if (has_value) {
-            bytes memory block2 = bcs_serialize_MessageId(input.value);
-            return abi.encodePacked(block1, block2);
-        } else {
-            return block1;
-        }
-    }
-
-    function bcs_deserialize_offset_opt_MessageId(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, opt_MessageId memory)
-    {
-        uint256 new_pos;
-        bool has_value;
-        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        MessageId memory value;
-        if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_MessageId(new_pos, input);
-        }
-        return (new_pos, opt_MessageId(true, value));
-    }
-
-    function bcs_deserialize_opt_MessageId(bytes memory input)
-        internal
-        pure
-        returns (opt_MessageId memory)
-    {
-        uint256 new_pos;
-        opt_MessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_uint64(uint64 input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = new bytes(8);
-        uint64 value = input;
-        result[0] = bytes1(uint8(value));
-        for (uint i=1; i<8; i++) {
-            value = value >> 8;
-            result[i] = bytes1(uint8(value));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_uint64(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, uint64)
-    {
-        uint64 value = uint8(input[pos + 7]);
-        for (uint256 i=0; i<7; i++) {
-            value = value << 8;
-            value += uint8(input[pos + 6 - i]);
-        }
-        return (pos + 8, value);
     }
 
     function bcs_serialize_seq_AccountOwner(AccountOwner[] memory input)
@@ -581,54 +690,372 @@ library LineraTypes {
         return value;
     }
 
-    struct opt_TimeDelta {
+    struct opt_uint32 {
         bool has_value;
-        TimeDelta value;
+        uint32 value;
     }
 
-    function bcs_serialize_opt_TimeDelta(opt_TimeDelta memory input)
+    function bcs_serialize_opt_uint32(opt_uint32 memory input)
         internal
         pure
         returns (bytes memory)
     {
-        bool has_value = input.has_value;
-        bytes memory block1 = bcs_serialize_bool(has_value);
-        if (has_value) {
-            bytes memory block2 = bcs_serialize_TimeDelta(input.value);
-            return abi.encodePacked(block1, block2);
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_uint32(input.value));
         } else {
-            return block1;
+            return abi.encodePacked(uint8(0));
         }
     }
 
-    function bcs_deserialize_offset_opt_TimeDelta(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_opt_uint32(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, opt_TimeDelta memory)
+        returns (uint256, opt_uint32 memory)
     {
         uint256 new_pos;
         bool has_value;
         (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        TimeDelta memory value;
+        uint32 value;
         if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_TimeDelta(new_pos, input);
+            (new_pos, value) = bcs_deserialize_offset_uint32(new_pos, input);
         }
-        return (new_pos, opt_TimeDelta(true, value));
+        return (new_pos, opt_uint32(has_value, value));
     }
 
-    function bcs_deserialize_opt_TimeDelta(bytes memory input)
+    function bcs_deserialize_opt_uint32(bytes memory input)
         internal
         pure
-        returns (opt_TimeDelta memory)
+        returns (opt_uint32 memory)
     {
         uint256 new_pos;
-        opt_TimeDelta memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_TimeDelta(0, input);
+        opt_uint32 memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_uint32(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
 
-    function bcs_serialize_bytes32(bytes32 input)
+    struct ContractRuntimePrecompile {
+        uint8 choice;
+        // choice=0 corresponds to TryCallApplication
+        ContractRuntimePrecompile_TryCallApplication try_call_application;
+        // choice=1 corresponds to ValidationRound
+        // choice=2 corresponds to SendMessage
+        ContractRuntimePrecompile_SendMessage send_message;
+        // choice=3 corresponds to MessageId
+        // choice=4 corresponds to MessageIsBouncing
+        // choice=5 corresponds to ReadEvent
+        ContractRuntimePrecompile_ReadEvent read_event;
+        // choice=6 corresponds to SubscribeToEvents
+        ContractRuntimePrecompile_SubscribeToEvents subscribe_to_events;
+        // choice=7 corresponds to UnsubscribeFromEvents
+        ContractRuntimePrecompile_UnsubscribeFromEvents unsubscribe_from_events;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile(ContractRuntimePrecompile memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.choice == 0) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_TryCallApplication(input.try_call_application));
+        }
+        if (input.choice == 2) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SendMessage(input.send_message));
+        }
+        if (input.choice == 5) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_ReadEvent(input.read_event));
+        }
+        if (input.choice == 6) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_SubscribeToEvents(input.subscribe_to_events));
+        }
+        if (input.choice == 7) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile_UnsubscribeFromEvents(input.unsubscribe_from_events));
+        }
+        return abi.encodePacked(input.choice);
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        if (choice == 0) {
+            (new_pos, try_call_application) = bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(new_pos, input);
+        }
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        if (choice == 2) {
+            (new_pos, send_message) = bcs_deserialize_offset_ContractRuntimePrecompile_SendMessage(new_pos, input);
+        }
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        if (choice == 5) {
+            (new_pos, read_event) = bcs_deserialize_offset_ContractRuntimePrecompile_ReadEvent(new_pos, input);
+        }
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        if (choice == 6) {
+            (new_pos, subscribe_to_events) = bcs_deserialize_offset_ContractRuntimePrecompile_SubscribeToEvents(new_pos, input);
+        }
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        if (choice == 7) {
+            (new_pos, unsubscribe_from_events) = bcs_deserialize_offset_ContractRuntimePrecompile_UnsubscribeFromEvents(new_pos, input);
+        }
+        require(choice < 8);
+        return (new_pos, ContractRuntimePrecompile(choice, try_call_application, send_message, read_event, subscribe_to_events, unsubscribe_from_events));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct key_values_AccountOwner_uint64 {
+        AccountOwner key;
+        uint64 value;
+    }
+
+    function bcs_serialize_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64 memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_AccountOwner(input.key);
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_uint64(input.value)));
+    }
+
+    function bcs_deserialize_offset_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, key_values_AccountOwner_uint64 memory)
+    {
+        uint256 new_pos;
+        AccountOwner memory key;
+        (new_pos, key) = bcs_deserialize_offset_AccountOwner(pos, input);
+        uint64 value;
+        (new_pos, value) = bcs_deserialize_offset_uint64(new_pos, input);
+        return (new_pos, key_values_AccountOwner_uint64(key, value));
+    }
+
+    function bcs_deserialize_key_values_AccountOwner_uint64(bytes memory input)
+        internal
+        pure
+        returns (key_values_AccountOwner_uint64 memory)
+    {
+        uint256 new_pos;
+        key_values_AccountOwner_uint64 memory value;
+        (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct RuntimePrecompile {
+        uint8 choice;
+        // choice=0 corresponds to Base
+        BaseRuntimePrecompile base;
+        // choice=1 corresponds to Contract
+        ContractRuntimePrecompile contract_;
+        // choice=2 corresponds to Service
+        ServiceRuntimePrecompile service;
+    }
+
+    function bcs_serialize_RuntimePrecompile(RuntimePrecompile memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.choice == 0) {
+            return abi.encodePacked(input.choice, bcs_serialize_BaseRuntimePrecompile(input.base));
+        }
+        if (input.choice == 1) {
+            return abi.encodePacked(input.choice, bcs_serialize_ContractRuntimePrecompile(input.contract_));
+        }
+        if (input.choice == 2) {
+            return abi.encodePacked(input.choice, bcs_serialize_ServiceRuntimePrecompile(input.service));
+        }
+        return abi.encodePacked(input.choice);
+    }
+
+    function bcs_deserialize_offset_RuntimePrecompile(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, RuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        BaseRuntimePrecompile memory base;
+        if (choice == 0) {
+            (new_pos, base) = bcs_deserialize_offset_BaseRuntimePrecompile(new_pos, input);
+        }
+        ContractRuntimePrecompile memory contract_;
+        if (choice == 1) {
+            (new_pos, contract_) = bcs_deserialize_offset_ContractRuntimePrecompile(new_pos, input);
+        }
+        ServiceRuntimePrecompile memory service;
+        if (choice == 2) {
+            (new_pos, service) = bcs_deserialize_offset_ServiceRuntimePrecompile(new_pos, input);
+        }
+        require(choice < 3);
+        return (new_pos, RuntimePrecompile(choice, base, contract_, service));
+    }
+
+    function bcs_deserialize_RuntimePrecompile(bytes memory input)
+        internal
+        pure
+        returns (RuntimePrecompile memory)
+    {
+        uint256 new_pos;
+        RuntimePrecompile memory value;
+        (new_pos, value) = bcs_deserialize_offset_RuntimePrecompile(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ApplicationId {
+        CryptoHash application_description_hash;
+    }
+
+    function bcs_serialize_ApplicationId(ApplicationId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_CryptoHash(input.application_description_hash);
+    }
+
+    function bcs_deserialize_offset_ApplicationId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ApplicationId memory)
+    {
+        uint256 new_pos;
+        CryptoHash memory application_description_hash;
+        (new_pos, application_description_hash) = bcs_deserialize_offset_CryptoHash(pos, input);
+        return (new_pos, ApplicationId(application_description_hash));
+    }
+
+    function bcs_deserialize_ApplicationId(bytes memory input)
+        internal
+        pure
+        returns (ApplicationId memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_ApplicationId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    enum OptionBool { None, True, False }
+
+    function bcs_serialize_OptionBool(OptionBool input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input == OptionBool.None) {
+            return abi.encodePacked(uint8(0));
+        }
+        if (input == OptionBool.False) {
+            return abi.encodePacked(uint8(1), uint8(0));
+        }
+        return abi.encodePacked(uint8(1), uint8(1));
+    }
+
+    function bcs_deserialize_offset_OptionBool(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionBool)
+    {
+        uint8 choice = uint8(input[pos]);
+        if (choice == 0) {
+           return (pos + 1, OptionBool.None);
+        } else {
+            require(choice == 1);
+            uint8 value = uint8(input[pos + 1]);
+            if (value == 0) {
+                return (pos + 2, OptionBool.False);
+            } else {
+                require(value == 1);
+                return (pos + 2, OptionBool.True);
+            }
+        }
+    }
+
+    function bcs_deserialize_OptionBool(bytes memory input)
+        internal
+        pure
+        returns (OptionBool)
+    {
+        uint256 new_pos;
+        OptionBool value;
+        (new_pos, value) = bcs_deserialize_offset_OptionBool(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_uint8(uint8 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+      return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_uint8(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, uint8)
+    {
+        uint8 value = uint8(input[pos]);
+        return (pos + 1, value);
+    }
+
+    struct OptionMessageId {
+        opt_MessageId value;
+    }
+
+    function bcs_serialize_OptionMessageId(OptionMessageId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_MessageId(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionMessageId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionMessageId memory)
+    {
+        uint256 new_pos;
+        opt_MessageId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(pos, input);
+        return (new_pos, OptionMessageId(value));
+    }
+
+    function bcs_deserialize_OptionMessageId(bytes memory input)
+        internal
+        pure
+        returns (OptionMessageId memory)
+    {
+        uint256 new_pos;
+        OptionMessageId memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionMessageId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_bool(bool input)
         internal
         pure
         returns (bytes memory)
@@ -636,61 +1063,263 @@ library LineraTypes {
         return abi.encodePacked(input);
     }
 
-    function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_bool(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, bytes32)
+        returns (uint256, bool)
     {
-        bytes32 dest;
-        assembly {
-            dest := mload(add(add(input, 0x20), pos))
+        uint8 val = uint8(input[pos]);
+        bool result = false;
+        if (val == 1) {
+            result = true;
+        } else {
+            require(val == 0);
         }
-        uint256 new_pos = pos + 32;
-        return (new_pos, dest);
+        return (pos + 1, result);
     }
 
-    function bcs_serialize_seq_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64[] memory input)
+    struct StreamName {
+        bytes value;
+    }
+
+    function bcs_serialize_StreamName(StreamName memory input)
         internal
         pure
         returns (bytes memory)
     {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
-        for (uint256 i=0; i<len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_key_values_AccountOwner_uint64(input[i]));
+        return bcs_serialize_bytes(input.value);
+    }
+
+    function bcs_deserialize_offset_StreamName(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, StreamName memory)
+    {
+        uint256 new_pos;
+        bytes memory value;
+        (new_pos, value) = bcs_deserialize_offset_bytes(pos, input);
+        return (new_pos, StreamName(value));
+    }
+
+    function bcs_deserialize_StreamName(bytes memory input)
+        internal
+        pure
+        returns (StreamName memory)
+    {
+        uint256 new_pos;
+        StreamName memory value;
+        (new_pos, value) = bcs_deserialize_offset_StreamName(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct TimeDelta {
+        uint64 value;
+    }
+
+    function bcs_serialize_TimeDelta(TimeDelta memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_uint64(input.value);
+    }
+
+    function bcs_deserialize_offset_TimeDelta(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, TimeDelta memory)
+    {
+        uint256 new_pos;
+        uint64 value;
+        (new_pos, value) = bcs_deserialize_offset_uint64(pos, input);
+        return (new_pos, TimeDelta(value));
+    }
+
+    function bcs_deserialize_TimeDelta(bytes memory input)
+        internal
+        pure
+        returns (TimeDelta memory)
+    {
+        uint256 new_pos;
+        TimeDelta memory value;
+        (new_pos, value) = bcs_deserialize_offset_TimeDelta(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_uint64(uint64 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = new bytes(8);
+        uint64 value = input;
+        result[0] = bytes1(uint8(value));
+        for (uint i=1; i<8; i++) {
+            value = value >> 8;
+            result[i] = bytes1(uint8(value));
         }
         return result;
     }
 
-    function bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_uint64(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, key_values_AccountOwner_uint64[] memory)
+        returns (uint256, uint64)
     {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
-        key_values_AccountOwner_uint64[] memory result;
-        result = new key_values_AccountOwner_uint64[](len);
-        key_values_AccountOwner_uint64 memory value;
-        for (uint256 i=0; i<len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(new_pos, input);
-            result[i] = value;
+        uint64 value = uint8(input[pos + 7]);
+        for (uint256 i=0; i<7; i++) {
+            value = value << 8;
+            value += uint8(input[pos + 6 - i]);
         }
-        return (new_pos, result);
+        return (pos + 8, value);
     }
 
-    function bcs_deserialize_seq_key_values_AccountOwner_uint64(bytes memory input)
+    struct BaseRuntimePrecompile_ReadDataBlob {
+        CryptoHash hash;
+    }
+
+    function bcs_serialize_BaseRuntimePrecompile_ReadDataBlob(BaseRuntimePrecompile_ReadDataBlob memory input)
         internal
         pure
-        returns (key_values_AccountOwner_uint64[] memory)
+        returns (bytes memory)
+    {
+        return bcs_serialize_CryptoHash(input.hash);
+    }
+
+    function bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BaseRuntimePrecompile_ReadDataBlob memory)
     {
         uint256 new_pos;
-        key_values_AccountOwner_uint64[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(0, input);
+        CryptoHash memory hash;
+        (new_pos, hash) = bcs_deserialize_offset_CryptoHash(pos, input);
+        return (new_pos, BaseRuntimePrecompile_ReadDataBlob(hash));
+    }
+
+    function bcs_deserialize_BaseRuntimePrecompile_ReadDataBlob(bytes memory input)
+        internal
+        pure
+        returns (BaseRuntimePrecompile_ReadDataBlob memory)
+    {
+        uint256 new_pos;
+        BaseRuntimePrecompile_ReadDataBlob memory value;
+        (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
+
+    struct ContractRuntimePrecompile_TryCallApplication {
+        ApplicationId target;
+        bytes argument;
+    }
+
+    function bcs_serialize_ContractRuntimePrecompile_TryCallApplication(ContractRuntimePrecompile_TryCallApplication memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ApplicationId(input.target);
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_bytes(input.argument)));
+    }
+
+    function bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ContractRuntimePrecompile_TryCallApplication memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory target;
+        (new_pos, target) = bcs_deserialize_offset_ApplicationId(pos, input);
+        bytes memory argument;
+        (new_pos, argument) = bcs_deserialize_offset_bytes(new_pos, input);
+        return (new_pos, ContractRuntimePrecompile_TryCallApplication(target, argument));
+    }
+
+    function bcs_deserialize_ContractRuntimePrecompile_TryCallApplication(bytes memory input)
+        internal
+        pure
+        returns (ContractRuntimePrecompile_TryCallApplication memory)
+    {
+        uint256 new_pos;
+        ContractRuntimePrecompile_TryCallApplication memory value;
+        (new_pos, value) = bcs_deserialize_offset_ContractRuntimePrecompile_TryCallApplication(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct BlockHeight {
+        uint64 value;
+    }
+
+    function bcs_serialize_BlockHeight(BlockHeight memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_uint64(input.value);
+    }
+
+    function bcs_deserialize_offset_BlockHeight(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BlockHeight memory)
+    {
+        uint256 new_pos;
+        uint64 value;
+        (new_pos, value) = bcs_deserialize_offset_uint64(pos, input);
+        return (new_pos, BlockHeight(value));
+    }
+
+    function bcs_deserialize_BlockHeight(bytes memory input)
+        internal
+        pure
+        returns (BlockHeight memory)
+    {
+        uint256 new_pos;
+        BlockHeight memory value;
+        (new_pos, value) = bcs_deserialize_offset_BlockHeight(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct MessageIsBouncing {
+        OptionBool value;
+    }
+
+    function bcs_serialize_MessageIsBouncing(MessageIsBouncing memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_OptionBool(input.value);
+    }
+
+    function bcs_deserialize_offset_MessageIsBouncing(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, MessageIsBouncing memory)
+    {
+        uint256 new_pos;
+        OptionBool value;
+        (new_pos, value) = bcs_deserialize_offset_OptionBool(pos, input);
+        return (new_pos, MessageIsBouncing(value));
+    }
+
+    function bcs_deserialize_MessageIsBouncing(bytes memory input)
+        internal
+        pure
+        returns (MessageIsBouncing memory)
+    {
+        uint256 new_pos;
+        MessageIsBouncing memory value;
+        (new_pos, value) = bcs_deserialize_offset_MessageIsBouncing(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct AccountOwner {
         uint8 choice;
         // choice=0 corresponds to Reserved
@@ -706,17 +1335,16 @@ library LineraTypes {
         pure
         returns (bytes memory)
     {
-        bytes memory result = abi.encodePacked(input.choice);
         if (input.choice == 0) {
-            return abi.encodePacked(result, bcs_serialize_uint8(input.reserved));
+            return abi.encodePacked(input.choice, bcs_serialize_uint8(input.reserved));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(result, bcs_serialize_CryptoHash(input.address32));
+            return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.address32));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(result, bcs_serialize_bytes20(input.address20));
+            return abi.encodePacked(input.choice, bcs_serialize_bytes20(input.address20));
         }
-        return result;
+        return abi.encodePacked(input.choice);
     }
 
     function bcs_deserialize_offset_AccountOwner(uint256 pos, bytes memory input)
@@ -739,6 +1367,7 @@ library LineraTypes {
         if (choice == 2) {
             (new_pos, address20) = bcs_deserialize_offset_bytes20(new_pos, input);
         }
+        require(choice < 3);
         return (new_pos, AccountOwner(choice, reserved, address32, address20));
     }
 
@@ -754,138 +1383,59 @@ library LineraTypes {
         return value;
     }
 
-    struct opt_uint32 {
-        bool has_value;
-        uint32 value;
+    struct BaseRuntimePrecompile {
+        uint8 choice;
+        // choice=0 corresponds to ChainId
+        // choice=1 corresponds to ApplicationCreatorChainId
+        // choice=2 corresponds to ChainOwnership
+        // choice=3 corresponds to ReadDataBlob
+        BaseRuntimePrecompile_ReadDataBlob read_data_blob;
+        // choice=4 corresponds to AssertDataBlobExists
+        BaseRuntimePrecompile_AssertDataBlobExists assert_data_blob_exists;
     }
 
-    function bcs_serialize_opt_uint32(opt_uint32 memory input)
+    function bcs_serialize_BaseRuntimePrecompile(BaseRuntimePrecompile memory input)
         internal
         pure
         returns (bytes memory)
     {
-        bool has_value = input.has_value;
-        bytes memory block1 = bcs_serialize_bool(has_value);
-        if (has_value) {
-            bytes memory block2 = bcs_serialize_uint32(input.value);
-            return abi.encodePacked(block1, block2);
-        } else {
-            return block1;
+        if (input.choice == 3) {
+            return abi.encodePacked(input.choice, bcs_serialize_BaseRuntimePrecompile_ReadDataBlob(input.read_data_blob));
         }
-    }
-
-    function bcs_deserialize_offset_opt_uint32(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, opt_uint32 memory)
-    {
-        uint256 new_pos;
-        bool has_value;
-        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        uint32 value;
-        if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_uint32(new_pos, input);
+        if (input.choice == 4) {
+            return abi.encodePacked(input.choice, bcs_serialize_BaseRuntimePrecompile_AssertDataBlobExists(input.assert_data_blob_exists));
         }
-        return (new_pos, opt_uint32(true, value));
+        return abi.encodePacked(input.choice);
     }
 
-    function bcs_deserialize_opt_uint32(bytes memory input)
+    function bcs_deserialize_offset_BaseRuntimePrecompile(uint256 pos, bytes memory input)
         internal
         pure
-        returns (opt_uint32 memory)
+        returns (uint256, BaseRuntimePrecompile memory)
     {
         uint256 new_pos;
-        opt_uint32 memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_uint32(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        BaseRuntimePrecompile_ReadDataBlob memory read_data_blob;
+        if (choice == 3) {
+            (new_pos, read_data_blob) = bcs_deserialize_offset_BaseRuntimePrecompile_ReadDataBlob(new_pos, input);
+        }
+        BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists;
+        if (choice == 4) {
+            (new_pos, assert_data_blob_exists) = bcs_deserialize_offset_BaseRuntimePrecompile_AssertDataBlobExists(new_pos, input);
+        }
+        require(choice < 5);
+        return (new_pos, BaseRuntimePrecompile(choice, read_data_blob, assert_data_blob_exists));
     }
 
-    struct OptionU32 {
-        opt_uint32 value;
-    }
-
-    function bcs_serialize_OptionU32(OptionU32 memory input)
+    function bcs_deserialize_BaseRuntimePrecompile(bytes memory input)
         internal
         pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_opt_uint32(input.value);
-        return result;
-    }
-
-    function bcs_deserialize_offset_OptionU32(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OptionU32 memory)
-    {
-        uint256 new_pos = pos;
-        opt_uint32 memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_uint32(new_pos, input);
-        return (new_pos, OptionU32(value));
-    }
-
-    function bcs_deserialize_OptionU32(bytes memory input)
-        internal
-        pure
-        returns (OptionU32 memory)
+        returns (BaseRuntimePrecompile memory)
     {
         uint256 new_pos;
-        OptionU32 memory value;
-        (new_pos, value) = bcs_deserialize_offset_OptionU32(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_uint8(uint8 input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-      return abi.encodePacked(input);
-    }
-
-    function bcs_deserialize_offset_uint8(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, uint8)
-    {
-        uint8 value = uint8(input[pos]);
-        return (pos + 1, value);
-    }
-
-    struct ChainId {
-        CryptoHash value;
-    }
-
-    function bcs_serialize_ChainId(ChainId memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_CryptoHash(input.value);
-        return result;
-    }
-
-    function bcs_deserialize_offset_ChainId(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, ChainId memory)
-    {
-        uint256 new_pos = pos;
-        CryptoHash memory value;
-        (new_pos, value) = bcs_deserialize_offset_CryptoHash(new_pos, input);
-        return (new_pos, ChainId(value));
-    }
-
-    function bcs_deserialize_ChainId(bytes memory input)
-        internal
-        pure
-        returns (ChainId memory)
-    {
-        uint256 new_pos;
-        ChainId memory value;
-        (new_pos, value) = bcs_deserialize_offset_ChainId(0, input);
+        BaseRuntimePrecompile memory value;
+        (new_pos, value) = bcs_deserialize_offset_BaseRuntimePrecompile(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -902,9 +1452,8 @@ library LineraTypes {
         returns (bytes memory)
     {
         bytes memory result = bcs_serialize_ChainId(input.chain_id);
-        result = abi.encodePacked(result, bcs_serialize_BlockHeight(input.height));
-        result = abi.encodePacked(result, bcs_serialize_uint32(input.index));
-        return result;
+        result = abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_BlockHeight(input.height)));
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_uint32(input.index)));
     }
 
     function bcs_deserialize_offset_MessageId(uint256 pos, bytes memory input)
@@ -912,9 +1461,9 @@ library LineraTypes {
         pure
         returns (uint256, MessageId memory)
     {
-        uint256 new_pos = pos;
+        uint256 new_pos;
         ChainId memory chain_id;
-        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(new_pos, input);
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
         BlockHeight memory height;
         (new_pos, height) = bcs_deserialize_offset_BlockHeight(new_pos, input);
         uint32 index;
@@ -934,41 +1483,122 @@ library LineraTypes {
         return value;
     }
 
-    struct OptionMessageId {
-        opt_MessageId value;
+    struct opt_MessageId {
+        bool has_value;
+        MessageId value;
     }
 
-    function bcs_serialize_OptionMessageId(OptionMessageId memory input)
+    function bcs_serialize_opt_MessageId(opt_MessageId memory input)
         internal
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_opt_MessageId(input.value);
-        return result;
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_MessageId(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
     }
 
-    function bcs_deserialize_offset_OptionMessageId(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_opt_MessageId(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, OptionMessageId memory)
-    {
-        uint256 new_pos = pos;
-        opt_MessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(new_pos, input);
-        return (new_pos, OptionMessageId(value));
-    }
-
-    function bcs_deserialize_OptionMessageId(bytes memory input)
-        internal
-        pure
-        returns (OptionMessageId memory)
+        returns (uint256, opt_MessageId memory)
     {
         uint256 new_pos;
-        OptionMessageId memory value;
-        (new_pos, value) = bcs_deserialize_offset_OptionMessageId(0, input);
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        MessageId memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_MessageId(new_pos, input);
+        }
+        return (new_pos, opt_MessageId(has_value, value));
+    }
+
+    function bcs_deserialize_opt_MessageId(bytes memory input)
+        internal
+        pure
+        returns (opt_MessageId memory)
+    {
+        uint256 new_pos;
+        opt_MessageId memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_MessageId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct CryptoHash {
+        bytes32 value;
+    }
+
+    function bcs_serialize_CryptoHash(CryptoHash memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_bytes32(input.value);
+    }
+
+    function bcs_deserialize_offset_CryptoHash(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, CryptoHash memory)
+    {
+        uint256 new_pos;
+        bytes32 value;
+        (new_pos, value) = bcs_deserialize_offset_bytes32(pos, input);
+        return (new_pos, CryptoHash(value));
+    }
+
+    function bcs_deserialize_CryptoHash(bytes memory input)
+        internal
+        pure
+        returns (CryptoHash memory)
+    {
+        uint256 new_pos;
+        CryptoHash memory value;
+        (new_pos, value) = bcs_deserialize_offset_CryptoHash(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct ServiceRuntimePrecompile_TryQueryApplication {
+        ApplicationId target;
+        bytes argument;
+    }
+
+    function bcs_serialize_ServiceRuntimePrecompile_TryQueryApplication(ServiceRuntimePrecompile_TryQueryApplication memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ApplicationId(input.target);
+        return abi.encodePacked(result, abi.encodePacked(result, bcs_serialize_bytes(input.argument)));
+    }
+
+    function bcs_deserialize_offset_ServiceRuntimePrecompile_TryQueryApplication(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ServiceRuntimePrecompile_TryQueryApplication memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory target;
+        (new_pos, target) = bcs_deserialize_offset_ApplicationId(pos, input);
+        bytes memory argument;
+        (new_pos, argument) = bcs_deserialize_offset_bytes(new_pos, input);
+        return (new_pos, ServiceRuntimePrecompile_TryQueryApplication(target, argument));
+    }
+
+    function bcs_deserialize_ServiceRuntimePrecompile_TryQueryApplication(bytes memory input)
+        internal
+        pure
+        returns (ServiceRuntimePrecompile_TryQueryApplication memory)
+    {
+        uint256 new_pos;
+        ServiceRuntimePrecompile_TryQueryApplication memory value;
+        (new_pos, value) = bcs_deserialize_offset_ServiceRuntimePrecompile_TryQueryApplication(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
 
 } // end of library LineraTypes
-

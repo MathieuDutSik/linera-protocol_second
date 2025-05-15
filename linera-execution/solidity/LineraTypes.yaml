@@ -73,6 +73,10 @@ OptionMessageId:
       TYPENAME: MessageId
 StreamName:
   NEWTYPESTRUCT: BYTES
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
 BaseRuntimePrecompile:
   ENUM:
     0:
@@ -86,7 +90,7 @@ BaseRuntimePrecompile:
         STRUCT:
           - hash:
               TYPENAME: CryptoHash
-    3:
+    4:
       AssertDataBlobExists:
         STRUCT:
           - hash:
@@ -98,8 +102,7 @@ ContractRuntimePrecompile:
         STRUCT:
           - target:
               TYPENAME: ApplicationId
-          - argument:
-              SEQ: U8
+          - argument: BYTES
     1:
       ValidationRound: UNIT
     2:
@@ -107,8 +110,7 @@ ContractRuntimePrecompile:
         STRUCT:
           - destination:
               TYPENAME: ChainId
-          - message:
-              SEQ: U8
+          - message: BYTES
     3:
       MessageId: UNIT
     4:
@@ -147,9 +149,8 @@ ServiceRuntimePrecompile:
         STRUCT:
           - target:
               TYPENAME: ApplicationId
-          - argument:
-              SEQ: U8
-BaseRuntimePrecompile:
+          - argument: BYTES
+RuntimePrecompile:
   ENUM:
     0:
       Base:
