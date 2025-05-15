@@ -1,0 +1,73 @@
+---
+TimeoutConfig:
+  STRUCT:
+    - fast_round_duration:
+        OPTION:
+          TYPENAME: TimeDelta
+    - base_timeout:
+        TYPENAME: TimeDelta
+    - timeout_increment:
+        TYPENAME: TimeDelta
+    - fallback_duration:
+        TYPENAME: TimeDelta
+TimeDelta:
+  NEWTYPESTRUCT: U64
+ChainOwnership:
+  STRUCT:
+    - super_owners:
+        SEQ:
+          TYPENAME: AccountOwner
+    - owners:
+        MAP:
+          KEY:
+            TYPENAME: AccountOwner
+          VALUE: U64
+    - multi_leader_rounds: U32
+    - open_multi_leader_rounds: BOOL
+    - timeout_config:
+        TYPENAME: TimeoutConfig
+AccountOwner:
+  ENUM:
+    0:
+      Reserved:
+        NEWTYPE: U8
+    1:
+      Address32:
+        NEWTYPE:
+          TYPENAME: CryptoHash
+    2:
+      Address20:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 20
+CryptoHash:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+MessageId:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
+BlockHeight:
+  NEWTYPESTRUCT: U64
+ChainId:
+  NEWTYPESTRUCT:
+    TYPENAME: CryptoHash
+MessageIsBouncing:
+  NEWTYPESTRUCT:
+    OPTION: BOOL
+MessageIsBouncing:
+  NEWTYPESTRUCT:
+    OPTION: BOOL
+OptionU32:
+  NEWTYPESTRUCT:
+    OPTION: U32
+OptionMessageId:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: MessageId

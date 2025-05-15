@@ -319,7 +319,7 @@ enum ServiceRuntimePrecompile {
 
 /// Key prefixes used to transmit precompiles.
 #[derive(Debug, Serialize, Deserialize)]
-enum LineraPrecompile {
+enum RuntimePrecompile {
     Base(BaseRuntimePrecompile),
     Contract(ContractRuntimePrecompile),
     Service(ServiceRuntimePrecompile),
@@ -472,13 +472,12 @@ impl GeneralContractCall {
         input: &Bytes,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
-        match bcs::from_bytes(&vec).map_err(|error| format!("{error}"))? {
-            LineraPrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
-            LineraPrecompile::Contract(contract_tag) => {
+        match bcs::from_bytes(input.as_ref()).map_err(|error| format!("{error}"))? {
+            RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            RuntimePrecompile::Contract(contract_tag) => {
                 Self::contract_runtime_call(contract_tag, context)
             }
-            LineraPrecompile::Service(_) => {
+            RuntimePrecompile::Service(_) => {
                 Err("Service tags are not available in GeneralContractCall".to_string())
             }
         }
@@ -528,13 +527,12 @@ impl GeneralServiceCall {
         input: &Bytes,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
-        let vec = input.to_vec();
-        match bcs::from_bytes(&vec).map_err(|error| format!("{error}"))? {
-            LineraPrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
-            LineraPrecompile::Contract(_) => {
+        match bcs::from_bytes(input.as_ref()).map_err(|error| format!("{error}"))? {
+            RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            RuntimePrecompile::Contract(_) => {
                 Err("Contract calls are not available in GeneralServiceCall".to_string())
             }
-            LineraPrecompile::Service(service_tag) => {
+            RuntimePrecompile::Service(service_tag) => {
                 Self::service_runtime_call(service_tag, context)
             }
         }
