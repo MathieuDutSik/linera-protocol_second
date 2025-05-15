@@ -394,10 +394,6 @@ fn base_runtime_call<Runtime: BaseRuntime>(
     }
 }
 
-const MESSAGE_IS_BOUNCING_NONE: u8 = 0;
-const MESSAGE_IS_BOUNCING_SOME_TRUE: u8 = 1;
-const MESSAGE_IS_BOUNCING_SOME_FALSE: u8 = 2;
-
 impl GeneralContractCall {
     fn contract_runtime_call<Runtime: ContractRuntime>(
         tag: ContractRuntimePrecompile,
@@ -446,15 +442,11 @@ impl GeneralContractCall {
                     .map_err(|error| format!("MessageId serialization error {error}"))
             }
             ContractRuntimePrecompile::MessageIsBouncing => {
-                let message_is_bouncing = runtime
+                let result = runtime
                     .message_is_bouncing()
                     .map_err(|error| format!("MessageIsBouncing error {error}"))?;
-                let value = match message_is_bouncing {
-                    None => MESSAGE_IS_BOUNCING_NONE,
-                    Some(true) => MESSAGE_IS_BOUNCING_SOME_TRUE,
-                    Some(false) => MESSAGE_IS_BOUNCING_SOME_FALSE,
-                };
-                Ok(vec![value])
+                bcs::to_bytes(&result)
+                    .map_err(|error| format!("MessageIsBouncing serialization error {error}"))
             }
             ContractRuntimePrecompile::ReadEvent { chain_id, stream_name, index } => {
                 runtime
@@ -549,19 +541,27 @@ impl GeneralServiceCall {
     }
 }
 
-fn failing_outcome() -> CallOutcome {
-    let result = InstructionResult::Revert;
-    let output = Bytes::default();
-    let gas = Gas::default();
-    let result = InterpreterResult {
-        result,
-        output,
-        gas,
-    };
-    let memory_offset = Range::default();
-    CallOutcome {
-        result,
-        memory_offset,
+fn map_result_call_outcome(result: Result<Option<CallOutcome>, ExecutionError>) -> Option<CallOutcome> {
+    match result {
+        Err(_error) => {
+            // An alternative way would be to return None, which would induce
+            // Revm to call the smart contract in its database, where it is
+            // non-existent.
+            let result = InstructionResult::Revert;
+            let output = Bytes::default();
+            let gas = Gas::default();
+            let result = InterpreterResult {
+                result,
+                output,
+                gas,
+            };
+            let memory_offset = Range::default();
+            Some(CallOutcome {
+                result,
+                memory_offset,
+            })
+        },
+        Ok(result) => result,
     }
 }
 
@@ -589,15 +589,7 @@ impl<Runtime: ContractRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Ru
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        match result {
-            Err(_error) => {
-                // An alternative way would be to return None, which would induce
-                // Revm to call the smart contract in its database, where it is
-                // non-existent.
-                Some(failing_outcome())
-            }
-            Ok(result) => result,
-        }
+        map_result_call_outcome(result)
     }
 }
 
@@ -614,7 +606,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
         let vec = inputs.input.to_vec();
         let target = address_to_user_application_id(inputs.target_address);
-        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+        let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
         argument.extend(&vec);
         let authenticated = true;
         let result = {
@@ -642,15 +634,7 @@ impl<Runtime: ServiceRuntime> Inspector<WrapDatabaseRef<&mut DatabaseRuntime<Run
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        match result {
-            Err(_error) => {
-                // An alternative way would be to return None, which would induce
-                // Revm to call the smart contract in its database, where it is
-                // non-existent.
-                Some(failing_outcome())
-            }
-            Ok(result) => result,
-        }
+        map_result_call_outcome(result)
     }
 }
 
@@ -667,7 +651,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         }
         let vec = inputs.input.to_vec();
         let target = address_to_user_application_id(inputs.target_address);
-        let mut argument: Vec<u8> = INTERPRETER_RESULT_SELECTOR.to_vec();
+        let mut argument = INTERPRETER_RESULT_SELECTOR.to_vec();
         argument.extend(&vec);
         let result = {
             let evm_query = EvmQuery::Query(argument);
