@@ -119,7 +119,7 @@ fn get_revm_instantiation_bytes(value: Vec<u8>) -> Vec<u8> {
     sol! {
         function instantiate(bytes value);
     }
-    let bytes = Bytes::copy_from_slice(&value);
+    let bytes = Bytes::from(value);
     let argument = instantiateCall { value: bytes };
     argument.abi_encode()
 }
@@ -130,7 +130,7 @@ fn get_revm_execute_message_bytes(value: Vec<u8>) -> Vec<u8> {
     sol! {
         function execute_message(bytes value);
     }
-    let bytes = Bytes::copy_from_slice(&value);
+    let bytes = Bytes::from(value);
     let argument = execute_messageCall { value: bytes };
     argument.abi_encode()
 }
@@ -306,7 +306,7 @@ fn get_precompile_output(result: Vec<u8>) -> PrecompileOutput {
     // The gas usage is set to zero since the proper accounting is done
     // by the called application
     let gas_used = 0;
-    let bytes = Bytes::copy_from_slice(&result);
+    let bytes = Bytes::from(result);
     PrecompileOutput { gas_used, bytes }
 }
 
@@ -717,7 +717,7 @@ where
         let instantiation_argument = serde_json::from_slice::<Vec<u8>>(&argument)?;
         if !instantiation_argument.is_empty() {
             let argument = get_revm_instantiation_bytes(instantiation_argument);
-            let result = self.transact_commit(Choice::Call, &argument)?;
+            let result = self.transact_commit(Choice::Call, argument)?;
             self.write_logs(result.logs, "instantiate")?;
         }
         Ok(())
@@ -728,12 +728,12 @@ where
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
-            let result = self.init_transact_commit(Choice::Call, &operation[4..])?;
+            let result = self.init_transact_commit(Choice::Call, operation[4..].to_vec())?;
             result.interpreter_result_and_logs()?
         } else {
             ensure_message_length(operation.len(), 4)?;
             forbid_execute_operation_origin(&operation[..4])?;
-            let result = self.init_transact_commit(Choice::Call, &operation)?;
+            let result = self.init_transact_commit(Choice::Call, operation)?;
             result.output_and_logs()
         };
         self.consume_fuel(gas_final)?;
@@ -743,7 +743,7 @@ where
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
         let operation = get_revm_execute_message_bytes(message);
-        let result = self.init_transact_commit(Choice::Call, &operation)?;
+        let result = self.init_transact_commit(Choice::Call, operation)?;
         let (gas_final, output, logs) = result.output_and_logs();
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, "message")?;
@@ -807,7 +807,7 @@ where
     fn init_transact_commit(
         &mut self,
         ch: Choice,
-        vec: &[u8],
+        vec: Vec<u8>,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
         // An application can be instantiated in Linera sense, but not in EVM sense,
         // that is the contract entries corresponding to the deployed contract may
@@ -823,21 +823,19 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
-        let result = self.transact_commit(Choice::Create, &vec_init)?;
+        let result = self.transact_commit(Choice::Create, vec_init)?;
         self.write_logs(result.logs, "deploy")
     }
 
     fn transact_commit(
         &mut self,
         ch: Choice,
-        input: &[u8],
+        input: Vec<u8>,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
-        let (kind, tx_data) = match ch {
-            Choice::Create => (TxKind::Create, Bytes::copy_from_slice(input)),
-            Choice::Call => {
-                let tx_data = Bytes::copy_from_slice(input);
-                (TxKind::Call(Address::ZERO.create(0)), tx_data)
-            }
+        let data = Bytes::from(input);
+        let kind = match ch {
+            Choice::Create => TxKind::Create,
+            Choice::Call => TxKind::Call(Address::ZERO.create(0)),
         };
         let mut inspector = CallInterceptorContract {
             db: self.db.clone(),
@@ -854,7 +852,7 @@ where
                 .modify_tx_env(|tx| {
                     tx.clear();
                     tx.transact_to = kind;
-                    tx.data = tx_data;
+                    tx.data = data;
                     tx.gas_limit = gas_limit;
                 })
                 .modify_block_env(|block| {
@@ -940,11 +938,11 @@ where
         // Also, for handle_query, we do not have associated costs.
         // More generally, there is gas costs associated to service operation.
         let answer = if &query[..4] == INTERPRETER_RESULT_SELECTOR {
-            let result = self.init_transact(&query[4..])?;
+            let result = self.init_transact(query[4..].to_vec())?;
             let (_gas_final, answer, _logs) = result.interpreter_result_and_logs()?;
             answer
         } else {
-            let result = self.init_transact(&query)?;
+            let result = self.init_transact(query)?;
             let (_gas_final, output, _logs) = result.output_and_logs();
             serde_json::to_vec(&output)?
         };
@@ -956,7 +954,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
-    fn init_transact(&mut self, vec: &[u8]) -> Result<ExecutionResultSuccess, ExecutionError> {
+    fn init_transact(&mut self, vec: Vec<u8>) -> Result<ExecutionResultSuccess, ExecutionError> {
         // In case of a shared application, we need to instantiate it first
         // However, since in ServiceRuntime, we cannot modify the storage,
         // therefore the compiled contract is saved in the changes.
@@ -966,7 +964,7 @@ where
                 let constructor_argument = self.db.constructor_argument()?;
                 vec_init.extend_from_slice(&constructor_argument);
                 let kind = TxKind::Create;
-                let (_, changes) = self.transact(kind, &vec_init)?;
+                let (_, changes) = self.transact(kind, vec_init)?;
                 changes
             };
             self.db.changes = changes;
@@ -982,9 +980,9 @@ where
     fn transact(
         &mut self,
         kind: TxKind,
-        input: &[u8],
+        input: Vec<u8>,
     ) -> Result<(ExecutionResultSuccess, EvmState), ExecutionError> {
-        let tx_data = Bytes::copy_from_slice(input);
+        let data = Bytes::from(input);
         let mut inspector = CallInterceptorService {
             db: self.db.clone(),
         };
@@ -997,7 +995,7 @@ where
                 .modify_tx_env(|tx| {
                     tx.clear();
                     tx.transact_to = kind;
-                    tx.data = tx_data;
+                    tx.data = data;
                     tx.gas_limit = EVM_SERVICE_GAS_LIMIT;
                 })
                 .modify_block_env(|block| {
