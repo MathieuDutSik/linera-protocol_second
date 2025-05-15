@@ -19,17 +19,18 @@ import "./LineraTypes.sol";
 // (1,2): send_message
 // (1,3): message_id
 // (1,4): message_is_bouncing
+// (1,5): reading events in the stream.
+// (1,6): subscribe_to_events in a stream.
+// (1,7): unsubscribe_from_events in a stream.
 // (2,0): try_query_application
 library Linera {
 
     function inner_chain_id(uint8 val) internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(0));
-        input1[1] = bytes1(val);
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input = abi.encodePacked(uint8(0), val);
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        return LineraTypes.bcs_deserialize_ChainId(output1);
+        return LineraTypes.bcs_deserialize_ChainId(output);
     }
 
     function chain_id() internal returns (LineraTypes.ChainId memory) {
@@ -42,83 +43,90 @@ library Linera {
 
     function chain_ownership() internal returns (LineraTypes.ChainOwnership memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(0));
-        input1[1] = bytes1(uint8(2));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input = abi.encodePacked(uint8(0), uint8(2));
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        return LineraTypes.bcs_deserialize_ChainOwnership(output1);
+        return LineraTypes.bcs_deserialize_ChainOwnership(output);
     }
 
     function read_data_blob(bytes32 hash) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(0));
-        input1[1] = bytes1(uint8(3));
-        bytes memory input2 = abi.encodePacked(input1, hash);
-        (bool success, bytes memory output1) = precompile.call(input2);
+        bytes memory input = abi.encodePacked(uint8(0), uint8(3), hash);
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        return output1;
+        return output;
     }
 
     function assert_data_blob_exists(bytes32 hash) internal {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(0));
-        input1[1] = bytes1(uint8(4));
-        bytes memory input2 = abi.encodePacked(input1, hash);
-        (bool success, bytes memory output1) = precompile.call(input2);
+        bytes memory input = abi.encodePacked(uint8(0), uint8(4), hash);
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        assert(output1.length == 0);
+        assert(output.length == 0);
     }
 
     function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes memory input2 = abi.encodePacked(uint8(1), uint8(0), universal_address, operation);
-        (bool success, bytes memory output) = precompile.call(input2);
+        bytes memory input = abi.encodePacked(uint8(1), uint8(0), universal_address, operation);
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
         return output;
     }
 
     function validation_round() internal returns (LineraTypes.opt_uint32 memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(1));
-        input1[1] = bytes1(uint8(1));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input = abi.encodePacked(uint8(1), uint8(1));
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        LineraTypes.opt_uint32 memory val = LineraTypes.bcs_deserialize_opt_uint32(output1);
-        return val;
+        return LineraTypes.bcs_deserialize_opt_uint32(output);
     }
 
     function send_message(bytes32 input_chain_id, bytes memory message) internal {
         address precompile = address(0x0b);
-        bytes memory input2 = abi.encodePacked(uint8(1), uint8(2), input_chain_id, message);
-        (bool success, bytes memory output) = precompile.call(input2);
+        bytes memory input = abi.encodePacked(uint8(1), uint8(2), input_chain_id, message);
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
         require(output.length == 0);
     }
 
     function message_id() internal returns (LineraTypes.opt_MessageId memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(1));
-        input1[1] = bytes1(uint8(3));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input = abi.encodePacked(uint8(1), uint8(3));
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        LineraTypes.opt_MessageId memory output2 = LineraTypes.bcs_deserialize_opt_MessageId(output1);
-        return output2;
+        return LineraTypes.bcs_deserialize_opt_MessageId(output);
     }
 
     function message_is_bouncing() internal returns (LineraTypes.MessageIsBouncing memory) {
         address precompile = address(0x0b);
-        bytes memory input1 = new bytes(2);
-        input1[0] = bytes1(uint8(1));
-        input1[1] = bytes1(uint8(4));
-        (bool success, bytes memory output1) = precompile.call(input1);
+        bytes memory input = abi.encodePacked(uint8(1), uint8(4));
+        (bool success, bytes memory output) = precompile.call(input);
         require(success);
-        LineraTypes.MessageIsBouncing memory output2 = abi.decode(output1, (LineraTypes.MessageIsBouncing));
-        return output2;
+        return abi.decode(output, (LineraTypes.MessageIsBouncing));
+    }
+
+    function read_event(bytes32 chain_id, bytes memory stream_name, uint32 index) internal returns (bytes memory) {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(5), chain_id, stream_name, index);
+        address precompile = address(0x0b);
+        (bool success, bytes memory output) = precompile.call(input);
+        require(success);
+        return output;
+    }
+
+    function subscribe_to_events(bytes32 chain_id, bytes32 application_id, bytes memory stream_name) internal {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(6), chain_id, application_id, stream_name);
+        address precompile = address(0x0b);
+        (bool success, bytes memory output) = precompile.call(input);
+        require(success);
+        require(output.length == 0);
+    }
+
+    function unsubscribe_from_events(bytes32 chain_id, bytes32 application_id, bytes memory stream_name) internal {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(7), chain_id, application_id, stream_name);
+        address precompile = address(0x0b);
+        (bool success, bytes memory output) = precompile.call(input);
+        require(success);
+        require(output.length == 0);
     }
 
     function try_query_application(bytes32 universal_address, bytes memory argument) internal returns (bytes memory) {

@@ -260,12 +260,6 @@ impl UserServiceModule for EvmServiceModule {
 // functionalities accessed from the EVM.
 const PRECOMPILE_ADDRESS: Address = address!("000000000000000000000000000000000000000b");
 
-fn u8_slice_to_application_id(vec: &[u8]) -> ApplicationId {
-    // In calls the length is 32, so no problem unwrapping
-    let hash = CryptoHash::try_from(vec).unwrap();
-    ApplicationId::new(hash)
-}
-
 fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
@@ -274,7 +268,7 @@ fn address_to_user_application_id(address: Address) -> ApplicationId {
 
 /// Some functionalities from the BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
-enum BasePrecompileTag {
+enum BaseRuntimePrecompile {
     /// Key prefix for `chain_id`
     ChainId,
     /// Key prefix for `application_creator_chain_id`
@@ -282,24 +276,30 @@ enum BasePrecompileTag {
     /// Key prefix for `chain_ownership`
     ChainOwnership,
     /// Key prefix for `read_data_blob`
-    ReadDataBlob,
+    ReadDataBlob { hash: CryptoHash },
     /// Key prefix for `assert_data_blob_exists`
-    AssertDataBlobExists,
+    AssertDataBlobExists { hash: CryptoHash },
 }
 
 /// Some functionalities from the ContractRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
-enum ContractPrecompileTag {
+enum ContractRuntimePrecompile {
     /// Key prefix for `try_call_application`
-    TryCallApplication,
+    TryCallApplication { target: ApplicationId, argument: Vec<u8> },
     /// Key prefix for `validation_round`
     ValidationRound,
     /// Key prefix for `send_message`
-    SendMessage,
+    SendMessage { destination: ChainId, message: Vec<u8> },
     /// Key prefix for `message_id`
     MessageId,
     /// Key prefix for `message_is_bouncing`
     MessageIsBouncing,
+    /// Key prefix for `read_event`
+    ReadEvent { chain_id: ChainId, stream_name: StreamName, index: u32 },
+    /// Key prefix for `subscribe_to_events`
+    SubscribeToEvents { chain_id: ChainId, application_id: ApplicationId, stream_name: StreamName },
+    /// Key prefix for `unsubscribe_from_events`
+    UnsubscribeFromEvents { chain_id: ChainId, application_id: ApplicationId, stream_name: StreamName },
 }
 
 fn get_precompile_output(result: Vec<u8>) -> PrecompileOutput {
@@ -312,17 +312,17 @@ fn get_precompile_output(result: Vec<u8>) -> PrecompileOutput {
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
 #[derive(Debug, Serialize, Deserialize)]
-enum ServicePrecompileTag {
+enum ServiceRuntimePrecompile {
     /// Try query application
-    TryQueryApplication,
+    TryQueryApplication { target: ApplicationId, argument: Vec<u8> },
 }
 
 /// Key prefixes used to transmit precompiles.
 #[derive(Debug, Serialize, Deserialize)]
-enum PrecompileTag {
-    Base(BasePrecompileTag),
-    Contract(ContractPrecompileTag),
-    Service(ServicePrecompileTag),
+enum LineraPrecompile {
+    Base(BaseRuntimePrecompile),
+    Contract(ContractRuntimePrecompile),
+    Service(ServiceRuntimePrecompile),
 }
 
 struct GeneralContractCall;
@@ -350,8 +350,7 @@ impl<Runtime: ContractRuntime>
 }
 
 fn base_runtime_call<Runtime: BaseRuntime>(
-    tag: BasePrecompileTag,
-    vec: &[u8],
+    tag: BaseRuntimePrecompile,
     context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
 ) -> Result<Vec<u8>, String> {
     let mut runtime = context
@@ -361,39 +360,32 @@ fn base_runtime_call<Runtime: BaseRuntime>(
         .lock()
         .expect("The lock should be possible");
     match tag {
-        BasePrecompileTag::ChainId => {
-            ensure!(vec.is_empty(), format!("vec should be empty"));
+        BaseRuntimePrecompile::ChainId => {
             let chain_id = runtime
                 .chain_id()
                 .map_err(|error| format!("ChainId error: {error}"))?;
             bcs::to_bytes(&chain_id).map_err(|error| format!("ChainId serialization error {error}"))
         }
-        BasePrecompileTag::ApplicationCreatorChainId => {
-            ensure!(vec.is_empty(), format!("vec should be empty"));
+        BaseRuntimePrecompile::ApplicationCreatorChainId => {
             let chain_id = runtime
                 .application_creator_chain_id()
                 .map_err(|error| format!("ApplicationCreatorChainId error: {error}"))?;
             bcs::to_bytes(&chain_id).map_err(|error| format!("ChainId serialization error {error}"))
         }
-        BasePrecompileTag::ChainOwnership => {
-            ensure!(vec.is_empty(), format!("vec should be empty"));
+        BaseRuntimePrecompile::ChainOwnership => {
             let chain_ownership = runtime
                 .chain_ownership()
                 .map_err(|error| format!("ChainOwnership error: {error}"))?;
             bcs::to_bytes(&chain_ownership)
                 .map_err(|error| format!("ChainOwnership serialization error {error}"))
         }
-        BasePrecompileTag::ReadDataBlob => {
-            ensure!(vec.len() == 32, format!("vec.size() should be 32"));
-            let hash = CryptoHash::try_from(vec).unwrap();
+        BaseRuntimePrecompile::ReadDataBlob { hash } => {
             let blob = runtime
                 .read_data_blob(&hash)
                 .map_err(|error| format!("ReadDataBlob error: {error}"))?;
             Ok(blob)
         }
-        BasePrecompileTag::AssertDataBlobExists => {
-            ensure!(vec.len() == 32, format!("vec.size() should be 32"));
-            let hash = CryptoHash::try_from(vec).unwrap();
+        BaseRuntimePrecompile::AssertDataBlobExists { hash } => {
             runtime
                 .assert_data_blob_exists(&hash)
                 .map_err(|error| format!("AssertDataBlobExists error: {error}"))?;
@@ -408,8 +400,7 @@ const MESSAGE_IS_BOUNCING_SOME_FALSE: u8 = 2;
 
 impl GeneralContractCall {
     fn contract_runtime_call<Runtime: ContractRuntime>(
-        tag: ContractPrecompileTag,
-        vec: &[u8],
+        tag: ContractRuntimePrecompile,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
@@ -419,32 +410,22 @@ impl GeneralContractCall {
             .lock()
             .expect("The lock should be possible");
         match tag {
-            ContractPrecompileTag::TryCallApplication => {
-                ensure!(vec.len() >= 32, format!("vec.size() should be at least 32"));
-                let target = u8_slice_to_application_id(&vec[0..32]);
-                let argument = vec[32..].to_vec();
+            ContractRuntimePrecompile::TryCallApplication { target, argument } => {
                 let authenticated = true;
                 runtime
                     .try_call_application(authenticated, target, argument)
                     .map_err(|error| format!("TryCallApplication error: {error}"))
             }
-            ContractPrecompileTag::ValidationRound => {
-                ensure!(vec.is_empty(), format!("vec should be empty"));
+            ContractRuntimePrecompile::ValidationRound => {
                 let value = runtime
                     .validation_round()
                     .map_err(|error| format!("ValidationRound error: {error}"))?;
                 bcs::to_bytes(&value).map_err(|error| format!("u32 serialization error {error}"))
             }
-            ContractPrecompileTag::SendMessage => {
-                ensure!(vec.len() >= 32, format!("vec.size() should be at least 32"));
-                let destination = ChainId(
-                    CryptoHash::try_from(&vec[..32])
-                        .map_err(|error| format!("TryError: {error}"))?,
-                );
+            ContractRuntimePrecompile::SendMessage { destination, message } => {
                 let authenticated = true;
                 let is_tracked = true;
                 let grant = Resources::default();
-                let message = vec[32..].to_vec();
                 let send_message_request = SendMessageRequest {
                     destination,
                     authenticated,
@@ -457,16 +438,14 @@ impl GeneralContractCall {
                     .map_err(|error| format!("SendMessage error: {error}"))?;
                 Ok(vec![])
             }
-            ContractPrecompileTag::MessageId => {
-                ensure!(vec.is_empty(), format!("vec should be empty"));
+            ContractRuntimePrecompile::MessageId => {
                 let message_id = runtime
                     .message_id()
                     .map_err(|error| format!("MessageId error {error}"))?;
                 bcs::to_bytes(&message_id)
                     .map_err(|error| format!("MessageId serialization error {error}"))
             }
-            ContractPrecompileTag::MessageIsBouncing => {
-                ensure!(vec.is_empty(), format!("vec should be empty"));
+            ContractRuntimePrecompile::MessageIsBouncing => {
                 let message_is_bouncing = runtime
                     .message_is_bouncing()
                     .map_err(|error| format!("MessageIsBouncing error {error}"))?;
@@ -477,6 +456,23 @@ impl GeneralContractCall {
                 };
                 Ok(vec![value])
             }
+            ContractRuntimePrecompile::ReadEvent { chain_id, stream_name, index } => {
+                runtime
+                    .read_event(chain_id, stream_name, index)
+                    .map_err(|error| format!("ReadEvent error {error}"))
+            }
+            ContractRuntimePrecompile::SubscribeToEvents { chain_id, application_id, stream_name } => {
+                runtime
+                    .subscribe_to_events(chain_id, application_id, stream_name)
+                    .map_err(|error| format!("SubscribeToEvents error {error}"))?;
+                Ok(vec![])
+            }
+            ContractRuntimePrecompile::UnsubscribeFromEvents { chain_id, application_id, stream_name } => {
+                runtime
+                    .unsubscribe_from_events(chain_id, application_id, stream_name)
+                    .map_err(|error| format!("UnsubscribeFromEvents error {error}"))?;
+                Ok(vec![])
+            }
         }
     }
 
@@ -485,13 +481,12 @@ impl GeneralContractCall {
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let vec = input.to_vec();
-        ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
-        match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
-            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
-            PrecompileTag::Contract(contract_tag) => {
-                Self::contract_runtime_call(contract_tag, &vec[2..], context)
+        match bcs::from_bytes(&vec).map_err(|error| format!("{error}"))? {
+            LineraPrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            LineraPrecompile::Contract(contract_tag) => {
+                Self::contract_runtime_call(contract_tag, context)
             }
-            PrecompileTag::Service(_) => {
+            LineraPrecompile::Service(_) => {
                 Err("Service tags are not available in GeneralContractCall".to_string())
             }
         }
@@ -519,8 +514,7 @@ impl<Runtime: ServiceRuntime>
 
 impl GeneralServiceCall {
     fn service_runtime_call<Runtime: ServiceRuntime>(
-        tag: ServicePrecompileTag,
-        vec: &[u8],
+        tag: ServiceRuntimePrecompile,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let mut runtime = context
@@ -530,9 +524,7 @@ impl GeneralServiceCall {
             .lock()
             .expect("The lock should be possible");
         match tag {
-            ServicePrecompileTag::TryQueryApplication => {
-                let target = u8_slice_to_application_id(&vec[..32]);
-                let argument = vec[32..].to_vec();
+            ServiceRuntimePrecompile::TryQueryApplication { target, argument } => {
                 runtime
                     .try_query_application(target, argument)
                     .map_err(|error| format!("TryQueryApplication error: {error}"))
@@ -545,14 +537,13 @@ impl GeneralServiceCall {
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
         let vec = input.to_vec();
-        ensure!(vec.len() >= 2, format!("vec.size() should be at least 2"));
-        match bcs::from_bytes(&vec[..2]).map_err(|error| format!("{error}"))? {
-            PrecompileTag::Base(base_tag) => base_runtime_call(base_tag, &vec[2..], context),
-            PrecompileTag::Contract(_) => {
-                Err("Contract tags are not available in ServiceContractCall".to_string())
+        match bcs::from_bytes(&vec).map_err(|error| format!("{error}"))? {
+            LineraPrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
+            LineraPrecompile::Contract(_) => {
+                Err("Contract calls are not available in GeneralServiceCall".to_string())
             }
-            PrecompileTag::Service(service_tag) => {
-                Self::service_runtime_call(service_tag, &vec[2..], context)
+            LineraPrecompile::Service(service_tag) => {
+                Self::service_runtime_call(service_tag, context)
             }
         }
     }
