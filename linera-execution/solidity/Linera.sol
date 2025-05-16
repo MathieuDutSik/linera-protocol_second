@@ -67,8 +67,18 @@ library Linera {
 
     function try_call_application(bytes32 universal_address, bytes memory operation) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes memory input = abi.encodePacked(uint8(1), uint8(0), universal_address, operation);
-        (bool success, bytes memory output) = precompile.call(input);
+        LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
+        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_ = LineraTypes.ContractRuntimePrecompile_TryCallApplication(target, operation);
+        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
+        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
+        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
+        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(0), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
+        LineraTypes.BaseRuntimePrecompile memory base;
+	LineraTypes.ServiceRuntimePrecompile memory service;
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         return output;
     }
@@ -105,24 +115,24 @@ library Linera {
         return abi.decode(output, (LineraTypes.MessageIsBouncing));
     }
 
-    function read_event(bytes32 chain_id, bytes memory stream_name, uint32 index) internal returns (bytes memory) {
-        bytes memory input = abi.encodePacked(uint8(1), uint8(5), chain_id, stream_name, index);
+    function read_event(bytes32 input_chain_id, bytes memory stream_name, uint32 index) internal returns (bytes memory) {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(5), input_chain_id, stream_name, index);
         address precompile = address(0x0b);
         (bool success, bytes memory output) = precompile.call(input);
         require(success);
         return output;
     }
 
-    function subscribe_to_events(bytes32 chain_id, bytes32 application_id, bytes memory stream_name) internal {
-        bytes memory input = abi.encodePacked(uint8(1), uint8(6), chain_id, application_id, stream_name);
+    function subscribe_to_events(bytes32 input_chain_id, bytes32 application_id, bytes memory stream_name) internal {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(6), input_chain_id, application_id, stream_name);
         address precompile = address(0x0b);
         (bool success, bytes memory output) = precompile.call(input);
         require(success);
         require(output.length == 0);
     }
 
-    function unsubscribe_from_events(bytes32 chain_id, bytes32 application_id, bytes memory stream_name) internal {
-        bytes memory input = abi.encodePacked(uint8(1), uint8(7), chain_id, application_id, stream_name);
+    function unsubscribe_from_events(bytes32 input_chain_id, bytes32 application_id, bytes memory stream_name) internal {
+        bytes memory input = abi.encodePacked(uint8(1), uint8(7), input_chain_id, application_id, stream_name);
         address precompile = address(0x0b);
         (bool success, bytes memory output) = precompile.call(input);
         require(success);
@@ -131,7 +141,13 @@ library Linera {
 
     function try_query_application(bytes32 universal_address, bytes memory argument) internal returns (bytes memory) {
         address precompile = address(0x0b);
-        bytes memory input2 = abi.encodePacked(uint8(2), uint8(0), universal_address, argument);
+        LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
+        LineraTypes.ServiceRuntimePrecompile_TryQueryApplication memory try_query_application_ = LineraTypes.ServiceRuntimePrecompile_TryQueryApplication(target, argument);
+        LineraTypes.ContractRuntimePrecompile memory contract_;
+        LineraTypes.BaseRuntimePrecompile memory base;
+	LineraTypes.ServiceRuntimePrecompile memory service = LineraTypes.ServiceRuntimePrecompile(uint8(0), try_query_application_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(2), base, contract_, service);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         return output;

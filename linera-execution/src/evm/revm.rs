@@ -527,7 +527,11 @@ impl GeneralServiceCall {
         input: &Bytes,
         context: &mut InnerEvmContext<WrapDatabaseRef<&mut DatabaseRuntime<Runtime>>>,
     ) -> Result<Vec<u8>, String> {
-        match bcs::from_bytes(input.as_ref()).map_err(|error| format!("{error}"))? {
+        tracing::info!("ServiceRuntime, call_or_fail, input={:?}", input.to_vec());
+        tracing::info!("ServiceRuntime, call_or_fail, before deserialization |input|={}", input.len());
+        let result = bcs::from_bytes(input.as_ref()).map_err(|error| format!("{error}"))?;
+        tracing::info!("ServiceRuntime, call_or_fail, after deserialization");
+        match result {
             RuntimePrecompile::Base(base_tag) => base_runtime_call(base_tag, context),
             RuntimePrecompile::Contract(_) => {
                 Err("Contract calls are not available in GeneralServiceCall".to_string())
@@ -988,6 +992,7 @@ where
         };
 
         let block_env = self.db.get_service_block_env()?;
+        tracing::info!("Start of fn transact");
         let result_state = {
             let mut evm: Evm<'_, _, _> = Evm::builder()
                 .with_ref_db(&mut self.db)
