@@ -5238,6 +5238,7 @@ name = "linera-ethereum"
 version = "0.15.0"
 dependencies = [
  "alloy",
+ "alloy-primitives",
  "anyhow",
  "async-lock",
  "async-trait",
