@@ -34,9 +34,10 @@ use crate::{
         DeletionSet, SuffixClosedSetIterator, Update,
     },
     context::Context,
+    hashable_wrapper::WrappedHashableContainerView,
     map_view::ByteMapView,
     store::{KeyIterable, KeyValueIterable, ReadableKeyValueStore},
-    views::{ClonableView, HashableView, Hasher, View, ViewError, MIN_VIEW_TAG},
+    views::{ClonableView, HashableView, Hasher, HasherOutput, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]
@@ -1152,6 +1153,9 @@ where
         self.compute_hash().await
     }
 }
+
+/// Type wrapping `KeyValueStoreView` while memoizing the hash.
+pub type HashedKeyValueStoreView<C> = WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
 
 /// A virtual DB client using a `KeyValueStoreView` as a backend (testing only).
 #[cfg(with_testing)]
