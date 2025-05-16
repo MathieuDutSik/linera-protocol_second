@@ -696,8 +696,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value);
 
-
-/*
     let mutation = nest_incrementCall { input: increment };
     let mutation = mutation.abi_encode();
     let mutation = EvmQuery::Mutation(mutation);
@@ -706,7 +704,6 @@ async fn test_evm_call_wasm_end_to_end_counter(config: impl LineraNetConfig) -> 
     let result = nest_application.run_json_query(query).await?;
     let counter_value = read_evm_u64_entry(result);
     assert_eq!(counter_value, original_counter_value + increment);
-*/
 
     node_service.ensure_is_running()?;
 
