@@ -15,7 +15,7 @@
 
 #[cfg(with_metrics)]
 use std::sync::LazyLock;
-use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included, sync::Mutex};
+use std::{collections::BTreeMap, fmt::Debug, mem, ops::Bound::Included};
 
 use linera_base::{data_types::ArithmeticError, ensure};
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,8 @@ use {
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_interval, get_upper_bound,
-        DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
+        from_bytes_option_or_default, get_interval, get_upper_bound,
+        DeletionSet, SuffixClosedSetIterator, Update,
     },
     context::Context,
     map_view::ByteMapView,
@@ -145,8 +145,6 @@ enum KeyTag {
     TotalSize,
     /// The prefix where the sizes are being stored
     Sizes,
-    /// Prefix for the hash.
-    Hash,
 }
 
 /// A pair containing the key and value size.
@@ -209,8 +207,6 @@ pub struct KeyValueStoreView<C> {
     stored_total_size: SizeData,
     total_size: SizeData,
     sizes: ByteMapView<C, u32>,
-    stored_hash: Option<HasherOutput>,
-    hash: Mutex<Option<HasherOutput>>,
 }
 
 impl<C> View<C> for KeyValueStoreView<C>
@@ -225,9 +221,8 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        let key_hash = context.base_key().base_tag(KeyTag::Hash as u8);
         let key_total_size = context.base_key().base_tag(KeyTag::TotalSize as u8);
-        let mut v = vec![key_hash, key_total_size];
+        let mut v = vec![key_total_size];
         let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
@@ -235,14 +230,13 @@ where
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let total_size =
-            from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
         let context_sizes = context.clone_with_base_key(base_key);
         let sizes = ByteMapView::post_load(
             context_sizes,
-            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
+            values.get(1..).ok_or(ViewError::PostLoadValuesError)?,
         )?;
         Ok(Self {
             context,
@@ -251,8 +245,6 @@ where
             stored_total_size: total_size,
             total_size,
             sizes,
-            stored_hash: hash,
-            hash: Mutex::new(hash),
         })
     }
 
@@ -267,7 +259,6 @@ where
         self.updates.clear();
         self.total_size = self.stored_total_size;
         self.sizes.rollback();
-        *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
@@ -280,11 +271,7 @@ where
         if self.stored_total_size != self.total_size {
             return true;
         }
-        if self.sizes.has_pending_changes().await {
-            return true;
-        }
-        let hash = self.hash.lock().unwrap();
-        self.stored_hash != *hash
+        self.sizes.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -303,7 +290,6 @@ where
                     delete_view = false;
                 }
             }
-            self.stored_hash = None
         } else {
             for index in mem::take(&mut self.deletion_set.deleted_prefixes) {
                 let key = self
@@ -324,15 +310,6 @@ where
             }
         }
         self.sizes.flush(batch)?;
-        let hash = *self.hash.get_mut().unwrap();
-        if self.stored_hash != hash {
-            let key = self.context.base_key().base_tag(KeyTag::Hash as u8);
-            match hash {
-                None => batch.delete_key(key),
-                Some(hash) => batch.put_key_value(key, &hash)?,
-            }
-            self.stored_hash = hash;
-        }
         if self.stored_total_size != self.total_size {
             let key = self.context.base_key().base_tag(KeyTag::TotalSize as u8);
             batch.put_key_value(key, &self.total_size)?;
@@ -347,7 +324,6 @@ where
         self.updates.clear();
         self.total_size = SizeData::default();
         self.sizes.clear();
-        *self.hash.get_mut().unwrap() = None;
     }
 }
 
@@ -364,8 +340,6 @@ where
             stored_total_size: self.stored_total_size,
             total_size: self.total_size,
             sizes: self.sizes.clone_unchecked()?,
-            stored_hash: self.stored_hash,
-            hash: Mutex::new(*self.hash.get_mut().unwrap()),
         })
     }
 }
@@ -869,7 +843,6 @@ where
     pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         let _latency = KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
-        *self.hash.get_mut().unwrap() = None;
         let max_key_size = self.max_key_size();
         for operation in batch.operations {
             match operation {
@@ -1172,29 +1145,11 @@ where
     type Hasher = sha3::Sha3_256;
 
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.get_mut().unwrap();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let hash = self.hash.get_mut().unwrap();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash().await
     }
 
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
-        let hash = *self.hash.lock().unwrap();
-        match hash {
-            Some(hash) => Ok(hash),
-            None => {
-                let new_hash = self.compute_hash().await?;
-                let mut hash = self.hash.lock().unwrap();
-                *hash = Some(new_hash);
-                Ok(new_hash)
-            }
-        }
+        self.compute_hash().await
     }
 }
 
