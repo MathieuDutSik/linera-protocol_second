@@ -164,11 +164,31 @@ RuntimePrecompile:
       Service:
         NEWTYPE:
           TYPENAME: ServiceRuntimePrecompile
-
-
-
-
-
-
-
+StreamUpdate:
+  STRUCT:
+    - chain_id:
+        TYPENAME: ChainId
+    - stream_id:
+        TYPENAME: StreamId
+    - previous_index: U32
+    - next_index: U32
+StreamId:
+  STRUCT:
+    - application_id:
+        TYPENAME: GenericApplicationId
+    - stream_name:
+        TYPENAME: StreamName
+GenericApplicationId:
+  ENUM:
+    0:
+      System: UNIT
+    1:
+      User:
+        NEWTYPE:
+          TYPENAME: ApplicationId
+StreamUpdates:
+  STRUCT:
+    - entries:
+        SEQ:
+          TYPENAME: StreamUpdate
 

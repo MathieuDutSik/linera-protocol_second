@@ -900,6 +900,69 @@ library LineraTypes {
         return value;
     }
 
+    struct GenericApplicationId {
+        uint8 choice;
+        // choice=0 corresponds to System
+        // choice=1 corresponds to User
+        ApplicationId user;
+    }
+
+    function GenericApplicationId_case_system()
+        internal
+        pure
+        returns (GenericApplicationId memory)
+    {
+        ApplicationId memory user;
+        return GenericApplicationId(uint8(0), user);
+    }
+
+    function GenericApplicationId_case_user(ApplicationId memory user)
+        internal
+        pure
+        returns (GenericApplicationId memory)
+    {
+        return GenericApplicationId(uint8(1), user);
+    }
+
+    function bcs_serialize_GenericApplicationId(GenericApplicationId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.choice == 1) {
+            return abi.encodePacked(input.choice, bcs_serialize_ApplicationId(input.user));
+        }
+        return abi.encodePacked(input.choice);
+    }
+
+    function bcs_deserialize_offset_GenericApplicationId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, GenericApplicationId memory)
+    {
+        uint256 new_pos;
+        uint8 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        ApplicationId memory user;
+        if (choice == 1) {
+            (new_pos, user) = bcs_deserialize_offset_ApplicationId(new_pos, input);
+        }
+        require(choice < 2);
+        return (new_pos, GenericApplicationId(choice, user));
+    }
+
+    function bcs_deserialize_GenericApplicationId(bytes memory input)
+        internal
+        pure
+        returns (GenericApplicationId memory)
+    {
+        uint256 new_pos;
+        GenericApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_GenericApplicationId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct MessageId {
         ChainId chain_id;
         BlockHeight height;
@@ -1281,6 +1344,45 @@ library LineraTypes {
         return value;
     }
 
+    struct StreamId {
+        GenericApplicationId application_id;
+        StreamName stream_name;
+    }
+
+    function bcs_serialize_StreamId(StreamId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_GenericApplicationId(input.application_id);
+        return abi.encodePacked(result, bcs_serialize_StreamName(input.stream_name));
+    }
+
+    function bcs_deserialize_offset_StreamId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, StreamId memory)
+    {
+        uint256 new_pos;
+        GenericApplicationId memory application_id;
+        (new_pos, application_id) = bcs_deserialize_offset_GenericApplicationId(pos, input);
+        StreamName memory stream_name;
+        (new_pos, stream_name) = bcs_deserialize_offset_StreamName(new_pos, input);
+        return (new_pos, StreamId(application_id, stream_name));
+    }
+
+    function bcs_deserialize_StreamId(bytes memory input)
+        internal
+        pure
+        returns (StreamId memory)
+    {
+        uint256 new_pos;
+        StreamId memory value;
+        (new_pos, value) = bcs_deserialize_offset_StreamId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct StreamName {
         bytes value;
     }
@@ -1312,6 +1414,88 @@ library LineraTypes {
         uint256 new_pos;
         StreamName memory value;
         (new_pos, value) = bcs_deserialize_offset_StreamName(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct StreamUpdate {
+        ChainId chain_id;
+        StreamId stream_id;
+        uint32 previous_index;
+        uint32 next_index;
+    }
+
+    function bcs_serialize_StreamUpdate(StreamUpdate memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ChainId(input.chain_id);
+        result = abi.encodePacked(result, bcs_serialize_StreamId(input.stream_id));
+        result = abi.encodePacked(result, bcs_serialize_uint32(input.previous_index));
+        return abi.encodePacked(result, bcs_serialize_uint32(input.next_index));
+    }
+
+    function bcs_deserialize_offset_StreamUpdate(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, StreamUpdate memory)
+    {
+        uint256 new_pos;
+        ChainId memory chain_id;
+        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
+        StreamId memory stream_id;
+        (new_pos, stream_id) = bcs_deserialize_offset_StreamId(new_pos, input);
+        uint32 previous_index;
+        (new_pos, previous_index) = bcs_deserialize_offset_uint32(new_pos, input);
+        uint32 next_index;
+        (new_pos, next_index) = bcs_deserialize_offset_uint32(new_pos, input);
+        return (new_pos, StreamUpdate(chain_id, stream_id, previous_index, next_index));
+    }
+
+    function bcs_deserialize_StreamUpdate(bytes memory input)
+        internal
+        pure
+        returns (StreamUpdate memory)
+    {
+        uint256 new_pos;
+        StreamUpdate memory value;
+        (new_pos, value) = bcs_deserialize_offset_StreamUpdate(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct StreamUpdates {
+        StreamUpdate[] entries;
+    }
+
+    function bcs_serialize_StreamUpdates(StreamUpdates memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_seq_StreamUpdate(input.entries);
+    }
+
+    function bcs_deserialize_offset_StreamUpdates(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, StreamUpdates memory)
+    {
+        uint256 new_pos;
+        StreamUpdate[] memory entries;
+        (new_pos, entries) = bcs_deserialize_offset_seq_StreamUpdate(pos, input);
+        return (new_pos, StreamUpdates(entries));
+    }
+
+    function bcs_deserialize_StreamUpdates(bytes memory input)
+        internal
+        pure
+        returns (StreamUpdates memory)
+    {
+        uint256 new_pos;
+        StreamUpdates memory value;
+        (new_pos, value) = bcs_deserialize_offset_StreamUpdates(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1696,6 +1880,49 @@ library LineraTypes {
         uint256 new_pos;
         AccountOwner[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_AccountOwner(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_seq_StreamUpdate(StreamUpdate[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i=0; i<len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_StreamUpdate(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_StreamUpdate(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, StreamUpdate[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        StreamUpdate[] memory result;
+        result = new StreamUpdate[](len);
+        StreamUpdate memory value;
+        for (uint256 i=0; i<len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_StreamUpdate(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_StreamUpdate(bytes memory input)
+        internal
+        pure
+        returns (StreamUpdate[] memory)
+    {
+        uint256 new_pos;
+        StreamUpdate[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_StreamUpdate(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
