@@ -9,36 +9,30 @@ import "./LineraTypes.sol";
 
 library Linera {
 
-    function inner_chain_id(uint8 val) internal returns (LineraTypes.ChainId memory) {
+    function chain_id() internal returns (LineraTypes.ChainId memory) {
         address precompile = address(0x0b);
-	LineraTypes.BaseRuntimePrecompile_ReadDataBlob memory read_data_blob_;
-        LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists_;
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile(val, read_data_blob_, assert_data_blob_exists_);
-        LineraTypes.ContractRuntimePrecompile memory contract_;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(0), base, contract_, service);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_chain_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
         return LineraTypes.bcs_deserialize_ChainId(output);
     }
 
-    function chain_id() internal returns (LineraTypes.ChainId memory) {
-        return inner_chain_id(uint8(0));
-    }
-
     function application_creator_chain_id() internal returns (LineraTypes.ChainId memory) {
-        return inner_chain_id(uint8(1));
+        address precompile = address(0x0b);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_application_creator_chain_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output) = precompile.call(input2);
+        require(success);
+        return LineraTypes.bcs_deserialize_ChainId(output);
     }
 
     function chain_ownership() internal returns (LineraTypes.ChainOwnership memory) {
         address precompile = address(0x0b);
-	LineraTypes.BaseRuntimePrecompile_ReadDataBlob memory read_data_blob_;
-        LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists_;
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile(uint8(2), read_data_blob_, assert_data_blob_exists_);
-        LineraTypes.ContractRuntimePrecompile memory contract_;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(0), base, contract_, service);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_chain_ownership();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -49,11 +43,8 @@ library Linera {
         address precompile = address(0x0b);
         LineraTypes.CryptoHash memory hash2 = LineraTypes.CryptoHash(hash);
 	LineraTypes.BaseRuntimePrecompile_ReadDataBlob memory read_data_blob_ = LineraTypes.BaseRuntimePrecompile_ReadDataBlob(hash2);
-        LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists_;
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile(uint8(3), read_data_blob_, assert_data_blob_exists_);
-        LineraTypes.ContractRuntimePrecompile memory contract_;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(0), base, contract_, service);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_read_data_blob(read_data_blob_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -63,12 +54,9 @@ library Linera {
     function assert_data_blob_exists(bytes32 hash) internal {
         address precompile = address(0x0b);
         LineraTypes.CryptoHash memory hash2 = LineraTypes.CryptoHash(hash);
-	LineraTypes.BaseRuntimePrecompile_ReadDataBlob memory read_data_blob_;
         LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists memory assert_data_blob_exists_ = LineraTypes.BaseRuntimePrecompile_AssertDataBlobExists(hash2);
-        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile(uint8(4), read_data_blob_, assert_data_blob_exists_);
-        LineraTypes.ContractRuntimePrecompile memory contract_;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(0), base, contract_, service);
+        LineraTypes.BaseRuntimePrecompile memory base = LineraTypes.BaseRuntimePrecompile_case_assert_data_blob_exists(assert_data_blob_exists_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_base(base);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -79,14 +67,8 @@ library Linera {
         address precompile = address(0x0b);
         LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
         LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_ = LineraTypes.ContractRuntimePrecompile_TryCallApplication(target, operation);
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(0), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_try_call_application(try_call_application_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -95,15 +77,8 @@ library Linera {
 
     function validation_round() internal returns (LineraTypes.opt_uint32 memory) {
         address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(1), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_validation_round();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -115,13 +90,8 @@ library Linera {
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
         LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
         LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_ = LineraTypes.ContractRuntimePrecompile_SendMessage(chain_id2, message);
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(2), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_send_message(send_message_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -130,15 +100,8 @@ library Linera {
 
     function message_id() internal returns (LineraTypes.opt_MessageId memory) {
         address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(3), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_id();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -147,15 +110,8 @@ library Linera {
 
     function message_is_bouncing() internal returns (LineraTypes.MessageIsBouncing memory) {
         address precompile = address(0x0b);
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(4), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_is_bouncing();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -166,15 +122,9 @@ library Linera {
         address precompile = address(0x0b);
         LineraTypes.ChainId memory chain_id2 = LineraTypes.ChainId(LineraTypes.CryptoHash(chain_id1));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
         LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_ = LineraTypes.ContractRuntimePrecompile_ReadEvent(chain_id2, stream_name2, index);
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(5), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_read_event(read_event_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -187,15 +137,8 @@ library Linera {
         LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(application_id));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
         LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_ = LineraTypes.ContractRuntimePrecompile_SubscribeToEvents(chain_id2, application_id2, stream_name2);
-
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(6), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_subscribe_to_events(subscribe_to_events_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -208,15 +151,8 @@ library Linera {
         LineraTypes.ApplicationId memory application_id2 = LineraTypes.ApplicationId(LineraTypes.CryptoHash(application_id));
         LineraTypes.StreamName memory stream_name2 = LineraTypes.StreamName(stream_name);
         LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events_ = LineraTypes.ContractRuntimePrecompile_UnsubscribeFromEvents(chain_id2, application_id2, stream_name2);
-
-        LineraTypes.ContractRuntimePrecompile_TryCallApplication memory try_call_application_;
-        LineraTypes.ContractRuntimePrecompile_SendMessage memory send_message_;
-        LineraTypes.ContractRuntimePrecompile_ReadEvent memory read_event_;
-        LineraTypes.ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events_;
-        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile(uint8(7), try_call_application_, send_message_, read_event_, subscribe_to_events_, unsubscribe_from_events_);
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service;
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(1), base, contract_, service);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_unsubscribe_from_events(unsubscribe_from_events_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
@@ -227,10 +163,8 @@ library Linera {
         address precompile = address(0x0b);
         LineraTypes.ApplicationId memory target = LineraTypes.ApplicationId(LineraTypes.CryptoHash(universal_address));
         LineraTypes.ServiceRuntimePrecompile_TryQueryApplication memory try_query_application_ = LineraTypes.ServiceRuntimePrecompile_TryQueryApplication(target, argument);
-        LineraTypes.ContractRuntimePrecompile memory contract_;
-        LineraTypes.BaseRuntimePrecompile memory base;
-	LineraTypes.ServiceRuntimePrecompile memory service = LineraTypes.ServiceRuntimePrecompile(uint8(0), try_query_application_);
-        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile(uint8(2), base, contract_, service);
+        LineraTypes.ServiceRuntimePrecompile memory service = LineraTypes.ServiceRuntimePrecompile_case_try_query_application(try_query_application_);
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_service(service);
         bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
         (bool success, bytes memory output) = precompile.call(input2);
         require(success);
