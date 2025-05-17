@@ -1,0 +1,16 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "ERC20.sol": {
+      "urls": ["./ERC20.sol"]
+    }
+  },
+  "settings": {
+    "viaIR": true,
+    "outputSelection": {
+      "*": {
+        "*": ["evm.bytecode"]
+      }
+    }
+  }
+}
