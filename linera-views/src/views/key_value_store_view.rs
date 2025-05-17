@@ -201,7 +201,7 @@ impl SizeData {
 ///
 /// [entry1]: crate::batch::WriteOperation::DeletePrefix
 #[derive(Debug)]
-pub struct KeyValueStoreView<C> {
+pub struct BigKeyValueStoreView<C> {
     context: C,
     deletion_set: DeletionSet,
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
@@ -210,7 +210,7 @@ pub struct KeyValueStoreView<C> {
     sizes: ByteMapView<C, u32>,
 }
 
-impl<C> View<C> for KeyValueStoreView<C>
+impl<C> View<C> for BigKeyValueStoreView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -328,13 +328,13 @@ where
     }
 }
 
-impl<C> ClonableView<C> for KeyValueStoreView<C>
+impl<C> ClonableView<C> for BigKeyValueStoreView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
-        Ok(KeyValueStoreView {
+        Ok(BigKeyValueStoreView {
             context: self.context.clone(),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
@@ -345,7 +345,7 @@ where
     }
 }
 
-impl<C> KeyValueStoreView<C>
+impl<C> BigKeyValueStoreView<C>
 where
     C: Send + Context + Sync,
     ViewError: From<C::Error>,
@@ -359,10 +359,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
+    /// # use linera_views::key_value_store_view::{BigKeyValueStoreView, SizeData};
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// let total_size = view.total_size();
     /// assert_eq!(total_size, SizeData::default());
     /// # })
@@ -376,10 +376,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// view.insert(vec![0, 3], vec![0]).await.unwrap();
@@ -449,10 +449,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// view.insert(vec![0, 3], vec![0]).await.unwrap();
@@ -482,10 +482,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// let mut values = Vec::new();
@@ -554,10 +554,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// let mut part_keys = Vec::new();
@@ -585,10 +585,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// let indices = view.indices().await.unwrap();
@@ -609,10 +609,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// let key_values = view.indices().await.unwrap();
@@ -633,10 +633,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![0]).await.unwrap();
     /// view.insert(vec![0, 2], vec![0]).await.unwrap();
     /// let count = view.count().await.unwrap();
@@ -657,10 +657,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![42]));
     /// assert_eq!(view.get(&[0, 2]).await.unwrap(), None);
@@ -691,10 +691,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// assert!(view.contains_key(&[0, 1]).await.unwrap());
     /// assert!(!view.contains_key(&[0, 2]).await.unwrap());
@@ -725,10 +725,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// let keys = vec![vec![0, 1], vec![0, 2]];
     /// let results = view.contains_keys(keys).await.unwrap();
@@ -772,10 +772,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![42]).await.unwrap();
     /// assert_eq!(
     ///     view.multi_get(vec![vec![0, 1], vec![0, 2]]).await.unwrap(),
@@ -827,11 +827,11 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::batch::Batch;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// view.insert(vec![3, 4], vec![42]).await.unwrap();
     /// let mut batch = Batch::new();
@@ -912,10 +912,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), Some(vec![34]));
     /// # })
@@ -930,10 +930,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// view.remove(vec![0, 1]).await.unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
@@ -949,10 +949,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// view.remove_by_prefix(vec![0]).await.unwrap();
     /// assert_eq!(view.get(&[0, 1]).await.unwrap(), None);
@@ -968,10 +968,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// view.insert(vec![3, 4], vec![42]).await.unwrap();
     /// let keys = view.find_keys_by_prefix(&[0]).await.unwrap();
@@ -1045,10 +1045,10 @@ where
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::KeyValueStoreView;
+    /// # use linera_views::key_value_store_view::BigKeyValueStoreView;
     /// # use linera_views::views::View;
     /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
+    /// let mut view = BigKeyValueStoreView::load(context).await.unwrap();
     /// view.insert(vec![0, 1], vec![34]).await.unwrap();
     /// view.insert(vec![3, 4], vec![42]).await.unwrap();
     /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
@@ -1138,7 +1138,7 @@ where
     }
 }
 
-impl<C> HashableView<C> for KeyValueStoreView<C>
+impl<C> HashableView<C> for BigKeyValueStoreView<C>
 where
     C: Context + Send + Sync,
     ViewError: From<C::Error>,
@@ -1154,14 +1154,14 @@ where
     }
 }
 
-/// Type wrapping `KeyValueStoreView` while memoizing the hash.
-pub type HashedKeyValueStoreView<C> = WrappedHashableContainerView<C, KeyValueStoreView<C>, HasherOutput>;
+/// Type wrapping `BigKeyValueStoreView` while memoizing the hash.
+pub type HashedKeyValueStoreView<C> = WrappedHashableContainerView<C, BigKeyValueStoreView<C>, HasherOutput>;
 
 /// A virtual DB client using a `KeyValueStoreView` as a backend (testing only).
 #[cfg(with_testing)]
 #[derive(Debug, Clone)]
 pub struct ViewContainer<C> {
-    view: Arc<RwLock<KeyValueStoreView<C>>>,
+    view: Arc<RwLock<BigKeyValueStoreView<C>>>,
 }
 
 #[cfg(with_testing)]
@@ -1275,7 +1275,7 @@ where
 {
     /// Creates a [`ViewContainer`].
     pub async fn new(context: C) -> Result<Self, ViewError> {
-        let view = KeyValueStoreView::load(context).await?;
+        let view = BigKeyValueStoreView::load(context).await?;
         let view = Arc::new(RwLock::new(view));
         Ok(Self { view })
     }
