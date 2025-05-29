@@ -24,7 +24,7 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     /// How the resources were used so far.
     pub tracker: Tracker,
     /// The account paying for the resource usage.
-    pub account: Account,
+    account: Account,
 }
 
 impl<Account, Tracker> ResourceController<Account, Tracker> {
@@ -129,7 +129,7 @@ where
 
     /// Operates a 3-way merge by transferring the difference between `initial`
     /// and `other` to `self`.
-    pub fn merge_balance(&mut self, initial: Amount, other: Amount) -> Result<(), ExecutionError> {
+    pub(crate) fn merge_balance(&mut self, initial: Amount, other: Amount) -> Result<(), ExecutionError> {
         if other <= initial {
             let sub_amount = initial.try_sub(other).expect("other <= initial");
             self.account.try_sub_assign(sub_amount).map_err(|_| {
@@ -167,7 +167,7 @@ where
     }
 
     /// Tracks the allocation of a grant.
-    pub fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
+    pub(crate) fn track_grant(&mut self, grant: Amount) -> Result<(), ExecutionError> {
         self.tracker.as_mut().grants.try_add_assign(grant)?;
         self.update_balance(grant)
     }
@@ -223,7 +223,7 @@ where
     }
 
     /// Tracks the execution of an HTTP request.
-    pub fn track_http_request(&mut self) -> Result<(), ExecutionError> {
+    pub(crate) fn track_http_request(&mut self) -> Result<(), ExecutionError> {
         self.tracker.as_mut().http_requests = self
             .tracker
             .as_ref()
