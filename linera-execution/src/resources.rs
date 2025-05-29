@@ -25,15 +25,18 @@ pub struct ResourceController<Account = Amount, Tracker = ResourceTracker> {
     pub tracker: Tracker,
     /// The account paying for the resource usage.
     account: Account,
+    /// The account paying for the resource usage.
+    refund_account: Account,
 }
 
-impl<Account, Tracker> ResourceController<Account, Tracker> {
+impl<Account: Default, Tracker> ResourceController<Account, Tracker> {
     /// Creates a new resource controller with the given policy and account.
     pub fn new(policy: Arc<ResourceControlPolicy>, tracker: Tracker, account: Account) -> Self {
         Self {
             policy,
             tracker,
             account,
+            refund_account: Account::default(),
         }
     }
 
@@ -469,7 +472,7 @@ impl ResourceController<Option<AccountOwner>, ResourceTracker> {
     /// Provides a reference to the current execution state as well as an optional grant,
     /// and obtains a temporary object where the accounting functions of
     /// [`ResourceController`] are available.
-    pub async fn with_state_and_grant<'a, C>(
+    pub(crate) async fn with_state_and_grant<'a, C>(
         &mut self,
         view: &'a mut SystemExecutionStateView<C>,
         grant: Option<&'a mut Amount>,
@@ -497,6 +500,7 @@ impl ResourceController<Option<AccountOwner>, ResourceTracker> {
             policy: self.policy.clone(),
             tracker: &mut self.tracker,
             account: Sources { sources },
+            refund_account: Sources { sources: Vec::new() },
         })
     }
 }

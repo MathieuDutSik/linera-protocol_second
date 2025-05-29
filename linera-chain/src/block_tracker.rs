@@ -86,7 +86,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a new TransactionTracker for the current transaction.
-    pub fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
+    pub(crate) fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,
@@ -115,7 +115,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     /// so that the execution of the next transaction doesn't overwrite the previous ones.
     ///
     /// Tracks the resources used by the transaction - size of the incoming and outgoing messages, blobs, etc.
-    pub async fn process_txn_outcome<C>(
+    pub(crate) async fn process_txn_outcome<C>(
         &mut self,
         txn_outcome: &TransactionOutcome,
         view: &mut SystemExecutionStateView<C>,
@@ -183,7 +183,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns recipient chain ids for outgoing messages in the block.
-    pub fn recipients(&self) -> BTreeSet<ChainId> {
+    pub(crate) fn recipients(&self) -> BTreeSet<ChainId> {
         self.messages
             .iter()
             .flatten()
@@ -192,7 +192,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns the execution context for the current transaction.
-    pub fn chain_execution_context(&self, transaction: &Transaction<'_>) -> ChainExecutionContext {
+    pub(crate) fn chain_execution_context(&self, transaction: &Transaction<'_>) -> ChainExecutionContext {
         match transaction {
             Transaction::ReceiveMessages(_) => {
                 ChainExecutionContext::IncomingBundle(self.transaction_index)
@@ -204,7 +204,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a mutable reference to the resource controller.
-    pub fn resource_controller_mut(
+    pub(crate) fn resource_controller_mut(
         &mut self,
     ) -> &mut ResourceController<Option<AccountOwner>, ResourceTracker> {
         self.resource_controller
