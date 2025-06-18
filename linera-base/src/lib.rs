@@ -24,6 +24,8 @@ pub mod crypto;
 pub mod data_types;
 pub mod dyn_convert;
 mod graphql;
+#[doc(hidden)]
+pub mod guard;
 pub mod hashed;
 pub mod http;
 pub mod identifiers;

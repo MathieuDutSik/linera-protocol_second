@@ -7,7 +7,6 @@ use std::{
     convert::Infallible,
     iter,
     num::NonZeroUsize,
-    ops::{Deref, DerefMut},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -37,6 +36,7 @@ use linera_base::{
         ModuleId, StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
+    guard::Unsend,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
@@ -1551,36 +1551,6 @@ impl From<Infallible> for ChainClientError {
 impl ChainClientError {
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
-    }
-}
-
-// We never want to pass the DashMap references over an `await` point, for fear of
-// deadlocks. The following construct will cause a (relatively) helpful error if we do.
-
-pub struct Unsend<T> {
-    inner: T,
-    _phantom: std::marker::PhantomData<*mut u8>,
-}
-
-impl<T> Unsend<T> {
-    fn new(inner: T) -> Self {
-        Self {
-            inner,
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<T: Deref> Deref for Unsend<T> {
-    type Target = T::Target;
-    fn deref(&self) -> &T::Target {
-        self.inner.deref()
-    }
-}
-
-impl<T: DerefMut> DerefMut for Unsend<T> {
-    fn deref_mut(&mut self) -> &mut T::Target {
-        self.inner.deref_mut()
     }
 }
 
