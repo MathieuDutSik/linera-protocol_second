@@ -303,11 +303,13 @@ linera-witty-macros = { version = "0.15.0", path = "./linera-witty-macros" }
 
 amm = { path = "./examples/amm" }
 call-evm-counter = { path = "./examples/call-evm-counter" }
+call-intensive = { path = "./examples/call-intensive" }
 counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 fungible = { path = "./examples/fungible" }
+intensive-cpu = { path = "./examples/intensive-cpu" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./examples/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }

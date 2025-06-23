@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "amm",
     "call-evm-counter",
+    "call-intensive",
     "counter",
     "counter-no-graphql",
     "crowd-funding",
@@ -11,6 +12,7 @@ members = [
     "gen-nft",
     "hex-game",
     "how-to/perform-http-requests",
+    "intensive-cpu",
     "llm",
     "matching-engine",
     "meta-counter",
@@ -59,6 +61,7 @@ counter = { path = "./counter" }
 crowd-funding = { path = "./crowd-funding" }
 ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 fungible = { path = "./fungible" }
+intensive-cpu = { path = "./intensive-cpu" }
 matching-engine = { path = "./matching-engine" }
 native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }

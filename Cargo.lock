@@ -2064,6 +2064,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "call-intensive"
+version = "0.1.0"
+dependencies = [
+ "intensive-cpu",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "camino"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4601,6 +4610,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "intensive-cpu"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5545,6 +5563,7 @@ dependencies = [
  "bcs",
  "bincode",
  "call-evm-counter",
+ "call-intensive",
  "cargo_toml",
  "cfg-if",
  "cfg_aliases",
@@ -5569,6 +5588,7 @@ dependencies = [
  "futures",
  "heck 0.4.1",
  "http 1.3.1",
+ "intensive-cpu",
  "k8s-openapi",
  "kube",
  "linera-base",

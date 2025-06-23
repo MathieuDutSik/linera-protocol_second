@@ -1409,6 +1409,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "call-intensive"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "intensive-cpu",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "camino"
 version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3520,6 +3531,17 @@ dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
  "serde",
+]
+
+[[package]]
+name = "intensive-cpu"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "futures",
+ "linera-sdk",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

@@ -528,6 +528,146 @@ async fn test_evm_event(config: impl LineraNetConfig) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_intensive_cpu(config: impl LineraNetConfig) -> Result<()> {
+    use call_intensive::{CallIntensiveAbi, CallIntensiveRequest};
+    use intensive_cpu::{IntensiveCpuAbi, IntensiveCpuRequest};
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    tracing::info!("test_intensive_cpu, step 1");
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    let account1 = Account::chain(chain);
+    let account_owner = client.get_owner().unwrap();
+    let account2 = Account::new(chain, account_owner);
+
+    let n = 3;
+
+    tracing::info!("test_intensive_cpu, step 2");
+    // Creating the inner contract
+
+    let (wasm_contract, wasm_service) = client.build_example("intensive-cpu").await?;
+    let inner_application_id = client
+        .publish_and_create::<IntensiveCpuAbi, (), ()>(
+            wasm_contract,
+            wasm_service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+    tracing::info!("test_intensive_cpu, step 3");
+
+    // Creating the outer contract
+
+    let (wasm_contract, wasm_service) = client.build_example("call-intensive").await?;
+    type WasmParameter = ApplicationId<IntensiveCpuAbi>;
+    let outer_application_id = client
+        .publish_and_create::<CallIntensiveAbi, WasmParameter, ()>(
+            wasm_contract,
+            wasm_service,
+            VmRuntime::Wasm,
+            &inner_application_id,
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+    tracing::info!("test_intensive_cpu, step 4");
+
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    tracing::info!("test_intensive_cpu, step 5");
+
+    let inner_application = node_service
+        .make_application(&chain, &inner_application_id)
+        .await?;
+    tracing::info!("test_intensive_cpu, step 6");
+
+    let outer_application = node_service
+        .make_application(&chain, &outer_application_id)
+        .await?;
+    tracing::info!("test_intensive_cpu, step 7");
+
+
+
+    let mut current_balance = node_service.balance(&account1).await?;
+    tracing::info!("test_intensive_cpu, step 8, current_balance={current_balance}");
+
+    // Test 1: Calling the inner by direct service
+
+    let query = IntensiveCpuRequest::PowerTest(n);
+    inner_application.run_json_query(&query).await?;
+
+    let balance = node_service.balance(&account1).await?;
+    let cost = current_balance - balance;
+    tracing::info!("Test 1, cost={cost}");
+    current_balance = balance;
+
+    // Test 2: Calling the inner by scheduling an operation
+
+    let query = IntensiveCpuRequest::ScheduleDirectOperation(n);
+    inner_application.run_json_query(&query).await?;
+
+    let balance = node_service.balance(&account1).await?;
+    let cost = current_balance - balance;
+    tracing::info!("Test 2, cost={cost}");
+    current_balance = balance;
+
+    // Test 3: Calling the outer via service
+
+    let query = CallIntensiveRequest::QueryProcess(n);
+    outer_application.run_json_query(&query).await?;
+
+    let balance = node_service.balance(&account1).await?;
+    let cost = current_balance - balance;
+    tracing::info!("Test 3, cost={cost}");
+    current_balance = balance;
+
+    // Test 4: Calling the outer by scheduling an operation that calls an operation
+
+    let query = CallIntensiveRequest::ScheduleDirectOperation(n);
+    outer_application.run_json_query(&query).await?;
+
+    let balance = node_service.balance(&account1).await?;
+    let cost = current_balance - balance;
+    tracing::info!("Test 4, cost={cost}");
+    current_balance = balance;
+
+    // Test 5: Calling the outer by scheduling an operation that calls a service
+
+    let query = CallIntensiveRequest::ScheduleServiceOperation(n);
+    outer_application.run_json_query(&query).await?;
+
+    let balance = node_service.balance(&account1).await?;
+    let cost = current_balance - balance;
+    tracing::info!("Test 5, cost={cost}");
+
+    // Winding down
+
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    assert!(false);
+    Ok(())
+}
+
+
+
+
 #[cfg(with_revm)]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

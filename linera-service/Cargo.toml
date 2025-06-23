@@ -131,12 +131,14 @@ cfg_aliases.workspace = true
 amm.workspace = true
 base64.workspace = true
 call-evm-counter.workspace = true
+call-intensive.workspace = true
 counter.workspace = true
 counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
 fungible.workspace = true
+intensive-cpu.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
 linera-client = { workspace = true, features = ["test"] }
