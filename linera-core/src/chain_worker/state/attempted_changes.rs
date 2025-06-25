@@ -18,7 +18,7 @@ use linera_chain::{
     },
     manager,
     types::{ConfirmedBlockCertificate, TimeoutCertificate, ValidatedBlockCertificate},
-    ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
 };
 use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, Storage};
@@ -313,7 +313,8 @@ where
                 .state
                 .storage
                 .committees_for([epoch].into_iter().collect())
-                .await?;
+                .await
+                .map_err(|error| ChainError::ExecutionError(Box::new(error), ChainExecutionContext::CommitteesFor))?;
             let committee = committees
                 .get(&epoch)
                 .ok_or(WorkerError::UnknownEpoch { chain_id, epoch })?;

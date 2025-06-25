@@ -178,8 +178,8 @@ pub trait Storage: Sized {
     async fn committees_for(
         &self,
         mut epochs: BTreeSet<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
-        let read_committee = async |committee_hash| -> Result<Committee, ViewError> {
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
+        let read_committee = async |committee_hash| -> Result<Committee, ExecutionError> {
             let blob_id = BlobId::new(committee_hash, BlobType::Committee);
             let committee_blob = self
                 .read_blob(blob_id)
@@ -220,7 +220,7 @@ pub trait Storage: Sized {
                 })
                 .map(|(epoch, maybe_blob_hash)| async move {
                     let committee = read_committee(maybe_blob_hash?).await?;
-                    Result::<_, ViewError>::Ok((epoch, committee))
+                    Result::<_, ExecutionError>::Ok((epoch, committee))
                 }),
         )
         .await?;
@@ -233,10 +233,10 @@ pub trait Storage: Sized {
         if epochs.is_empty() {
             Ok(result)
         } else {
-            Err(ViewError::NotFound(format!(
+            Err(ExecutionError::ViewError(ViewError::NotFound(format!(
                 "Committees for epochs not found: {:?}",
                 epochs
-            )))
+            ))))
         }
     }
 
@@ -489,7 +489,7 @@ where
     async fn committees_for(
         &self,
         epochs: BTreeSet<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
         self.storage.committees_for(epochs).await
     }
 

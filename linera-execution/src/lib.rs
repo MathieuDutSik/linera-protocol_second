@@ -407,7 +407,7 @@ pub trait ExecutionRuntimeContext {
     async fn committees_for(
         &self,
         epochs: BTreeSet<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError>;
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError>;
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
@@ -1098,7 +1098,7 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
     async fn committees_for(
         &self,
         epochs: BTreeSet<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ViewError> {
+    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
         let committee_blob_bytes = self
             .blobs
             .iter()

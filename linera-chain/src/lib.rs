@@ -175,6 +175,7 @@ pub enum ChainError {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub enum ChainExecutionContext {
+    CommitteesFor,
     Query,
     DescribeApplication,
     IncomingBundle(u32),
