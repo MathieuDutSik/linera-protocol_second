@@ -1677,8 +1677,6 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
 async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -> Result<()> {
     use std::collections::BTreeMap;
 
-    use fungible::FungibleTokenAbi;
-
     use delegated_fungible::{DelegatedFungibleTokenAbi, InitialState, Parameters};
     tracing::info!("delegated_fungible, step 1");
 
@@ -1686,7 +1684,7 @@ async fn test_wasm_end_to_end_delegated_fungible(config: impl LineraNetConfig) -
     tracing::info!("Starting test {}", test_name!());
     tracing::info!("delegated_fungible, step 2");
 
-    // Create runner and two clients.
+    // Create runner and three clients.
     let (mut net, client1) = config.instantiate().await?;
     tracing::info!("delegated_fungible, step 3");
 
