@@ -51,6 +51,10 @@ const PROCESS_STREAMS_SELECTOR: &[u8] = &[227, 9, 189, 153];
 /// only when creating a new instance of a shared contract
 const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
 
+/// This is the selector of the `finalize` that should be called
+/// only when finalizing a contract after execution
+const FINALIZE_SELECTOR: &[u8] = &[75, 178, 120, 243];
+
 fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> {
     if vec == EXECUTE_MESSAGE_SELECTOR {
         return Err(EvmExecutionError::IllegalOperationCall(
@@ -65,6 +69,11 @@ fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecutionError> 
     if vec == INSTANTIATE_SELECTOR {
         return Err(EvmExecutionError::IllegalOperationCall(
             "function instantiate".to_string(),
+        ));
+    }
+    if vec == FINALIZE_SELECTOR {
+        return Err(EvmExecutionError::IllegalOperationCall(
+            "function finalize".to_string(),
         ));
     }
     Ok(())
@@ -98,7 +107,7 @@ mod tests {
     use revm_primitives::keccak256;
 
     use crate::evm::revm::{
-        EXECUTE_MESSAGE_SELECTOR, INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
+        EXECUTE_MESSAGE_SELECTOR, FINALIZE_SELECTOR, INSTANTIATE_SELECTOR, PROCESS_STREAMS_SELECTOR,
     };
 
     // The function keccak256 is not const so we cannot build the execute_message
@@ -159,6 +168,12 @@ mod tests {
     fn check_instantiate_selector() {
         let selector = &keccak256("instantiate(bytes)".as_bytes())[..4];
         assert_eq!(selector, INSTANTIATE_SELECTOR);
+    }
+
+    #[test]
+    fn check_finalize_selector() {
+        let selector = &keccak256("finalize()".as_bytes())[..4];
+        assert_eq!(selector, FINALIZE_SELECTOR);
     }
 }
 
@@ -1154,7 +1169,14 @@ where
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
-        Ok(())
+        if has_selector(&self.module, FINALIZE_SELECTOR) {
+            self.db.set_contract_address()?;
+            let operation = FINALIZE_SELECTOR.to_vec();
+            let caller = self.get_msg_address()?;
+            self.execute_no_return_operation(operation, "message", caller)
+        } else {
+            Ok(())
+        }
     }
 }
 
