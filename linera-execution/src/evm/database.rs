@@ -192,11 +192,29 @@ where
             return Ok(Some(account.info.clone()));
         }
         let mut runtime = self.runtime.lock().expect("The lock should be possible");
+        let account_owner = address.into();
+        let balance = runtime.read_owner_balance(account_owner)?;
+        let balance: U256 = balance.into();
         let key_info = Self::get_address_key(KeyCategory::AccountInfo as u8, address);
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
-        Ok(account_info)
+        if balance == U256::ZERO {
+            return Ok(account_info);
+        }
+        if address == self.contract_address {
+            return Ok(account_info);
+        }
+        if let Some(mut account_info) = account_info {
+            account_info.balance = balance;
+            return Ok(Some(account_info));
+        }
+        // The balance is non-zero. Therefore, the account exists.đ
+        // However, the state is None. Therefore, we need to create
+        // a default account first.
+        let mut account_info = AccountInfo::default();
+        account_info.balance = balance;
+        Ok(Some(account_info))
     }
 
     fn code_by_hash_ref(&self, _code_hash: B256) -> Result<Bytecode, ExecutionError> {
