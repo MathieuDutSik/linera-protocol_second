@@ -24,6 +24,8 @@ pub enum EvmExecutionError {
     CommitError(String),
     #[error("It is illegal to call {0} from an operation")]
     IllegalOperationCall(String),
+    #[error("The balances are incoherent")]
+    IncoherentBalance,
     #[error("The function {0} is being called but is missing from the bytecode API")]
     MissingFunction(String),
     #[error("Incorrect contract creation: {0}")]

@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use linera_base::vm::VmRuntime;
+use linera_base::{vm::VmRuntime, identifiers::AccountOwner};
 use linera_views::common::from_bytes_option;
 use revm::{primitives::keccak256, Database, DatabaseCommit, DatabaseRef};
 use revm_context::BlockEnv;
@@ -18,7 +18,7 @@ use revm_database::{AccountState, DBErrorMarker};
 use revm_primitives::{address, Address, B256, U256};
 use revm_state::{AccountInfo, Bytecode, EvmState};
 
-use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, ExecutionError, ServiceRuntime};
+use crate::{ApplicationId, BaseRuntime, Batch, ContractRuntime, EvmExecutionError, ExecutionError, ServiceRuntime};
 
 // The runtime costs are not available in service operations.
 // We need to set a limit to gas usage in order to avoid blocking
@@ -303,6 +303,30 @@ impl<Runtime> DatabaseRuntime<Runtime>
 where
     Runtime: BaseRuntime,
 {
+    /// Gets the contract address balance
+    pub fn get_balance_increase(&self) -> Result<U256, ExecutionError> {
+        let existing_evm_balance = {
+            let account_info = self.basic_ref(self.contract_address)?;
+            match account_info {
+                None => U256::ZERO,
+                Some(account_info) => account_info.balance,
+            }
+        };
+        let linera_balance = {
+            let mut runtime = self.runtime.lock().expect("The lock should be possible");
+            let application_id = runtime.application_id()?;
+            let account_owner: AccountOwner = application_id.into();
+            let balance = runtime.read_owner_balance(account_owner)?;
+            let balance: U256 = balance.into();
+            balance
+        };
+        if existing_evm_balance > linera_balance {
+            return Err(EvmExecutionError::IncoherentBalance.into());
+        }
+        let increment = linera_balance - existing_evm_balance;
+        Ok(increment)
+    }
+
     /// Reads the nonce of the user
     pub fn get_nonce(&self, address: &Address) -> Result<u64, ExecutionError> {
         let account_info = self.basic_ref(*address)?;

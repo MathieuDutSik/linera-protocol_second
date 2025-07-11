@@ -1300,6 +1300,7 @@ where
             runtime.remaining_fuel(VmRuntime::Evm)?
         };
         let nonce = self.db.get_nonce(&caller)?;
+        let value = self.db.get_balance_increase()?;
         let result = {
             let ctx: revm_context::Context<
                 BlockEnv,
@@ -1327,6 +1328,7 @@ where
                     nonce,
                     gas_limit,
                     caller,
+                    value,
                     ..TxEnv::default()
                 },
                 inspector,
