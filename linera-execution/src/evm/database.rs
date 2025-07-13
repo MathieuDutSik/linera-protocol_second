@@ -199,10 +199,7 @@ where
         let promise = runtime.read_value_bytes_new(key_info)?;
         let result = runtime.read_value_bytes_wait(&promise)?;
         let account_info = from_bytes_option::<AccountInfo>(&result)?;
-        if balance == U256::ZERO {
-            return Ok(account_info);
-        }
-        if address == self.contract_address {
+        if balance == U256::ZERO || address == self.contract_address {
             return Ok(account_info);
         }
         if let Some(mut account_info) = account_info {

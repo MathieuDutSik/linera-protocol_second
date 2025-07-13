@@ -919,6 +919,9 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
+        if CallValue::Transfer(value) = inputs.value {
+            
+        }
         let result = self.call_or_fail(context, inputs);
         map_result_call_outcome(result)
     }
