@@ -1580,6 +1580,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::Amount;
+    use alloy_primitives::U256;
 
     #[test]
     fn display_amount() {
@@ -1605,5 +1606,13 @@ mod tests {
             "~+12.34~~",
             format!("{:~^+9.1}", Amount::from_str("12.34").unwrap())
         );
+    }
+
+    #[test]
+    fn test_conversion_amount_u256() {
+        let value_amount = Amount::from_tokens(15656565652209004332);
+        let value_u256: U256 = value_amount.into();
+        let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
+        assert_eq!(value_amount, value_amount_rev);
     }
 }
