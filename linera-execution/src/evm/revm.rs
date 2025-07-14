@@ -10,9 +10,9 @@ use std::{collections::BTreeSet, convert::TryFrom, sync::{Arc, Mutex}};
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, Bytecode, Resources, SendMessageRequest, StreamUpdate},
+    data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChainId, StreamName},
+    identifiers::{Account, AccountOwner, ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
@@ -33,6 +33,7 @@ use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    evm::read_amount,
     evm::database::{DatabaseRuntime, StorageStats, EVM_SERVICE_GAS_LIMIT},
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, EvmExecutionError, EvmRuntime,
     ExecutionError, ServiceRuntime, ServiceSyncRuntimeHandle, UserContract, UserContractInstance,
@@ -921,17 +922,6 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
-        if let CallValue::Transfer(value) = inputs.value {
-            let value_amount = Amount::try_from(value);
-            let value = match value_amount {
-                Ok(value) => value,
-                Err(_) => {
-                    let mut error = self.error.lock().expect("The lock should be possible");
-                    *error = Some(value);
-                    return None;
-                },
-            };
-        }
         let result = self.call_or_fail(context, inputs);
         map_result_call_outcome(result)
     }
@@ -954,6 +944,24 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
             // Precompile calls are handled by the precompile code.
             // The EVM smart contract is being called
             return Ok(None);
+        }
+        // Handling the balances.
+        if let CallValue::Transfer(value) = inputs.value {
+            if value != U256::ZERO {
+                let value = read_amount(value)?;
+                let mut runtime = context
+                    .db()
+                    .0
+                    .runtime
+                    .lock()
+                    .expect("The lock should be possible");
+                let source = runtime.application_id()?;
+                let source: AccountOwner = source.into();
+                let chain_id = runtime.chain_id()?;
+                let owner: AccountOwner = inputs.bytecode_address.into();
+                let destination = Account { chain_id, owner };
+                runtime.transfer(source, destination, value)?;
+            }
         }
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
@@ -1352,11 +1360,12 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        /*
         let error = inspector.error.lock().expect("Lock should be acquired");
         if let Some(error) = *error {
             let error = EvmExecutionError::AmountConversionError(error);
             return Err(error.into());
-        }
+        }*/
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
         Ok(process_execution_result(storage_stats, result)?)

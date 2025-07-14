@@ -10,14 +10,15 @@
 mod database;
 pub mod revm;
 
+use linera_base::data_types::{Amount, AmountConversionError};
 use revm_context::result::{HaltReason, Output, SuccessReason};
 use revm_primitives::{Log, U256};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EvmExecutionError {
-    #[error("Amount conversion error")]
-    AmountConversionError(U256),
+    #[error(transparent)]
+    AmountConversionError(#[from] AmountConversionError),
     #[error("Failed to load contract EVM module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service EVM module: {_0}")]
@@ -56,4 +57,8 @@ pub enum EvmExecutionError {
         logs: Vec<Log>,
         output: Output,
     },
+}
+
+fn read_amount(value: U256) -> Result<Amount, EvmExecutionError > {
+    Ok(Amount::try_from(value)?)
 }

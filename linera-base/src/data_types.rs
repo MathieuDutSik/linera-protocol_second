@@ -86,16 +86,27 @@ impl From<Amount> for U256 {
     }
 }
 
+/// Converting amount from U256 to Amount can fail since
+/// Amount is a u128.
+#[derive(Error, Debug)]
+pub struct AmountConversionError(U256);
+
+impl fmt::Display for AmountConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Amount conversion error for {}", self.0)
+    }
+}
+
 impl TryFrom<U256> for Amount {
-    type Error = ArithmeticError;
-    fn try_from(value: U256) -> Result<Amount, ArithmeticError> {
-        let value: [u8; 32] = value.to_be_bytes();
+    type Error = AmountConversionError;
+    fn try_from(value: U256) -> Result<Amount, Self::Error> {
+        let vec: [u8; 32] = value.to_be_bytes();
         for i in 0..16 {
-            if value[i] != 0 {
-                return Err(ArithmeticError::Overflow);
+            if vec[i] != 0 {
+                return Err(AmountConversionError(value));
             }
         }
-        let value: [u8; 16] = value[16..].try_into().expect("value should be of length 16");
+        let value: [u8; 16] = vec[16..].try_into().expect("value should be of length 16");
         let value = u128::from_be_bytes(value);
         Ok(Amount(value))
     }
