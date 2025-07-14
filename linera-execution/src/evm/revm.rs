@@ -828,14 +828,14 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     }
 }
 
-fn map_result_call_outcome(
+fn map_result_call_outcome<Runtime: BaseRuntime>(
+    database: &DatabaseRuntime<Runtime>,
     result: Result<Option<CallOutcome>, ExecutionError>,
 ) -> Option<CallOutcome> {
     match result {
-        Err(_error) => {
-            // An alternative way would be to return None, which would induce
-            // Revm to call the smart contract in its database, where it is
-            // non-existent.
+        Err(error) => {
+            database.insert_error(error);
+            // The use of Revert immediately stops the execution.
             let result = InstructionResult::Revert;
             let output = Bytes::default();
             let gas = Gas::default();
@@ -923,7 +923,7 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(result)
+        map_result_call_outcome(&self.db, result)
     }
 }
 
@@ -1014,7 +1014,7 @@ impl<'a, Runtime: ServiceRuntime> Inspector<Ctx<'a, Runtime>> for CallIntercepto
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
         let result = self.call_or_fail(context, inputs);
-        map_result_call_outcome(result)
+        map_result_call_outcome(&self.db, result)
     }
 }
 
@@ -1360,12 +1360,7 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
-        /*
-        let error = inspector.error.lock().expect("Lock should be acquired");
-        if let Some(error) = *error {
-            let error = EvmExecutionError::AmountConversionError(error);
-            return Err(error.into());
-        }*/
+        self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
         Ok(process_execution_result(storage_stats, result)?)
@@ -1518,6 +1513,7 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        self.db.process_any_error()?;
         let storage_stats = self.db.take_storage_stats();
         Ok((
             process_execution_result(storage_stats, result_state.result)?,
