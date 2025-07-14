@@ -11,11 +11,13 @@ mod database;
 pub mod revm;
 
 use revm_context::result::{HaltReason, Output, SuccessReason};
-use revm_primitives::Log;
+use revm_primitives::{Log, U256};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EvmExecutionError {
+    #[error("Amount conversion error")]
+    AmountConversionError(U256),
     #[error("Failed to load contract EVM module: {_0}")]
     LoadContractModule(#[source] anyhow::Error),
     #[error("Failed to load service EVM module: {_0}")]

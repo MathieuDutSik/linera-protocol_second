@@ -4,13 +4,13 @@
 //! Code specific to the usage of the [Revm](https://bluealloy.github.io/revm/) runtime.
 
 use core::ops::Range;
-use std::{collections::BTreeSet, convert::TryFrom};
+use std::{collections::BTreeSet, convert::TryFrom, sync::{Arc, Mutex}};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Bytecode, Resources, SendMessageRequest, StreamUpdate},
+    data_types::{Amount, Bytecode, Resources, SendMessageRequest, StreamUpdate},
     ensure,
     identifiers::{AccountOwner, ApplicationId, ChainId, StreamName},
     vm::{EvmQuery, VmRuntime},
@@ -25,10 +25,10 @@ use revm_handler::{
     instructions::EthInstructions, EthPrecompiles, MainnetContext, PrecompileProvider,
 };
 use revm_interpreter::{
-    CallInput, CallInputs, CallOutcome, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
+    CallInput, CallInputs, CallOutcome, CallValue, CreateInputs, CreateOutcome, CreateScheme, Gas, InputsImpl,
     InstructionResult, InterpreterResult,
 };
-use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind};
+use revm_primitives::{address, hardfork::SpecId, Address, Log, TxKind, U256};
 use revm_state::EvmState;
 use serde::{Deserialize, Serialize};
 
@@ -869,6 +869,7 @@ struct CallInterceptorContract<Runtime> {
     // This is the contract address of the contract being created.
     contract_address: Address,
     precompile_addresses: BTreeSet<Address>,
+    error: Arc<Mutex<Option<U256>>>,
 }
 
 impl<Runtime> Clone for CallInterceptorContract<Runtime> {
@@ -877,6 +878,7 @@ impl<Runtime> Clone for CallInterceptorContract<Runtime> {
             db: self.db.clone(),
             contract_address: self.contract_address,
             precompile_addresses: self.precompile_addresses.clone(),
+            error: self.error.clone(),
         }
     }
 }
@@ -919,8 +921,16 @@ impl<'a, Runtime: ContractRuntime> Inspector<Ctx<'a, Runtime>>
         context: &mut Ctx<'a, Runtime>,
         inputs: &mut CallInputs,
     ) -> Option<CallOutcome> {
-        if CallValue::Transfer(value) = inputs.value {
-            
+        if let CallValue::Transfer(value) = inputs.value {
+            let value_amount = Amount::try_from(value);
+            let value = match value_amount {
+                Ok(value) => value,
+                Err(_) => {
+                    let mut error = self.error.lock().expect("The lock should be possible");
+                    *error = Some(value);
+                    return None;
+                },
+            };
         }
         let result = self.call_or_fail(context, inputs);
         map_result_call_outcome(result)
@@ -1296,6 +1306,7 @@ where
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
+            error: Arc::new(Mutex::new(None)),
         };
         let block_env = self.db.get_contract_block_env()?;
         let gas_limit = {
@@ -1334,13 +1345,18 @@ where
                     value,
                     ..TxEnv::default()
                 },
-                inspector,
+                inspector.clone(),
             )
             .map_err(|error| {
                 let error = format!("{:?}", error);
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        let error = inspector.error.lock().expect("Lock should be acquired");
+        if let Some(error) = *error {
+            let error = EvmExecutionError::AmountConversionError(error);
+            return Err(error.into());
+        }
         let storage_stats = self.db.take_storage_stats();
         self.db.commit_changes()?;
         Ok(process_execution_result(storage_stats, result)?)
