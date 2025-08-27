@@ -617,14 +617,27 @@ where
                 ProposalContent {
                     block,
                     round,
-                    outcome: _,
+                    outcome,
                 },
             original_proposal,
             signature: _,
         } = proposal;
 
+        let blobs: Option<BTreeMap<BlobId,Blob>> = match outcome {
+            None => None,
+            Some(outcome) => {
+                let mut map = BTreeMap::new();
+                for blobs in outcome.blobs.clone() {
+                    for blob in blobs {
+                        map.insert(blob.id(), blob);
+                    }
+                }
+                Some(map)
+            },
+        };
+
         let mut maybe_blobs = self
-            .maybe_get_required_blobs(proposal.required_blob_ids(), None)
+            .maybe_get_required_blobs(proposal.required_blob_ids(), blobs.as_ref())
             .await?;
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {

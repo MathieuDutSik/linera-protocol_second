@@ -841,6 +841,57 @@ where
         Ok(module_id)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn publish_and_create_application(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+        contract: PathBuf,
+        service: PathBuf,
+        vm_runtime: VmRuntime,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ApplicationId, Error> {
+        info!("Loading bytecode files");
+        let contract_bytecode = Bytecode::load_from_file(&contract)
+            .await
+            .with_context(|| format!("failed to load contract bytecode from {:?}", &contract))?;
+        let service_bytecode = Bytecode::load_from_file(&service)
+            .await
+            .with_context(|| format!("failed to load service bytecode from {:?}", &service))?;
+
+        info!("Publishing module and creating application");
+        let (app_id, _) = self
+            .apply_client_command(chain_client, |chain_client| {
+                let chain_client = chain_client.clone();
+                let contract_bytecode = contract_bytecode.clone();
+                let service_bytecode = service_bytecode.clone();
+                let parameters = parameters.clone();
+                let instantiation_argument = instantiation_argument.clone();
+                let required_application_ids = required_application_ids.clone();
+                async move {
+                    chain_client
+                        .publish_and_create_application(
+                            contract_bytecode,
+                            service_bytecode,
+                            vm_runtime,
+                            parameters,
+                            instantiation_argument,
+                            required_application_ids,
+                        )
+                        .await
+                        .context("Failed to publish module and create application")
+                }
+            })
+            .await?;
+
+        info!("{}", "Module published and application created successfully!");
+
+        info!("Synchronizing client and processing inbox");
+        self.process_inbox(chain_client).await?;
+        Ok(app_id)
+    }
+
     pub async fn publish_data_blob(
         &mut self,
         chain_client: &ChainClient<Env>,

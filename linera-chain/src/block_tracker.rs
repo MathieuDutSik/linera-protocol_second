@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{collections::{BTreeMap, BTreeSet}, mem};
 
 use custom_debug_derive::Debug;
 #[cfg(with_metrics)]
@@ -161,6 +161,23 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .with_execution_context(chain_execution_context)?;
             }
         }
+        let published_blob_ids: Vec<BlobId> = txn_tracker
+            .blobs_published
+            .iter().copied()
+            .collect::<Vec<_>>();
+        let mut not_present_blob_ids = BTreeSet::new();
+        for blob_id in published_blob_ids {
+            match self.published_blobs.get(&blob_id) {
+                Some(blob) => {
+                    txn_tracker.add_created_blob(blob.clone().clone());
+                    self.published_blobs.remove(&blob_id);
+                },
+                None => {
+                    not_present_blob_ids.insert(blob_id);
+                },
+            }
+        }
+        txn_tracker.blobs_published = mem::take(&mut not_present_blob_ids);
 
         let txn_outcome = txn_tracker
             .into_outcome()

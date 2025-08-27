@@ -45,15 +45,15 @@ pub struct TransactionTracker {
     /// - [`EvmBytecode`]
     /// - [`ApplicationDescription`]
     /// - [`ChainDescription`]
-    blobs: BTreeMap<BlobId, BlobContent>,
+    pub blobs: BTreeMap<BlobId, BlobContent>,
     /// The blobs created in the previous transactions.
-    previously_created_blobs: BTreeMap<BlobId, BlobContent>,
+    pub previously_created_blobs: BTreeMap<BlobId, BlobContent>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
     streams_to_process: BTreeMap<ApplicationId, AppStreamUpdates>,
     /// Published blobs this transaction refers to by [`BlobId`].
-    blobs_published: BTreeSet<BlobId>,
+    pub blobs_published: BTreeSet<BlobId>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.

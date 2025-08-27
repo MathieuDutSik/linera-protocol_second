@@ -1565,29 +1565,19 @@ impl Runnable for Job {
                 let chain_client = context.make_chain_client(publisher);
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
-                let module_id = context
-                    .publish_module(&chain_client, contract, service, vm_runtime)
-                    .await?;
-
-                let (application_id, _) = context
-                    .apply_client_command(&chain_client, move |chain_client| {
-                        let parameters = parameters.clone();
-                        let argument = argument.clone();
-                        let chain_client = chain_client.clone();
-                        let required_application_ids = required_application_ids.clone();
-                        async move {
-                            chain_client
-                                .create_application_untyped(
-                                    module_id,
-                                    parameters,
-                                    argument,
-                                    required_application_ids.unwrap_or_default(),
-                                )
-                                .await
-                        }
-                    })
+                
+                let application_id = context
+                    .publish_and_create_application(
+                        &chain_client,
+                        contract,
+                        service,
+                        vm_runtime,
+                        parameters,
+                        argument,
+                        required_application_ids.unwrap_or_default(),
+                    )
                     .await
-                    .context("Failed to create application")?;
+                    .context("Failed to publish module and create application")?;
                 info!("{}", "Application published successfully!".green().bold());
                 info!(
                     "Application published and created in {} ms",
@@ -1638,29 +1628,18 @@ impl Runnable for Job {
                     let project = project::Project::from_existing_project(project_path)?;
                     let (contract_path, service_path) = project.build(name)?;
 
-                    let module_id = context
-                        .publish_module(&chain_client, contract_path, service_path, vm_runtime)
-                        .await?;
-
-                    let (application_id, _) = context
-                        .apply_client_command(&chain_client, move |chain_client| {
-                            let parameters = parameters.clone();
-                            let argument = argument.clone();
-                            let chain_client = chain_client.clone();
-                            let required_application_ids = required_application_ids.clone();
-                            async move {
-                                chain_client
-                                    .create_application_untyped(
-                                        module_id,
-                                        parameters,
-                                        argument,
-                                        required_application_ids.unwrap_or_default(),
-                                    )
-                                    .await
-                            }
-                        })
+                    let application_id = context
+                        .publish_and_create_application(
+                            &chain_client,
+                            contract_path,
+                            service_path,
+                            vm_runtime,
+                            parameters,
+                            argument,
+                            required_application_ids.unwrap_or_default(),
+                        )
                         .await
-                        .context("Failed to create application")?;
+                        .context("Failed to publish module and create application")?;
                     info!("{}", "Application published successfully!".green().bold());
                     info!(
                         "Project published and created in {} ms",

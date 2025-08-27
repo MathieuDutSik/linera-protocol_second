@@ -818,7 +818,6 @@ where
             replaying_oracle_responses,
             block,
         )?;
-
         for transaction in block.transaction_refs() {
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
@@ -918,12 +917,11 @@ where
         );
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
-        ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
+        let published_blob_ids = published_blobs
+            .iter()
+            .map(|blob| blob.id())
+            .collect::<BTreeSet<_>>();
+        ensure!(block.published_blob_ids() == published_blob_ids,
             ChainError::InternalError("published_blobs mismatch".to_string())
         );
 
