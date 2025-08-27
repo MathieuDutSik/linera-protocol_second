@@ -3291,25 +3291,82 @@ impl<Env: Environment> ChainClient<Env> {
             required_application_ids,
         })
         .await?
-        .try_map(|certificate| {
-            // The first message of the only operation created the application.
-            let mut creation: Vec<_> = certificate
-                .block()
-                .created_blob_ids()
-                .into_iter()
-                .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
-                .collect();
-            if creation.len() > 1 {
-                return Err(ChainClientError::InternalError(
-                    "Unexpected number of application descriptions published",
-                ));
-            }
-            let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
-                "ApplicationDescription blob not found.",
-            ))?;
-            let id = ApplicationId::new(blob_id.hash);
-            Ok((id, certificate))
-        })
+        .try_map(Self::extract_application_id_from_certificate)
+    }
+
+    /// Helper function to extract ApplicationId from a certificate that created an application.
+    fn extract_application_id_from_certificate(
+        certificate: ConfirmedBlockCertificate,
+    ) -> Result<(ApplicationId, ConfirmedBlockCertificate), ChainClientError> {
+        // Find the application description blob created by the CreateApplication operation
+        let mut creation: Vec<_> = certificate
+            .block()
+            .created_blob_ids()
+            .into_iter()
+            .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+            .collect();
+        if creation.len() > 1 {
+            return Err(ChainClientError::InternalError(
+                "Unexpected number of application descriptions published",
+            ));
+        }
+        let blob_id = creation.pop().ok_or(ChainClientError::InternalError(
+            "ApplicationDescription blob not found.",
+        ))?;
+        let id = ApplicationId::new(blob_id.hash);
+        Ok((id, certificate))
+    }
+
+    /// Creates an application from blobs by publishing module blobs and creating the application in a single operation.
+    #[instrument(
+        level = "trace",
+        skip(self, blobs, parameters, instantiation_argument, required_application_ids)
+    )]
+    pub async fn create_application_from_blobs_untyped(
+        &self,
+        blobs: Vec<Blob>,
+        module_id: ModuleId,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, ChainClientError> {
+        self.execute_operations(
+            vec![
+                Operation::system(SystemOperation::PublishModule { module_id }),
+                Operation::system(SystemOperation::CreateApplication {
+                    module_id,
+                    parameters,
+                    instantiation_argument,
+                    required_application_ids,
+                }),
+            ],
+            blobs,
+        )
+        .await?
+        .try_map(Self::extract_application_id_from_certificate)
+    }
+
+    /// Publishes module and creates an application in a single operation.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[instrument(level = "trace", skip(contract, service, parameters, instantiation_argument))]
+    pub async fn publish_and_create_application(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, ChainClientError> {
+        let (blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
+        self.create_application_from_blobs_untyped(
+            blobs,
+            module_id,
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        )
+        .await
     }
 
     /// Creates a new committee and starts using it (admin chains only).
