@@ -469,9 +469,8 @@ impl SyncRuntimeInternal<UserContractInstance> {
     }
 
     /// Cleans up the runtime after the execution of a call to a different contract.
-    fn finish_call(&mut self) -> Result<(), ExecutionError> {
+    fn finish_call(&mut self)  {
         self.pop_application();
-        Ok(())
     }
 
     /// Runs the service in a separate thread as an oracle.
@@ -1324,7 +1323,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .expect("Applications should not have reentrant calls")
             .execute_operation(argument)?;
 
-        self.inner().finish_call()?;
+        self.inner().finish_call();
 
         Ok(value)
     }
@@ -1593,7 +1592,7 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .expect("Applications should not have reentrant calls")
             .instantiate(argument)?;
 
-        self.inner().finish_call()?;
+        self.inner().finish_call();
 
         Ok(app_id)
     }

@@ -383,7 +383,7 @@ where
             ChangeApplicationPermissions(application_permissions) => {
                 self.application_permissions.set(application_permissions);
             }
-            CloseChain => self.close_chain().await?,
+            CloseChain => self.close_chain(),
             Transfer {
                 owner,
                 amount,
@@ -820,19 +820,19 @@ where
         Ok(false)
     }
 
-    pub async fn handle_query(
+    pub fn handle_query(
         &mut self,
         context: QueryContext,
         _query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, ExecutionError> {
+    ) -> QueryOutcome<SystemResponse> {
         let response = SystemResponse {
             chain_id: context.chain_id,
             balance: *self.balance.get(),
         };
-        Ok(QueryOutcome {
+        QueryOutcome {
             response,
             operations: vec![],
-        })
+        }
     }
 
     /// Returns the messages to open a new chain, and subtracts the new chain's balance
@@ -874,9 +874,8 @@ where
         Ok(child_id)
     }
 
-    pub async fn close_chain(&mut self) -> Result<(), ExecutionError> {
+    pub fn close_chain(&mut self) {
         self.closed.set(true);
-        Ok(())
     }
 
     pub async fn create_application(
