@@ -139,6 +139,7 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), LocalNodeError> {
+        tracing::info!("local_node: stage_block_execution, published_blobs={:?}", published_blobs);
         Ok(self
             .node
             .state

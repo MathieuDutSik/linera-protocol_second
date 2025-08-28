@@ -129,12 +129,10 @@ where
                 round,
                 published_blobs,
                 callback,
-            } => callback
-                .send(
-                    self.stage_block_execution(block, round, &published_blobs)
-                        .await,
-                )
-                .is_ok(),
+            } => {
+                tracing::info!("chain_worker::state, before stage_block_execution");
+                callback.send(self.stage_block_execution(block, round, &published_blobs).await).is_ok()
+            }
             ChainWorkerRequest::ProcessTimeout {
                 certificate,
                 callback,

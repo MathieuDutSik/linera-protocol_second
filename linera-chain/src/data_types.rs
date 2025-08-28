@@ -103,6 +103,11 @@ impl ProposedBlock {
     }
 
     /// Returns an iterator over all transactions as references.
+    pub fn n_transaction(&self) -> usize {
+        self.transactions.len()
+    }
+
+    /// Returns an iterator over all transactions as references.
     pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
         self.transactions.iter()
     }

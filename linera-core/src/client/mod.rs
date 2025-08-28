@@ -1273,6 +1273,7 @@ impl<Env: Environment> Client<Env> {
                 .await;
             tracing::info!("stage_block_execution, step 2");
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                tracing::info!("stage_block_execution, result={:?}", result);
                 tracing::info!("stage_block_execution, step 3");
                 self.receive_certificates_for_blobs(blob_ids.clone())
                     .await?;
@@ -3356,20 +3357,26 @@ impl<Env: Environment> ChainClient<Env> {
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, ChainClientError> {
-        self.execute_operations(
-            vec![
-                Operation::system(SystemOperation::PublishModule { module_id }),
-                Operation::system(SystemOperation::CreateApplication {
+        let mut operations = Vec::new();
+        /*
+        let mut operations = blobs
+            .iter()
+            .map(|blob| {
+                Operation::system(SystemOperation::PublishDataBlob {
+                    blob_hash: blob.id().hash,
+                })
+            })
+        .collect::<Vec<_>>();
+        */
+        operations.push(Operation::system(SystemOperation::PublishModule { module_id }));
+        operations.push(Operation::system(SystemOperation::CreateApplication {
                     module_id,
                     parameters,
                     instantiation_argument,
                     required_application_ids,
-                }),
-            ],
-            blobs,
-        )
-        .await?
-        .try_map(Self::extract_application_id_from_certificate)
+                }));
+        self.execute_operations(operations, blobs).await?
+            .try_map(Self::extract_application_id_from_certificate)
     }
 
     /// Publishes module and creates an application in a single operation.

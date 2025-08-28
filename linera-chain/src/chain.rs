@@ -749,9 +749,11 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
     ) -> Result<BlockExecutionOutcome, ChainError> {
+        tracing::info!("execute_block_inner step 1");
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency();
         chain.system.timestamp.set(block.timestamp);
+        tracing::info!("execute_block_inner step 2");
 
         let policy = chain
             .system
@@ -760,12 +762,14 @@ where
             .1
             .policy()
             .clone();
+        tracing::info!("execute_block_inner step 3");
 
         let mut resource_controller = ResourceController::new(
             Arc::new(policy),
             ResourceTracker::default(),
             block.authenticated_signer,
         );
+        tracing::info!("execute_block_inner step 4 |published_blobs|={}", published_blobs.len());
 
         for blob in published_blobs {
             let blob_id = blob.id();
@@ -775,6 +779,7 @@ where
                 .with_execution_context(ChainExecutionContext::Block)?;
             chain.system.used_blobs.insert(&blob_id)?;
         }
+        tracing::info!("execute_block_inner step 5");
 
         // Execute each incoming bundle as a transaction, then each operation.
         // Collect messages, events and oracle responses, each as one list per transaction.
@@ -788,12 +793,19 @@ where
             replaying_oracle_responses,
             block,
         )?;
-
+        tracing::info!("execute_block_inner step 6");
+        let n_transaction = block.n_transaction();
+        tracing::info!("execute_block_inner n_transaction={n_transaction}");
+        let mut i_trans = 0;
         for transaction in block.transaction_refs() {
+            tracing::info!("-- execute_transaction, i_trans={i_trans} (Before)");
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
                 .await?;
+            tracing::info!("-- execute_transaction, i_trans={i_trans} (After)");
+            i_trans += 1;
         }
+        tracing::info!("execute_block_inner step 7");
 
         let recipients = block_execution_tracker.recipients();
         let mut previous_message_blocks = BTreeMap::new();
@@ -808,6 +820,7 @@ where
                 previous_message_blocks.insert(recipient, (hash, height));
             }
         }
+        tracing::info!("execute_block_inner step 8");
 
         let streams = block_execution_tracker.event_streams();
         let mut previous_event_blocks = BTreeMap::new();
@@ -822,16 +835,27 @@ where
                 previous_event_blocks.insert(stream, (hash, height));
             }
         }
+        tracing::info!("execute_block_inner step 9");
 
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
             chain.crypto_hash().await?
         };
+        tracing::info!("execute_block_inner step 10");
 
         let (messages, oracle_responses, events, blobs, operation_results) =
             block_execution_tracker.finalize();
+        tracing::info!("execute_block_inner |blobs|={}", blobs.len());
+        let mut pos = 0;
+        for blobs_segment in blobs.clone() {
+            tracing::info!("pos={pos} |blobs_segment|={}", blobs_segment.len());
+            pos += 1;
+        }
 
+
+
+        
         Ok(BlockExecutionOutcome {
             messages,
             previous_message_blocks,
@@ -871,12 +895,13 @@ where
         );
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
-        ensure!(
-            block.published_blob_ids()
-                == published_blobs
-                    .iter()
-                    .map(|blob| blob.id())
-                    .collect::<BTreeSet<_>>(),
+        let published_blob_ids = published_blobs
+            .iter()
+            .map(|blob| blob.id())
+            .collect::<BTreeSet<_>>();
+        tracing::info!("block.published_blob_ids()={:?}", block.published_blob_ids());
+        tracing::info!("published_blob_ids={:?}", published_blob_ids);
+        ensure!(block.published_blob_ids() == published_blob_ids,
             ChainError::InternalError("published_blobs mismatch".to_string())
         );
 
