@@ -1207,9 +1207,11 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
+            tracing::info!("stage_block_execution_and_discard_failing_messages, step 1");
             let result = self
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
                 .await;
+            tracing::info!("stage_block_execution_and_discard_failing_messages, step 2");
             if let Err(ChainClientError::LocalNodeError(LocalNodeError::WorkerError(
                 WorkerError::ChainError(chain_error),
             ))) = &result
@@ -1219,22 +1221,26 @@ impl<Env: Environment> Client<Env> {
                     ChainExecutionContext::IncomingBundle(index),
                 ) = &**chain_error
                 {
+                    tracing::info!("stage_block_execution_and_discard_failing_messages, step 2.1");
                     let transaction = block
                         .transactions
                         .get_mut(*index as usize)
                         .expect("Transaction at given index should exist");
+                    tracing::info!("stage_block_execution_and_discard_failing_messages, step 2.2");
                     let Transaction::ReceiveMessages(message) = transaction else {
                         panic!(
                             "Expected incoming bundle at transaction index {}, found operation",
                             index
                         );
                     };
+                    tracing::info!("stage_block_execution_and_discard_failing_messages, step 2.3");
                     ensure!(
                         !message.bundle.is_protected(),
                         ChainClientError::BlockProposalError(
                             "Protected incoming message failed to execute locally"
                         )
                     );
+                    tracing::info!("stage_block_execution_and_discard_failing_messages, step 2.4");
                     // Reject the faulty message from the block and continue.
                     // TODO(#1420): This is potentially a bit heavy-handed for
                     // retryable errors.
@@ -1260,13 +1266,17 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
     ) -> Result<(Block, ChainInfoResponse), ChainClientError> {
         loop {
+            tracing::info!("stage_block_execution, step 1");
             let result = self
                 .local_node
                 .stage_block_execution(block.clone(), round, published_blobs.clone())
                 .await;
+            tracing::info!("stage_block_execution, step 2");
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                tracing::info!("stage_block_execution, step 3");
                 self.receive_certificates_for_blobs(blob_ids.clone())
                     .await?;
+                tracing::info!("stage_block_execution, step 4");
                 continue; // We found the missing blob: retry.
             }
             return Ok(result?);
@@ -2340,7 +2350,10 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     self.synchronize_chain_state(self.chain_id).await?;
                 }
-                Err(err) => return Err(err),
+                Err(err) => {
+                    
+                    return Err(err);
+                },
             };
         };
 
@@ -2378,6 +2391,7 @@ impl<Env: Environment> ChainClient<Env> {
         let mutex = self.state().client_mutex();
         let _guard = mutex.lock_owned().await;
         // TOOD: We shouldn't need to call this explicitly.
+        tracing::info!("execute_block, step 1");
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
@@ -2387,12 +2401,16 @@ impl<Env: Environment> ChainClient<Env> {
             }
             ClientOutcome::Committed(None) => {}
         }
+        tracing::info!("execute_block, step 2");
 
         let incoming_bundles = self.pending_message_bundles().await?;
+        tracing::info!("execute_block, step 2.1");
         let identity = self.identity().await?;
+        tracing::info!("execute_block, step 2.2");
         let confirmed_value = self
             .new_pending_block(incoming_bundles, operations, blobs, identity)
             .await?;
+        tracing::info!("execute_block, step 3");
 
         match self.process_pending_block_without_prepare().await? {
             ClientOutcome::Committed(Some(certificate))
@@ -2431,13 +2449,16 @@ impl<Env: Environment> ChainClient<Env> {
                     use the `linera retry-pending-block` command to commit that first"
             )
         );
+        tracing::info!("new_pending_block, step 1");
         let info = self.chain_info().await?;
+        tracing::info!("new_pending_block, step 2");
         let timestamp = self.next_timestamp(&incoming_bundles, info.timestamp);
         let transactions = incoming_bundles
             .into_iter()
             .map(Transaction::ReceiveMessages)
             .chain(operations.into_iter().map(Transaction::ExecuteOperation))
             .collect::<Vec<_>>();
+        tracing::info!("new_pending_block, step 3");
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
             chain_id: self.chain_id,
@@ -2447,6 +2468,7 @@ impl<Env: Environment> ChainClient<Env> {
             authenticated_signer: Some(identity),
             timestamp,
         };
+        tracing::info!("new_pending_block, step 4");
 
         // Use the round number assuming there are oracle responses.
         // Using the round number during execution counts as an oracle.
@@ -2456,6 +2478,7 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Left(round) => round.multi_leader(),
             Either::Right(_) => None,
         };
+        tracing::info!("new_pending_block, step 5");
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
         let (block, _) = self
@@ -2466,8 +2489,11 @@ impl<Env: Environment> ChainClient<Env> {
                 blobs.clone(),
             )
             .await?;
+        tracing::info!("new_pending_block, step 6");
         let (proposed_block, _) = block.clone().into_proposal();
+        tracing::info!("new_pending_block, step 7");
         self.state_mut().set_pending_proposal(proposed_block, blobs);
+        tracing::info!("new_pending_block, step 8");
         Ok(ConfirmedBlock::new(block))
     }
 
