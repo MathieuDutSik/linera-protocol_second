@@ -796,14 +796,12 @@ where
         tracing::info!("execute_block_inner step 6");
         let n_transaction = block.n_transaction();
         tracing::info!("execute_block_inner n_transaction={n_transaction}");
-        let mut i_trans = 0;
-        for transaction in block.transaction_refs() {
+        for (i_trans, transaction) in block.transaction_refs().enumerate() {
             tracing::info!("-- execute_transaction, i_trans={i_trans} (Before)");
             block_execution_tracker
                 .execute_transaction(transaction, round, chain)
                 .await?;
             tracing::info!("-- execute_transaction, i_trans={i_trans} (After)");
-            i_trans += 1;
         }
         tracing::info!("execute_block_inner step 7");
 
@@ -847,15 +845,11 @@ where
         let (messages, oracle_responses, events, blobs, operation_results) =
             block_execution_tracker.finalize();
         tracing::info!("execute_block_inner |blobs|={}", blobs.len());
-        let mut pos = 0;
-        for blobs_segment in blobs.clone() {
+        for (pos, blobs_segment) in blobs.clone().into_iter().enumerate() {
             tracing::info!("pos={pos} |blobs_segment|={}", blobs_segment.len());
-            pos += 1;
         }
+        tracing::info!("execute_block_inner step 11");
 
-
-
-        
         Ok(BlockExecutionOutcome {
             messages,
             previous_message_blocks,

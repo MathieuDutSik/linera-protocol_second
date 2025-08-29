@@ -1495,6 +1495,7 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     let chain = client.load_wallet()?.default_chain().unwrap();
     let account_chain = Account::chain(chain);
     let (contract, service) = client.build_example("counter").await?;
+    tracing::info!("test_wasm_end_to_end_counter, step 1");
 
     let application_id = client
         .publish_and_create::<CounterAbi, (), u64>(
@@ -1507,27 +1508,36 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
             None,
         )
         .await?;
+    tracing::info!("test_wasm_end_to_end_counter, step 2");
+
+
     let port = get_node_port().await;
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    tracing::info!("test_wasm_end_to_end_counter, step 3");
 
     let application = node_service
         .make_application(&chain, &application_id)
         .await?;
+    tracing::info!("test_wasm_end_to_end_counter, step 4");
 
     let balance1 = node_service.balance(&account_chain).await?;
+    tracing::info!("test_wasm_end_to_end_counter, step 5");
 
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value);
     let balance2 = node_service.balance(&account_chain).await?;
     assert_eq!(balance1, balance2);
+    tracing::info!("test_wasm_end_to_end_counter, step 6");
 
     let mutation = format!("increment(field0: {increment})");
     application.mutate(mutation).await?;
     let balance3 = node_service.balance(&account_chain).await?;
     assert!(balance3 < balance2);
+    tracing::info!("test_wasm_end_to_end_counter, step 7");
 
     let counter_value: u64 = application.query_json("value").await?;
     assert_eq!(counter_value, original_counter_value + increment);
+    tracing::info!("test_wasm_end_to_end_counter, step 8");
 
     node_service.ensure_is_running()?;
 

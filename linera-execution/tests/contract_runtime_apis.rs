@@ -990,7 +990,7 @@ async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
     assert!(result.is_ok());
 
     // Verify both blobs were created and tracked
-    let created_blobs = tracker.created_blobs();
+    let created_blobs = tracker.get_created_blobs();
     assert!(created_blobs.contains_key(&expected_blob1.id()));
     assert!(created_blobs.contains_key(&expected_blob2.id()));
 
@@ -1052,7 +1052,7 @@ async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
     assert!(result.is_ok());
 
     // Should have created 4 blobs total (2 contract + 2 service for WASM)
-    let created_blobs = tracker.created_blobs();
+    let created_blobs = tracker.get_created_blobs();
     assert_eq!(created_blobs.len(), 4);
 
     Ok(())

@@ -3370,11 +3370,11 @@ impl<Env: Environment> ChainClient<Env> {
         */
         operations.push(Operation::system(SystemOperation::PublishModule { module_id }));
         operations.push(Operation::system(SystemOperation::CreateApplication {
-                    module_id,
-                    parameters,
-                    instantiation_argument,
-                    required_application_ids,
-                }));
+            module_id,
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        }));
         self.execute_operations(operations, blobs).await?
             .try_map(Self::extract_application_id_from_certificate)
     }

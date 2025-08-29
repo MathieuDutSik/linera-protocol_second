@@ -170,8 +170,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         tracing::info!("txn_tracker(A) |blobs|={}, |blobs_published|={}", txn_tracker.blobs.len(), txn_tracker.blobs_published.len());
         let published_blob_ids: Vec<BlobId> = txn_tracker
             .blobs_published
-            .iter()
-            .map(|x| x.clone())
+            .iter().copied()
             .collect::<Vec<_>>();
         let mut not_present_blob_ids = BTreeSet::new();
         for blob_id in published_blob_ids {

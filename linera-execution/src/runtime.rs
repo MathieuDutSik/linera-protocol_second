@@ -488,7 +488,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let sender = self.execution_state_sender.clone();
 
         let txn_tracker = TransactionTracker::default()
-            .with_blobs(self.transaction_tracker.created_blobs().clone());
+            .with_blobs(self.transaction_tracker.get_created_blobs().clone());
 
         let timeout = self
             .resource_controller
