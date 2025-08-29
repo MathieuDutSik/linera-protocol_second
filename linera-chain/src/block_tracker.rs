@@ -110,11 +110,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         C: Context + Clone + Send + Sync + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
+        tracing::info!("execute_transaction, step 1");
         let chain_execution_context = self.chain_execution_context(transaction);
         let mut txn_tracker = self.new_transaction_tracker()?;
+        tracing::info!("execute_transaction, step 2");
 
         match transaction {
             Transaction::ReceiveMessages(incoming_bundle) => {
+                tracing::info!("execute_transaction, step 3 (Transaction::ReceiveMessages)");
                 self.resource_controller_mut()
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
@@ -130,6 +133,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 }
             }
             Transaction::ExecuteOperation(operation) => {
+                tracing::info!("execute_transaction, step 3 (Transaction::ExecuteOperation)");
                 self.resource_controller_mut()
                     .with_state(&mut chain.system)
                     .await?
@@ -137,6 +141,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
                 let _operation_latency = metrics::OPERATION_EXECUTION_LATENCY.measure_latency();
+                tracing::info!("execute_transaction, step 4");
                 let context = OperationContext {
                     chain_id: self.chain_id,
                     height: self.block_height,
@@ -144,6 +149,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     authenticated_signer: self.authenticated_signer,
                     timestamp: self.timestamp,
                 };
+                tracing::info!("execute_transaction, step 5");
                 Box::pin(chain.execute_operation(
                     context,
                     operation.clone(),
@@ -152,11 +158,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 ))
                 .await
                 .with_execution_context(chain_execution_context)?;
+                tracing::info!("execute_transaction, step 6");
                 self.resource_controller_mut()
                     .with_state(&mut chain.system)
                     .await?
                     .track_operation(operation)
                     .with_execution_context(chain_execution_context)?;
+                tracing::info!("execute_transaction, step 7");
             }
         }
         tracing::info!("txn_tracker(A) |blobs|={}, |blobs_published|={}", txn_tracker.blobs.len(), txn_tracker.blobs_published.len());
@@ -178,7 +186,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             }
         }
         txn_tracker.blobs_published = mem::take(&mut not_present_blob_ids);
-        tracing::info!("txn_tracker |blobs|={}, |blobs_published|={}", txn_tracker.blobs.len(), txn_tracker.blobs_published.len());
+        tracing::info!("txn_tracker(B) |blobs|={}, |blobs_published|={}", txn_tracker.blobs.len(), txn_tracker.blobs_published.len());
 
         let txn_outcome = txn_tracker
             .into_outcome()

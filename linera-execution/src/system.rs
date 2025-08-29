@@ -452,6 +452,7 @@ where
                 }
             }
             PublishModule { module_id } => {
+                tracing::info!("system::execute_operation, publish_module");
                 for blob_id in module_id.bytecode_blob_ids() {
                     self.blob_published(&blob_id, txn_tracker)?;
                 }
@@ -462,6 +463,10 @@ where
                 instantiation_argument,
                 required_application_ids,
             } => {
+                tracing::info!("system::execute_operation, create_application");
+                tracing::info!("|blobs|={}", txn_tracker.blobs.len());
+                tracing::info!("|previously_created_blobs|={}", txn_tracker.previously_created_blobs.len());
+                tracing::info!("|blobs_published|={}", txn_tracker.blobs_published.len());
                 let txn_tracker_moved = mem::take(txn_tracker);
                 let CreateApplicationResult {
                     app_id,
@@ -888,14 +893,18 @@ where
         required_application_ids: Vec<ApplicationId>,
         mut txn_tracker: TransactionTracker,
     ) -> Result<CreateApplicationResult, ExecutionError> {
+        tracing::info!("system :: create_application, step 1");
         let application_index = txn_tracker.next_application_index();
+        tracing::info!("system :: create_application, step 2");
 
         let blob_ids = self.check_bytecode_blobs(&module_id, &txn_tracker).await?;
+        tracing::info!("system :: create_application, step 3");
         // We only remember to register the blobs that aren't recorded in `used_blobs`
         // already.
         for blob_id in blob_ids {
             self.blob_used(&mut txn_tracker, blob_id).await?;
         }
+        tracing::info!("system :: create_application, step 4");
 
         let application_description = ApplicationDescription {
             module_id,
@@ -905,12 +914,17 @@ where
             parameters,
             required_application_ids,
         };
+        tracing::info!("system :: create_application, step 5");
         self.check_required_applications(&application_description, &mut txn_tracker)
             .await?;
+        tracing::info!("system :: create_application, step 6");
 
         let blob = Blob::new_application_description(&application_description);
+        tracing::info!("system :: create_application, step 7");
         self.used_blobs.insert(&blob.id())?;
+        tracing::info!("system :: create_application, step 8");
         txn_tracker.add_created_blob(blob);
+        tracing::info!("system :: create_application, step 9");
 
         Ok(CreateApplicationResult {
             app_id: ApplicationId::from(&application_description),
@@ -937,7 +951,7 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<ApplicationDescription, ExecutionError> {
         let blob_id = id.description_blob_id();
-        let content = match txn_tracker.created_blobs().get(&blob_id) {
+        let content = match txn_tracker.get_blob_content(&blob_id) {
             Some(content) => content.clone(),
             None => self.read_blob_content(blob_id).await?,
         };
@@ -1050,11 +1064,11 @@ where
 
         let mut missing_blobs = Vec::new();
         for blob_id in &blob_ids {
-            // First check if blob is present in created_blobs
-            if txn_tracker.created_blobs().contains_key(blob_id) {
-                continue; // Blob found in created_blobs, it's ok
+            // First check if blob is already known
+            if txn_tracker.get_blob_content(blob_id).is_some() {
+                continue; // Blob found in already
             }
-            // If not in created_blobs, check storage
+            // If not, check storage
             if !self.context().extra().contains_blob(*blob_id).await? {
                 missing_blobs.push(*blob_id);
             }

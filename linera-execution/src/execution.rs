@@ -288,13 +288,16 @@ where
         txn_tracker: &mut TransactionTracker,
         resource_controller: &mut ResourceController<Option<AccountOwner>>,
     ) -> Result<(), ExecutionError> {
+        tracing::info!("execution_state_view, execute_operation");
         assert_eq!(context.chain_id, self.context().extra().chain_id());
         match operation {
             Operation::System(op) => {
+                tracing::info!("execution_state_view, execute_operation (System), step 1");
                 let new_application = self
                     .system
                     .execute_operation(context, *op, txn_tracker, resource_controller)
                     .await?;
+                tracing::info!("execution_state_view, execute_operation (System), step 2");
                 if let Some((application_id, argument)) = new_application {
                     let user_action = UserAction::Instantiate(context, argument);
                     self.run_user_action(
@@ -307,11 +310,13 @@ where
                     )
                     .await?;
                 }
+                tracing::info!("execution_state_view, execute_operation (System), step 3");
             }
             Operation::User {
                 application_id,
                 bytes,
             } => {
+                tracing::info!("execution_state_view, execute_operation (User)");
                 self.run_user_action(
                     application_id,
                     UserAction::Operation(context, bytes),

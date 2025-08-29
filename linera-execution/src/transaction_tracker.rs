@@ -46,7 +46,7 @@ pub struct TransactionTracker {
     /// - [`ChainDescription`]
     pub blobs: BTreeMap<BlobId, BlobContent>,
     /// The blobs created in the previous transactions.
-    previously_created_blobs: BTreeMap<BlobId, BlobContent>,
+    pub previously_created_blobs: BTreeMap<BlobId, BlobContent>,
     /// Operation result.
     operation_result: Option<Vec<u8>>,
     /// Streams that have been updated but not yet processed during this transaction.
@@ -148,6 +148,7 @@ impl TransactionTracker {
     }
 
     pub fn get_blob_content(&self, blob_id: &BlobId) -> Option<&BlobContent> {
+        tracing::info!("get_blob_content, start");
         if let Some(content) = self.blobs.get(blob_id) {
             return Some(content);
         }
