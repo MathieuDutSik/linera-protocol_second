@@ -67,8 +67,10 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
     let struct_name = &input.ident;
     let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
+    let is_named_struct = input.fields.iter().all(|f| f.ident.is_some());
 
-    let mut name_quotes = Vec::new();
+    let mut struct_field_names = Vec::new();
+    let mut variable_names = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut flush_quotes = Vec::new();
     let mut test_flush_quotes = Vec::new();
@@ -78,17 +80,37 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
     for (idx, e) in input.fields.iter().enumerate() {
-        let name = e.ident.clone().unwrap();
+        let field_accessor = if let Some(name) = &e.ident {
+            // Named field - use field name
+            quote! { #name }
+        } else {
+            // Unnamed field - use index
+            let idx = syn::Index::from(idx);
+            quote! { #idx }
+        };
+        let field_name = if let Some(name) = &e.ident {
+            // Named field - use field name for variable naming
+            name.clone()
+        } else {
+            // Unnamed field - create a synthetic name
+            format_ident!("field_{}", idx)
+        };
         let test_flush_ident = format_ident!("deleted{}", idx);
         let idx_lit = syn::LitInt::new(&idx.to_string(), Span::call_site());
         let g = get_extended_entry(e.ty.clone());
-        name_quotes.push(quote! { #name });
-        rollback_quotes.push(quote! { self.#name.rollback(); });
-        flush_quotes.push(quote! { let #test_flush_ident = self.#name.flush(batch)?; });
+        
+        // For struct construction
+        if let Some(name) = &e.ident {
+            struct_field_names.push(quote! { #name: #field_name });
+        }
+        variable_names.push(field_name.clone());
+        
+        rollback_quotes.push(quote! { self.#field_accessor.rollback(); });
+        flush_quotes.push(quote! { let #test_flush_ident = self.#field_accessor.flush(batch)?; });
         test_flush_quotes.push(quote! { #test_flush_ident });
-        clear_quotes.push(quote! { self.#name.clear(); });
+        clear_quotes.push(quote! { self.#field_accessor.clear(); });
         has_pending_changes_quotes.push(quote! {
-            if self.#name.has_pending_changes().await {
+            if self.#field_accessor.has_pending_changes().await {
                 return true;
             }
         });
@@ -102,14 +124,28 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
             let index = #idx_lit;
             let pos_next = pos + #g :: NUM_INIT_KEYS;
             let base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &index)?;
-            let #name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
+            let #field_name = #g :: post_load(context.clone_with_base_key(base_key), &values[pos..pos_next])?;
             pos = pos_next;
         });
     }
 
-    let first_name_quote = name_quotes
-        .first()
-        .expect("list of names should be non-empty");
+    let first_field_accessor = if let Some(first_field) = input.fields.iter().next() {
+        if let Some(name) = &first_field.ident {
+            quote! { #name }
+        } else {
+            quote! { 0 }
+        }
+    } else {
+        panic!("Struct must have at least one field");
+    };
+
+    let struct_construction = if is_named_struct {
+        // Named fields - use struct syntax
+        quote! { Self { #(#struct_field_names),* } }
+    } else {
+        // Tuple fields - use tuple syntax
+        quote! { Self(#(#variable_names),*) }
+    };
 
     let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {
@@ -140,7 +176,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
 
             fn context(&self) -> &#context {
                 use linera_views::views::View;
-                self.#first_name_quote.context()
+                self.#first_field_accessor.context()
             }
 
             fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
@@ -154,7 +190,7 @@ fn generate_view_code(input: ItemStruct, root: bool) -> TokenStream2 {
                 use linera_views::context::Context as _;
                 let mut pos = 0;
                 #(#post_load_keys_quotes)*
-                Ok(Self {#(#name_quotes),*})
+                Ok(#struct_construction)
             }
 
             async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
@@ -244,10 +280,17 @@ fn generate_hash_view_code(input: ItemStruct) -> TokenStream2 {
     let field_types = input.fields.iter().map(|field| &field.ty);
     let mut field_hashes_mut = Vec::new();
     let mut field_hashes = Vec::new();
-    for e in &input.fields {
-        let name = e.ident.as_ref().unwrap();
-        field_hashes_mut.push(quote! { hasher.write_all(self.#name.hash_mut().await?.as_ref())?; });
-        field_hashes.push(quote! { hasher.write_all(self.#name.hash().await?.as_ref())?; });
+    for (idx, e) in input.fields.iter().enumerate() {
+        let field_accessor = if let Some(name) = &e.ident {
+            // Named field - use field name
+            quote! { #name }
+        } else {
+            // Unnamed field - use index
+            let idx = syn::Index::from(idx);
+            quote! { #idx }
+        };
+        field_hashes_mut.push(quote! { hasher.write_all(self.#field_accessor.hash_mut().await?.as_ref())?; });
+        field_hashes.push(quote! { hasher.write_all(self.#field_accessor.hash().await?.as_ref())?; });
     }
 
     quote! {
@@ -337,16 +380,34 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
         type_generics,
     } = Constraints::get(&input);
     let struct_name = &input.ident;
+    let is_named_struct = input.fields.iter().all(|f| f.ident.is_some());
 
     let mut clone_constraints = vec![];
-    let mut clone_fields = vec![];
+    let mut clone_struct_fields = vec![];
+    let mut clone_tuple_fields = vec![];
 
-    for field in &input.fields {
-        let name = &field.ident;
+    for (idx, field) in input.fields.iter().enumerate() {
         let ty = &field.ty;
         clone_constraints.push(quote! { #ty: ClonableView });
-        clone_fields.push(quote! { #name: self.#name.clone_unchecked() });
+        
+        if let Some(name) = &field.ident {
+            // Named field
+            let field_accessor = quote! { #name };
+            clone_struct_fields.push(quote! { #name: self.#field_accessor.clone_unchecked() });
+        } else {
+            // Unnamed field
+            let idx_accessor = syn::Index::from(idx);
+            clone_tuple_fields.push(quote! { self.#idx_accessor.clone_unchecked() });
+        }
     }
+
+    let clone_construction = if is_named_struct {
+        // Named fields - use struct syntax
+        quote! { Self { #(#clone_struct_fields),* } }
+    } else {
+        // Tuple fields - use tuple syntax
+        quote! { Self(#(#clone_tuple_fields),*) }
+    };
 
     quote! {
         impl #impl_generics linera_views::views::ClonableView for #struct_name #type_generics
@@ -356,9 +417,7 @@ fn generate_clonable_view_code(input: ItemStruct) -> TokenStream2 {
             Self: linera_views::views::View,
         {
             fn clone_unchecked(&mut self) -> Self {
-                Self {
-                    #(#clone_fields,)*
-                }
+                #clone_construction
             }
         }
     }

@@ -48,7 +48,7 @@ impl Service for CounterService {
         );
 
         match request {
-            CounterRequest::Query => *self.state.value.get(),
+            CounterRequest::Query => *self.state.0.get(),
             CounterRequest::Increment(value) => {
                 let operation = CounterOperation::Increment(value);
                 self.runtime.schedule_operation(&operation);
@@ -82,7 +82,7 @@ mod tests {
         let mut state = CounterState::load(runtime.root_view_storage_context())
             .blocking_wait()
             .expect("Failed to read from mock key value store");
-        state.value.set(value);
+        state.0.set(value);
 
         let service = CounterService { state, runtime };
         let request = CounterRequest::Query;

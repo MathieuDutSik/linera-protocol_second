@@ -6,6 +6,5 @@ use linera_sdk::views::{linera_views, RegisterView, RootView, ViewStorageContext
 /// The application state.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
-pub struct CounterState {
-    pub value: RegisterView<u64>,
-}
+pub struct CounterState(pub RegisterView<u64>);
+
