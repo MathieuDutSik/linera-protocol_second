@@ -523,22 +523,40 @@ where
         &mut self,
         proposal: &BlockProposal,
     ) -> Result<Vec<Blob>, WorkerError> {
+        tracing::info!("load_proposal_blobs, step 1");
         let owner = proposal.owner();
+        tracing::info!("load_proposal_blobs, step 2");
         let BlockProposal {
             content:
                 ProposalContent {
                     block,
                     round,
-                    outcome: _,
+                    outcome,
                 },
             original_proposal,
             signature: _,
         } = proposal;
+        tracing::info!("load_proposal_blobs, step 3, outcome.is_none()={}", outcome.is_none());
+
+        let blobs: Option<BTreeMap<BlobId,Blob>> = match outcome {
+            None => None,
+            Some(outcome) => {
+                let mut map = BTreeMap::new();
+                for blobs in outcome.blobs.clone() {
+                    for blob in blobs {
+                        map.insert(blob.id(), blob);
+                    }
+                }
+                Some(map)
+            },
+        };
 
         let mut maybe_blobs = self
-            .maybe_get_required_blobs(proposal.required_blob_ids(), None)
+            .maybe_get_required_blobs(proposal.required_blob_ids(), blobs.as_ref())
             .await?;
+        tracing::info!("load_proposal_blobs, step 4");
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
+        tracing::info!("load_proposal_blobs, step 5");
         if !missing_blob_ids.is_empty() {
             let chain = &mut self.chain;
             if chain.ownership().open_multi_leader_rounds {
@@ -555,11 +573,13 @@ where
             self.save().await?;
             return Err(WorkerError::BlobsNotFound(missing_blob_ids));
         }
+        tracing::info!("load_proposal_blobs, step 6");
         let published_blobs = block
             .published_blob_ids()
             .iter()
             .filter_map(|blob_id| maybe_blobs.remove(blob_id).flatten())
             .collect::<Vec<_>>();
+        tracing::info!("load_proposal_blobs, step 7");
         Ok(published_blobs)
     }
 
@@ -1105,17 +1125,21 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL (fat)");
         self.ensure_is_active().await?;
         proposal
             .check_invariants()
             .map_err(|msg| WorkerError::InvalidBlockProposal(msg.to_string()))?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 1");
         proposal.check_signature()?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 2");
         let owner = proposal.owner();
         let BlockProposal {
             content,
             original_proposal,
             signature: _,
         } = &proposal;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 3");
         let block = &content.block;
         let chain = &self.chain;
         // Check the epoch.
@@ -1123,6 +1147,7 @@ where
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 4");
         // Check the authentication of the block.
         ensure!(
             chain.manager.verify_owner(&owner, proposal.content.round)?,
@@ -1166,8 +1191,10 @@ where
                 original_proposal.check_signature()?;
             }
         }
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 5");
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 6");
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
             return Ok((self.chain_info_response(), NetworkActions::default()));
@@ -1178,55 +1205,68 @@ where
         if self.chain.manager.update_signed_proposal(&proposal) {
             self.save().await?;
         }
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 7");
 
         let published_blobs = self.load_proposal_blobs(&proposal).await?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 7.1");
         let ProposalContent {
             block,
             round,
             outcome,
         } = content;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 8");
 
         let local_time = self.storage.clock().current_time();
         ensure!(
             block.timestamp.duration_since(local_time) <= self.config.grace_period,
             WorkerError::InvalidTimestamp
         );
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 9");
         self.storage.clock().sleep_until(block.timestamp).await;
         let local_time = self.storage.clock().current_time();
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 10");
 
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, block.incoming_bundles())
             .await?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 11");
         let outcome = if let Some(outcome) = outcome {
             outcome.clone()
         } else {
             self.execute_block(block, local_time, round.multi_leader(), &published_blobs)
                 .await?
         };
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 13");
 
         ensure!(
             !round.is_fast() || !outcome.has_oracle_responses(),
             WorkerError::FastBlockUsingOracles
         );
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 14");
         let chain = &mut self.chain;
         // Check if the counters of tip_state would be valid.
         chain
             .tip_state
             .get_mut()
             .update_counters(&block.transactions, &outcome.messages)?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 15");
         // Verify that the resulting chain would have no unconfirmed incoming messages.
         chain.validate_incoming_bundles().await?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 16");
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 17");
 
         // Create the vote and store it in the chain state.
         let block = outcome.with(proposal.content.block.clone());
         let created_blobs: BTreeMap<_, _> = block.iter_created_blobs().collect();
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 18");
         let blobs = self
             .get_required_blobs(proposal.expected_blob_ids(), &created_blobs)
             .await?;
         let key_pair = self.config.key_pair();
         let manager = &mut self.chain.manager;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 19");
         match manager.create_vote(proposal, block, key_pair, local_time, blobs)? {
             // Cache the value we voted on, so the client doesn't have to send it again.
             Some(Either::Left(vote)) => {
@@ -1237,8 +1277,11 @@ where
             }
             None => (),
         }
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 20");
         self.save().await?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 21");
         let actions = self.create_network_actions().await?;
+        tracing::info!("state::HANDLE_BLOCK_PROPOSAL::fat, step 22");
         Ok((self.chain_info_response(), actions))
     }
 

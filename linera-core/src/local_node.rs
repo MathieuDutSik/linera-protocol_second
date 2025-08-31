@@ -88,6 +88,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
+        tracing::info!("local_node::HANDLE_BLOCK_PROPOSAL (thin)");
         // In local nodes, we can trust fully_handle_certificate to carry all actions eventually.
         let (response, _actions) = self.node.state.handle_block_proposal(proposal).await?;
         Ok(response)

@@ -777,6 +777,7 @@ where
         &self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+        tracing::info!("worker::HANDLE_BLOCK_PROPOSAL, thin");
         trace!("{} <-- {:?}", self.nickname, proposal);
         #[cfg(with_metrics)]
         let round = proposal.content.round;

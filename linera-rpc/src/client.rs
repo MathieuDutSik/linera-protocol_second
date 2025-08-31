@@ -48,6 +48,7 @@ impl ValidatorNode for Client {
         &self,
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, NodeError> {
+        tracing::info!("client::HANGLE_BLOCK_PROPOSAL (thin)");
         match self {
             Client::Grpc(grpc_client) => grpc_client.handle_block_proposal(proposal).await,
 

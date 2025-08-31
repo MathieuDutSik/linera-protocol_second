@@ -52,6 +52,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
         &self,
         proposal: Box<BlockProposal>,
     ) -> Result<Box<ChainInfo>, NodeError> {
+        tracing::info!("remote_node::HANDLE_BLOCK_PROPOSAL (thin)");
         let chain_id = proposal.content.block.chain_id;
         let response = self.node.handle_block_proposal(*proposal).await?;
         self.check_and_return_info(response, chain_id)

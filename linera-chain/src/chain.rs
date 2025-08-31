@@ -846,7 +846,8 @@ where
             block_execution_tracker.finalize();
         tracing::info!("execute_block_inner |blobs|={}", blobs.len());
         for (pos, blobs_segment) in blobs.clone().into_iter().enumerate() {
-            tracing::info!("pos={pos} |blobs_segment|={}", blobs_segment.len());
+            let lengths = blobs_segment.clone().iter().map(|x| x.len()).collect::<Vec<_>>();
+            tracing::info!("pos={pos} |blobs_segment|={} lengths={lengths:?}", blobs_segment.len());
         }
         tracing::info!("execute_block_inner step 11");
 
