@@ -30,6 +30,7 @@ metrics = [
 ]
 revm = [
     "linera-base/revm",
+    "linera-core/revm",
     "linera-execution/revm",
     "linera-storage/revm",
 ]
