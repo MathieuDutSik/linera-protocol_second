@@ -28,6 +28,11 @@ metrics = [
     "linera-rpc/metrics",
     "linera-views/metrics",
 ]
+revm = [
+    "linera-base/revm",
+    "linera-execution/revm",
+    "linera-storage/revm",
+]
 web = [
     "dep:web-sys",
     "dep:wasm-bindgen-futures",
