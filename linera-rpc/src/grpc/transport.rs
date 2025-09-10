@@ -33,8 +33,17 @@ cfg_if::cfg_if! {
             address: String,
             options: &Options,
         ) -> Result<Channel, Error> {
-            let mut endpoint = tonic::transport::Endpoint::from_shared(address)?
-                .tls_config(tonic::transport::channel::ClientTlsConfig::default().with_webpki_roots())?;
+            let mut endpoint = tonic::transport::Endpoint::from_shared(address.clone())?;
+
+            // Configure TLS for https URLs (used in test environments with self-signed certificates)
+            if address.starts_with("https://") {
+                use crate::{CERT_PEM};
+                let certificate = tonic::transport::Certificate::from_pem(CERT_PEM);
+                let tls_config = tonic::transport::channel::ClientTlsConfig::new()
+                    .ca_certificate(certificate)
+                    .domain_name("localhost");
+                endpoint = endpoint.tls_config(tls_config)?;
+            }
 
             if let Some(timeout) = options.connect_timeout {
                 endpoint = endpoint.connect_timeout(timeout);
