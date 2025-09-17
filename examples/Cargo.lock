@@ -3897,6 +3897,7 @@ dependencies = [
  "linera-views",
  "prometheus",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -4467,6 +4468,7 @@ dependencies = [
  "base64 0.22.1",
  "bcs",
  "linera-sdk",
+ "log",
  "non-fungible",
  "serde",
  "sha3",

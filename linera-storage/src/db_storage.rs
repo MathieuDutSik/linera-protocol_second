@@ -618,9 +618,11 @@ where
     }
 
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        tracing::info!("db_storage::read_blob, blob_id={blob_id}");
         let store = self.database.open_shared(&[])?;
         let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
         let maybe_blob_bytes = store.read_value_bytes(&blob_key).await?;
+        tracing::info!("db_storage::read_blob, maybe_blob_bytes.is_some()={}", maybe_blob_bytes.is_some());
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))

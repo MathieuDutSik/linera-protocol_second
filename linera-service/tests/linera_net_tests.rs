@@ -295,6 +295,17 @@ impl NonFungibleApp {
             token_id.to_value()
         );
         let response_body = self.0.query(&query).await?;
+        tracing::info!("get_nft, response_body={response_body:?}");
+        Ok(serde_json::from_value(response_body["nft"].clone())?)
+    }
+
+    async fn get_nft_fail(&self, token_id: &String) -> Result<non_fungible::NftOutput> {
+        let query = format!(
+            "nftfail(tokenId: {}) {{ tokenId, owner, name, minter, payload }}",
+            token_id.to_value()
+        );
+        let response_body = self.0.query(&query).await?;
+        tracing::info!("get_nft, response_body={response_body:?}");
         Ok(serde_json::from_value(response_body["nft"].clone())?)
     }
 
@@ -2495,17 +2506,21 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
     tracing::info!("Starting test {}", test_name!());
 
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 1");
     let (mut net, client1) = config.instantiate().await?;
 
     let client2 = net.make_client().await;
     client2.wallet_init(None).await?;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 2");
 
     let chain1 = client1.load_wallet()?.default_chain().unwrap();
     let chain2 = client1.open_and_assign(&client2, Amount::ONE).await?;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 3");
 
     // The players
     let account_owner1 = get_account_owner(&client1);
     let account_owner2 = get_account_owner(&client2);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 4");
 
     // Setting up the application and verifying
     let (contract, service) = client1.build_example("non-fungible").await?;
@@ -2520,11 +2535,13 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
             None,
         )
         .await?;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 5");
 
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
     let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
     let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 6");
 
     let app1 = NonFungibleApp(
         node_service1
@@ -2536,11 +2553,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     let nft1_minter = account_owner1;
 
     let nft1_blob_bytes = b"nft1_data".to_vec();
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 6.A nft1_blob_bytes={:?}", nft1_blob_bytes);
     let nft1_blob_hash = CryptoHash::new(&BlobContent::new_data(nft1_blob_bytes.clone()));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 7");
     let blob_hash = node_service1
         .publish_data_blob(&chain1, nft1_blob_bytes.clone())
         .await?;
     assert_eq!(nft1_blob_hash, blob_hash);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 8");
 
     let nft1_blob_hash = DataBlobHash(nft1_blob_hash);
 
@@ -2552,9 +2572,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         &nft1_blob_hash,
         0, // No NFTs are supposed to have been minted yet in this chain
     );
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 9");
 
     app1.mint(&account_owner1, &nft1_name, &nft1_blob_hash)
         .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 10");
 
     let mut expected_nft1 = NftOutput {
         token_id: nft1_id.clone(),
@@ -2563,12 +2585,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         minter: nft1_minter,
         payload: nft1_blob_bytes,
     };
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 11");
 
-    assert_eq!(app1.get_nft(&nft1_id).await?, expected_nft1);
+//    assert_eq!(app1.get_nft(&nft1_id).await?, expected_nft1);
     assert!(app1
         .get_owned_nfts(&account_owner1)
         .await?
         .contains(&nft1_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 12");
 
     // Transferring to different chain
     app1.transfer(
@@ -2580,15 +2604,22 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 13");
 
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
 
     // Checking the NFT is removed from chain1
-    assert!(app1.get_nft(&nft1_id).await.is_err());
+    /*
+    let result = app1.get_nft(&nft1_id).await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 13.A result={result:?}");
+    assert!(result.is_err());
+
     assert!(!app1
         .get_owned_nfts(&account_owner1)
         .await?
-        .contains(&nft1_id));
+    .contains(&nft1_id));
+    */
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 14");
 
     // Non Fungible didn't exist on chain2 initially but now it does and we can talk to it.
     let app2 = NonFungibleApp(
@@ -2596,13 +2627,23 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
             .make_application(&chain2, &application_id)
             .await?,
     );
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 15");
+
+//    let runtime_in_seconds = 2;
+//    use tokio::time;
+//    time::sleep(time::Duration::from_secs(runtime_in_seconds)).await;
 
     // Checking that the NFT is on chain2 now, with the same owner
-    assert_eq!(app2.get_nft(&nft1_id).await?, expected_nft1);
+    let result = app2.get_nft_fail(&nft1_id).await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 15.A, result={result:?}");
+    assert_eq!(result?, expected_nft1);
+/*
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 15.B");
     assert!(app2
         .get_owned_nfts(&account_owner1)
         .await?
         .contains(&nft1_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 16");
 
     // Claiming another NFT from chain2 to chain1.
     app1.claim(
@@ -2617,10 +2658,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 17");
 
     // Make sure that the cross-chain communication happens fast enough.
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
     assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 18");
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft1_id).await.is_err());
@@ -2633,6 +2676,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner1)
         .await?
         .contains(&nft1_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 19");
 
     // Transferring to different chain and owner
     app1.transfer(
@@ -2644,9 +2688,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 20");
 
     // The transfer is received by chain2 and needs to be processed.
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 21");
 
     // Checking the NFT is removed from chain1
     assert!(app1.get_nft(&nft1_id).await.is_err());
@@ -2654,6 +2700,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner1)
         .await?
         .contains(&nft1_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 22");
 
     expected_nft1.owner = account_owner2;
     // Checking that the NFT is on chain2 now, with the same updated owner
@@ -2662,6 +2709,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner2)
         .await?
         .contains(&nft1_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 23");
 
     let nft2_name = "nft2".to_string();
     let nft2_minter = account_owner2;
@@ -2671,6 +2719,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .publish_data_blob(&chain2, nft2_blob_bytes.clone())
         .await?;
     assert_eq!(nft2_blob_hash, blob_hash);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 24");
 
     let nft2_blob_hash = DataBlobHash(nft2_blob_hash);
 
@@ -2686,6 +2735,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
     // Minting NFT from chain2
     app2.mint(&account_owner2, &nft2_name, &nft2_blob_hash)
         .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 25");
 
     let expected_nft2 = NftOutput {
         token_id: nft2_id.clone(),
@@ -2701,6 +2751,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner2)
         .await?
         .contains(&nft2_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 26");
 
     // Transferring to another chain, maintaining the owner
     app2.transfer(
@@ -2712,9 +2763,11 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 27");
 
     // The transfer from chain2 has to be received from chain1.
     assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 28");
 
     // Checking the NFT is removed from chain2
     assert!(app2.get_nft(&nft2_id).await.is_err());
@@ -2728,6 +2781,7 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner2)
         .await?
         .contains(&nft2_id));
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 29");
 
     // Claiming another NFT from chain1 to chain2.
     app2.claim(
@@ -2742,10 +2796,12 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         },
     )
     .await;
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 30");
 
     // Make sure that the cross-chain communication happens fast enough.
     assert_eq!(node_service1.process_inbox(&chain1).await?.len(), 1);
     assert_eq!(node_service2.process_inbox(&chain2).await?.len(), 1);
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 31");
 
     // Checking the final state
 
@@ -2760,13 +2816,14 @@ async fn test_wasm_end_to_end_non_fungible(config: impl LineraNetConfig) -> Resu
         .get_owned_nfts(&account_owner2)
         .await?
         .contains(&nft2_id));
-
+    tracing::info!("test_wasm_end_to_end_non_fungible, step 32");
+*/
     node_service1.ensure_is_running()?;
     node_service2.ensure_is_running()?;
 
     net.ensure_is_running().await?;
     net.terminate().await?;
-
+    assert!(false);
     Ok(())
 }
 

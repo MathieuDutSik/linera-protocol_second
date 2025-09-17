@@ -478,34 +478,129 @@ where
             }
 
             ReadBlobContent { blob_id, callback } => {
-                callback.respond(
-                    async {
-                        let content =
-                            if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
-                                content.clone()
-                            } else {
-                                let content = self.state.system.read_blob_content(blob_id).await?;
-                                if blob_id.blob_type == BlobType::Data {
-                                    self.resource_controller
-                                        .with_state(&mut self.state.system)
-                                        .await?
-                                        .track_blob_read(content.bytes().len() as u64)?;
-                                }
-                                content
-                            };
-                        let is_new = self
-                            .state
-                            .system
-                            .blob_used(self.txn_tracker, blob_id)
-                            .await?;
-                        if is_new {
-                            self.txn_tracker
-                                .replay_oracle_response(OracleResponse::Blob(blob_id))?;
+                let method = 2;
+                if method == 1 {
+                    tracing::info!("ReadBlobContent(A), step 1");
+                    let content = if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
+                        tracing::info!("ReadBlobContent(A), step 2");
+                        content.clone()
+                    } else {
+                        tracing::info!("ReadBlobContent(A), step 3");
+                        let content = self.state.system.read_blob_content(blob_id).await;
+                        tracing::info!("ReadBlobContent(A), step 4, content::is_err={}", content.is_err());
+                        let content = content?;
+                        if blob_id.blob_type == BlobType::Data {
+                            let result = self.resource_controller
+                                .with_state(&mut self.state.system)
+                                .await?
+                                .track_blob_read(content.bytes().len() as u64);
+                            tracing::info!("ReadBlobContent(A), step 5, result::is_err={}", result.is_err());
+                            let _ = result?;
+		        }
+                        content
+                    };
+                    let is_new = self
+                        .state
+                        .system
+                        .blob_used(self.txn_tracker, blob_id)
+                        .await;
+                    tracing::info!("ReadBlobContent(A), step 6, is_new::is_err={}", is_new.is_err());
+                    let is_new = is_new?;
+                    if is_new {
+                        let result = self.txn_tracker
+                            .replay_oracle_response(OracleResponse::Blob(blob_id));
+                        tracing::info!("ReadBlobContent(A), step 7, result::is_err={}", result.is_err());
+                        let _ = result?;
+		    }
+                    callback.respond(Ok(content))
+                } else if method == 2 {
+                    tracing::info!("ReadBlobContent(A), step 1, blob_id={blob_id:?}");
+                    let content = if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
+                        tracing::info!("ReadBlobContent(A), step 2");
+                        content.clone()
+                    } else {
+                        tracing::info!("ReadBlobContent(A), step 3");
+                        let content = self.state.system.read_blob_content(blob_id).await;
+                        tracing::info!("ReadBlobContent(A), step 4, content::is_err={}", content.is_err());
+                        if let Err(error) = content {
+                            return Err(error);
+//                            return Ok(callback.respond(Err(error)));
                         }
-                        Ok(content)
+                        let content = content?;
+                        if blob_id.blob_type == BlobType::Data {
+                            let result = self.resource_controller
+                                .with_state(&mut self.state.system)
+                                .await?
+                                .track_blob_read(content.bytes().len() as u64);
+                            tracing::info!("ReadBlobContent(A), step 5, result::is_err={}", result.is_err());
+                            if let Err(error) = result {
+                                return Ok(callback.respond(Err(error)));
+                            }
+                            let _ = result?;
+		        }
+                        content
+                    };
+                    let is_new = self
+                        .state
+                        .system
+                        .blob_used(self.txn_tracker, blob_id)
+                        .await;
+                    tracing::info!("ReadBlobContent(A), step 6, is_new::is_err={}", is_new.is_err());
+                    if let Err(error) = is_new {
+                        return Ok(callback.respond(Err(error)));
                     }
-                    .await,
-                );
+                    let is_new = is_new?;
+                    if is_new {
+                        let result = self.txn_tracker
+                            .replay_oracle_response(OracleResponse::Blob(blob_id));
+                        tracing::info!("ReadBlobContent(A), step 7, result::is_err={}", result.is_err());
+                        if let Err(error) = result {
+                            return Ok(callback.respond(Err(error)));
+                        }
+                        let _ = result?;
+		    }
+                    callback.respond(Ok(content))
+                } else {
+                    callback.respond(
+                        async {
+                            tracing::info!("ReadBlobContent(B), step 1");
+                            let content =
+                                if let Some(content) = self.txn_tracker.get_blob_content(&blob_id) {
+                                    tracing::info!("ReadBlobContent(B), step 2");
+                                    content.clone()
+                                } else {
+                                    tracing::info!("ReadBlobContent(B), step 3");
+                                    let content = self.state.system.read_blob_content(blob_id).await;
+                                    tracing::info!("ReadBlobContent(B), step 4, content::is_err={}", content.is_err());
+                                    let content = content?;
+                                    if blob_id.blob_type == BlobType::Data {
+                                        let result = self.resource_controller
+                                            .with_state(&mut self.state.system)
+                                            .await?
+                                            .track_blob_read(content.bytes().len() as u64);
+                                        tracing::info!("ReadBlobContent(B), step 5, result::is_err={}", result.is_err());
+                                        let _ = result?;
+                                    }
+                                    content
+                                };
+                            let is_new = self
+                                .state
+                                .system
+                                .blob_used(self.txn_tracker, blob_id)
+                                .await;
+                            tracing::info!("ReadBlobContent(B), step 6, is_new::is_err={}", is_new.is_err());
+                            let is_new = is_new?;
+                            if is_new {
+                                let result = self.txn_tracker
+                                    .replay_oracle_response(OracleResponse::Blob(blob_id));
+                                tracing::info!("ReadBlobContent(B), step 7, result::is_err={}", result.is_err());
+                                let _ = result?;
+                            }
+                            Ok(content)
+                        }
+                        .await,
+                    );
+                }
             }
 
             AssertBlobExists { blob_id, callback } => {

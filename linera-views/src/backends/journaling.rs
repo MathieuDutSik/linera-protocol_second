@@ -124,6 +124,7 @@ where
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        tracing::info!("journaling::read_value_bytes");
         self.store.read_value_bytes(key).await
     }
 

@@ -172,12 +172,14 @@ impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {
 
 impl From<ExecutionError> for wasmer::RuntimeError {
     fn from(error: ExecutionError) -> Self {
+        tracing::info!("Conversion ExecutionError to RuntimeError");
         wasmer::RuntimeError::user(Box::new(error))
     }
 }
 
 impl From<wasmer::RuntimeError> for ExecutionError {
     fn from(error: wasmer::RuntimeError) -> Self {
+        tracing::info!("Conversion RuntimeError to ExecutionError");
         error
             .downcast::<ExecutionError>()
             .unwrap_or_else(|unknown_error| {

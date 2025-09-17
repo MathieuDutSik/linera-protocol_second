@@ -212,11 +212,14 @@ where
 
     /// Reads a data blob from storage.
     fn read_data_blob(caller: &mut Caller, hash: DataBlobHash) -> Result<Vec<u8>, RuntimeError> {
-        caller
+        tracing::info!("runtime_api::read_data_blob, before read_data_blob");
+        let result = caller
             .user_data_mut()
             .runtime
             .read_data_blob(hash)
-            .map_err(|error| RuntimeError::Custom(error.into()))
+            .map_err(|error| RuntimeError::Custom(error.into()));
+        tracing::info!("runtime_api::read_data_blob, after read_data_blob, result={result:?}");
+        result
     }
 
     /// Asserts the existence of a data blob with the given hash.

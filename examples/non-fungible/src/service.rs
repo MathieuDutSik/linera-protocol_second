@@ -9,7 +9,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-
+use log::info;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use base64::engine::{general_purpose::STANDARD_NO_PAD, Engine as _};
 use linera_sdk::{
@@ -69,21 +69,42 @@ struct QueryRoot {
 #[Object]
 impl QueryRoot {
     async fn nft(&self, token_id: String) -> Option<NftOutput> {
+        info!("QueryRoot::nft, token_id={}", token_id);
         let token_id_vec = STANDARD_NO_PAD.decode(&token_id).unwrap();
+        let count = self.non_fungible_token.nfts.count().await.expect("service::count");
+        info!("QueryRoot::nft, count={count}");
         let nft = self
             .non_fungible_token
             .nfts
             .get(&TokenId { id: token_id_vec })
             .await
             .unwrap();
+        info!("QueryRoot::nft, nft={:?}", nft);
 
         if let Some(nft) = nft {
+            info!("QueryRoot::nft, Before read_data_blob hash={:?}", nft.blob_hash);
             let payload = self.runtime.read_data_blob(nft.blob_hash);
+            info!("QueryRoot::nft, After read_data_blob, payload={payload:?}");
             let nft_output = NftOutput::new_with_token_id(token_id, nft, payload);
             Some(nft_output)
         } else {
+            info!("QueryRoot::nft, returning None");
             None
         }
+    }
+
+    async fn nftfail(&self, _token_id: String) -> Option<NftOutput> {
+        use linera_sdk::linera_base_types::CryptoHash;
+        info!("QueryRoot::nft_fail, Before read_data_blob");
+        let mut vec = [0_u8; 32];
+        for i in 0..32 {
+            vec[i] = i as u8;
+        }
+        let hash: CryptoHash = CryptoHash::from(vec);
+        let blob_hash = DataBlobHash(hash);
+        let _payload = self.runtime.read_data_blob(blob_hash);
+        info!("QueryRoot::nft_fail, After read_data_blob");
+        None
     }
 
     async fn nfts(&self) -> BTreeMap<String, NftOutput> {

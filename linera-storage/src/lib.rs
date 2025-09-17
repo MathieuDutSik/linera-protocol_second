@@ -482,6 +482,7 @@ where
     }
 
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
+        tracing::info!("linera-storage::lib::get_blob, blob_id={}", blob_id);
         self.storage.read_blob(blob_id).await
     }
 

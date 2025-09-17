@@ -244,6 +244,9 @@ impl From<ChainError> for WorkerError {
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
             ChainError::ExecutionError(execution_error, context) => {
+                tracing::info!("Conversion ChainError::ExecutionError => WorkerError");
+                tracing::info!("context={context:?}");
+                tracing::info!("execution_error={execution_error:?}");
                 if let ExecutionError::BlobsNotFound(blob_ids) = *execution_error {
                     Self::BlobsNotFound(blob_ids)
                 } else {

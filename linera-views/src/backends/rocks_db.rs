@@ -405,6 +405,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         &self,
         key: &[u8],
     ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        tracing::info!("rocksdb::read_value_bytes");
         check_key_size(key)?;
         let db = self.executor.db.clone();
         let mut full_key = self.executor.start_key.to_vec();

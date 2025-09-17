@@ -891,13 +891,21 @@ where
     }
 
     fn read_data_blob(&mut self, hash: DataBlobHash) -> Result<Vec<u8>, ExecutionError> {
+        use linera_base::data_types::BlobContent;
         let this = self.inner();
         let blob_id = hash.into();
-        let content = this
+        let content : Result<Result<BlobContent,ExecutionError>,ExecutionError> = this
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::ReadBlobContent { blob_id, callback })?
-            .recv_response()??;
-        Ok(content.into_vec_or_clone())
+            .recv_response();
+        tracing::info!("read_data_blob, 1: content={content:?}");
+        let content = content?;
+        tracing::info!("read_data_blob, 2: content={content:?}");
+        let content = content?;
+        tracing::info!("read_data_blob, 3: content={content:?}");
+        let vec = content.into_vec_or_clone();
+        tracing::info!("read_data_blob, 4: vec={vec:?}");
+        Ok(vec)
     }
 
     fn assert_data_blob_exists(&mut self, hash: DataBlobHash) -> Result<(), ExecutionError> {

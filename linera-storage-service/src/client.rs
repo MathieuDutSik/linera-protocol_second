@@ -106,6 +106,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             key.len() <= MAX_KEY_SIZE,
             StorageServiceStoreError::KeyTooLong
         );
+        tracing::info!("linera-storage-service::read_value_bytes");
         let mut full_key = self.start_key.clone();
         full_key.extend(key);
         let query = RequestReadValue { key: full_key };

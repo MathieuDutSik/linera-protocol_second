@@ -13,6 +13,7 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 use non_fungible::{Message, Nft, NonFungibleTokenAbi, Operation, TokenId};
+use log::info;
 
 use self::state::NonFungibleTokenState;
 
@@ -232,10 +233,14 @@ impl NonFungibleTokenContract {
     }
 
     async fn remove_nft(&mut self, nft: &Nft) {
+        let count = self.state.nfts.count().await.expect("count case 1");
+        info!("contract::remove_nft, 1: count={count}");
         self.state
             .nfts
             .remove(&nft.token_id)
             .expect("Failure removing NFT");
+        let count = self.state.nfts.count().await.expect("count case 2");
+        info!("contract::remove_nft, 2: count={count}");
         let owned_token_ids = self
             .state
             .owned_token_ids

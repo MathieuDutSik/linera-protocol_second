@@ -185,7 +185,9 @@ where
 
     /// Returns the current committee's validators.
     async fn current_validators(&self) -> Result<Vec<Validator>, Error> {
+        tracing::info!("current_validators, before local_committee");
         let committee = self.client.local_committee().await?;
+        tracing::info!("current_validators,  after local_committee");
         Ok(committee
             .validators()
             .iter()

@@ -91,7 +91,7 @@ impl LineraNet for RemoteNet {
             self.network,
             self.testing_prng_seed,
             self.next_client_id,
-            OnClientDrop::CloseChains,
+            OnClientDrop::LeakChains,
         );
         if let Some(seed) = self.testing_prng_seed {
             self.testing_prng_seed = Some(seed + 1);
