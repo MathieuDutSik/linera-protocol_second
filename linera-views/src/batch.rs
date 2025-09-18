@@ -24,11 +24,15 @@ use std::{
 };
 
 use bcs::serialized_size;
+use linera_base::crypto::{BcsHashable, CryptoHash};
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{get_interval, get_uleb128_size},
+    generic_array::GenericArray,
+    sha3::{digest::OutputSizeUser, Sha3_256},
+    views::Hasher,
     ViewError,
 };
 
@@ -64,6 +68,11 @@ pub struct Batch {
     /// The write operations.
     pub operations: Vec<WriteOperation>,
 }
+
+/// Operation type tags for hashing
+const OPERATION_DELETE: u8 = 0;
+const OPERATION_DELETE_PREFIX: u8 = 1;
+const OPERATION_PUT: u8 = 2;
 
 /// A batch of deletions and insertions that operate on disjoint keys, thus can be
 /// executed in any order.
@@ -308,6 +317,44 @@ impl Batch {
             }
         }
         true
+    }
+
+    /// Computes a hash of the batch operations for incremental hashing.
+    ///
+    /// This method combines a previous hash with the batch operations to create
+    /// an incremental hash without needing to read the entire state.
+    pub fn compute_incremental_hash(
+        &self,
+        previous_hash: CryptoHash,
+    ) -> Result<CryptoHash, ViewError> {
+        let mut hasher = sha3::Sha3_256::default();
+
+        // Start with previous hash
+        hasher.update_with_bytes(previous_hash.as_bytes().as_slice())?;
+
+        // Hash each operation
+        for operation in &self.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    hasher.update_with_bytes(&[OPERATION_DELETE])?;
+                    hasher.update_with_bytes(key)?;
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    hasher.update_with_bytes(&[OPERATION_DELETE_PREFIX])?;
+                    hasher.update_with_bytes(key_prefix)?;
+                }
+                WriteOperation::Put { key, value } => {
+                    hasher.update_with_bytes(&[OPERATION_PUT])?;
+                    hasher.update_with_bytes(key)?;
+                    hasher.update_with_bytes(value)?;
+                }
+            }
+        }
+        let hash = hasher.finalize();
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct CombinedBatchHash(GenericArray<u8, <Sha3_256 as OutputSizeUser>::OutputSize>);
+        impl BcsHashable<'_> for CombinedBatchHash {}
+        Ok(CryptoHash::new(&CombinedBatchHash(hash)))
     }
 
     /// Adds the insertion of a key-value pair into the batch with a serializable value.

@@ -32,7 +32,7 @@ use linera_views::{
     register_view::RegisterView,
     set_view::SetView,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, CryptoHashView, RootView, View},
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 
@@ -142,15 +142,6 @@ pub(crate) mod metrics {
             "VM number of bytes written per block",
             &[],
             exponential_bucket_interval(0.1, 10_000_000.0),
-        )
-    });
-
-    pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
-        register_histogram_vec(
-            "state_hash_computation_latency",
-            "Time to recompute the state hash",
-            &[],
-            exponential_bucket_latencies(500.0),
         )
     });
 
@@ -490,9 +481,9 @@ where
             // the chain was already initialized
             return Ok(());
         }
-        // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash().await?;
-        self.execution_state_hash.set(Some(hash));
+        // Initialize the state hash to zero for new chains
+        let initial_hash = CryptoHash::from([0u8; 32]);
+        self.execution_state_hash.set(Some(initial_hash));
         let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
@@ -501,6 +492,31 @@ where
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
+        Ok(())
+    }
+
+    /// Updates the execution state hash incrementally based on a batch of operations.
+    ///
+    /// This method should be called whenever the execution state is modified via batch operations
+    /// to maintain an up-to-date hash without needing to recompute from the entire state.
+    pub fn update_execution_state_hash_incrementally(
+        &mut self,
+        batch: &linera_views::batch::Batch,
+    ) -> Result<(), ChainError> {
+        // Get the current hash, or use zero hash if not set
+        let current_hash = self
+            .execution_state_hash
+            .get()
+            .unwrap_or_else(|| CryptoHash::from([0u8; 32]));
+
+        // Compute the new incremental hash based on the batch
+        let new_hash = batch
+            .compute_incremental_hash(current_hash)
+            .map_err(ChainError::ViewError)?;
+
+        // Update the stored hash
+        self.execution_state_hash.set(Some(new_hash));
+
         Ok(())
     }
 
@@ -753,6 +769,7 @@ where
     #[expect(clippy::too_many_arguments)]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
+        execution_state_hash: &mut RegisterView<C, Option<CryptoHash>>,
         confirmed_log: &LogView<C, CryptoHash>,
         previous_message_blocks_view: &MapView<C, ChainId, BlockHeight>,
         previous_event_blocks_view: &MapView<C, StreamId, BlockHeight>,
@@ -836,11 +853,11 @@ where
             }
         }
 
-        let state_hash = {
-            #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
-            chain.crypto_hash().await?
-        };
+        let state_hash = execution_state_hash.get_mut();
+        if state_hash.is_none() {
+            *state_hash = Some(CryptoHash::from([0u8; 32]));
+        }
+        let state_hash: CryptoHash = (*state_hash).unwrap();
 
         let (messages, oracle_responses, events, blobs, operation_results) =
             block_execution_tracker.finalize();
@@ -904,6 +921,7 @@ where
 
         Self::execute_block_inner(
             &mut self.execution_state,
+            &mut self.execution_state_hash,
             &self.confirmed_log,
             &self.previous_message_blocks,
             &self.previous_event_blocks,
