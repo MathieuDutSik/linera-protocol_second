@@ -1,0 +1,21 @@
+[package]
+name = "reported-solutions"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-graphql = "7.0.7"
+linera-sdk = { path = "../../linera-sdk" }
+serde = { version = "1.0.215", features = ["derive"] }
+thiserror = "2.0.3"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "reported_solutions_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "reported_solutions_service"
+path = "src/service.rs"

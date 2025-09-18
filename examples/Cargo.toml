@@ -19,6 +19,7 @@ members = [
     "native-fungible",
     "non-fungible",
     "publish-read-data-blob",
+    "reported-solutions",
     "rfq",
     "social",
     "track-instantiation",

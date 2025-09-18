@@ -5760,6 +5760,7 @@ dependencies = [
  "prost 0.14.1",
  "quick_cache",
  "rand 0.8.5",
+ "reported-solutions",
  "reqwest 0.11.27",
  "serde",
  "serde-command-opts",
@@ -7946,6 +7947,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71fe3824f5629716b1589be05dacd749f6aa084c87e00e016714a8cdfccc997c"
 dependencies = [
  "bytecheck",
+]
+
+[[package]]
+name = "reported-solutions"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
+ "thiserror 2.0.14",
 ]
 
 [[package]]

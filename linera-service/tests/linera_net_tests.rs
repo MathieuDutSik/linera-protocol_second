@@ -4707,3 +4707,139 @@ async fn test_end_to_end_repeated_transfers(config: impl LineraNetConfig) -> Res
 
     Ok(())
 }
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(all(feature = "rocksdb", feature = "scylladb"), test_case(LocalNetConfig::new_test(Database::DualRocksDbScyllaDb, Network::Grpc) ; "dualrocksdbscylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(None) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_reported_solutions(config: impl LineraNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 0");
+    let chain = client.load_wallet()?.default_chain().unwrap();
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 1");
+
+    let (contract, service) = client.build_example("reported-solutions").await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 2");
+
+    tracing::info!("Starting local test on chain {}", chain);
+
+    let instantiation_argument = ();
+    let application_id = client
+        .publish_and_create::<reported_solutions::ReportedSolutionsAbi, (), ()>(
+            contract,
+            service,
+            VmRuntime::Wasm,
+            &(),
+            &instantiation_argument,
+            &[],
+            None,
+        )
+        .await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 3");
+
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 4");
+
+    let application = node_service.make_application(&chain, &application_id)?;
+
+    // Set some test data in the nested collection
+    application
+        .mutate("setSolution(key1: 1, key2: 10, value: 100)")
+        .await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 5");
+
+    application
+        .mutate("setSolution(key1: 1, key2: 20, value: 200)")
+        .await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 6");
+
+    application
+        .mutate("setSolution(key1: 2, key2: 30, value: 300)")
+        .await?;
+    tracing::info!("test_wasm_end_to_end_reported_solutions, step 7");
+
+    // Test the nested GraphQL query
+    let query = r#"
+        query {
+            reportedSolutions {
+                entries(input:{}) {
+                    key
+                    value {
+                        entries(input: {}) {
+                            key
+                            value
+                        }
+                    }
+                }
+            }
+        }
+    "#;
+
+    let response = application.query(query).await?;
+    tracing::info!("GraphQL response: {}", serde_json::to_string_pretty(&response)?);
+
+    // Validate the response structure
+    let reported_solutions = &response["reportedSolutions"];
+    let entries = &reported_solutions["entries"];
+
+    assert!(entries.is_array());
+    let entries_array = entries.as_array().unwrap();
+    assert_eq!(entries_array.len(), 2); // We should have 2 outer keys
+
+    // Find entry with key 1
+    let entry1 = entries_array
+        .iter()
+        .find(|entry| entry["key"].as_u64() == Some(1))
+        .expect("Entry with key 1 should exist");
+
+    let inner_entries1 = &entry1["value"]["entries"];
+    assert!(inner_entries1.is_array());
+    assert_eq!(inner_entries1.as_array().unwrap().len(), 2); // Should have 2 inner entries
+
+    // Verify specific values
+    let inner_array1 = inner_entries1.as_array().unwrap();
+    let inner_entry_10 = inner_array1
+        .iter()
+        .find(|entry| entry["key"].as_u64() == Some(10))
+        .expect("Inner entry with key 10 should exist");
+    assert_eq!(inner_entry_10["value"].as_u64(), Some(100));
+
+    let inner_entry_20 = inner_array1
+        .iter()
+        .find(|entry| entry["key"].as_u64() == Some(20))
+        .expect("Inner entry with key 20 should exist");
+    assert_eq!(inner_entry_20["value"].as_u64(), Some(200));
+
+    // Find entry with key 2
+    let entry2 = entries_array
+        .iter()
+        .find(|entry| entry["key"].as_u64() == Some(2))
+        .expect("Entry with key 2 should exist");
+
+    let inner_entries2 = &entry2["value"]["entries"];
+    assert!(inner_entries2.is_array());
+    assert_eq!(inner_entries2.as_array().unwrap().len(), 1); // Should have 1 inner entry
+
+    // Verify specific value for entry 2
+    let inner_array2 = inner_entries2.as_array().unwrap();
+    let inner_entry_30 = inner_array2
+        .iter()
+        .find(|entry| entry["key"].as_u64() == Some(30))
+        .expect("Inner entry with key 30 should exist");
+    assert_eq!(inner_entry_30["value"].as_u64(), Some(300));
+
+    tracing::info!("Successfully validated nested CollectionView GraphQL queries");
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
