@@ -8,4 +8,5 @@ use linera_sdk::views::{linera_views, CollectionView, RegisterView, RootView, Vi
 #[view(context = ViewStorageContext)]
 pub struct ReportedSolutionsState {
     pub reported_solutions: CollectionView<u16, CollectionView<u32, RegisterView<u64>>>,
+    pub reported_reduced: CollectionView<u16, RegisterView<u32>>,
 }

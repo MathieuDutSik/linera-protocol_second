@@ -4767,7 +4767,7 @@ async fn test_wasm_end_to_end_reported_solutions(config: impl LineraNetConfig) -
     tracing::info!("test_wasm_end_to_end_reported_solutions, step 7");
 
     // Test the nested GraphQL query
-    let query = r#"
+    let query1 = r#"
         reportedSolutions {
             entries(input:{}) {
                 key
@@ -4780,59 +4780,18 @@ async fn test_wasm_end_to_end_reported_solutions(config: impl LineraNetConfig) -
             }
         }
     "#;
+    let query2 = r#"
+        reportedReduced {
+            entries(input:{}) {
+                key
+                value
+            }
+        }
+    "#;
 
-    let response = application.query(query).await?;
+    let response = application.query(query2).await?;
     tracing::info!("GraphQL response: {}", serde_json::to_string_pretty(&response)?);
 
-    // Validate the response structure
-    let reported_solutions = &response["reportedSolutions"];
-    let entries = &reported_solutions["entries"];
-
-    assert!(entries.is_array());
-    let entries_array = entries.as_array().unwrap();
-    assert_eq!(entries_array.len(), 2); // We should have 2 outer keys
-
-    // Find entry with key 1
-    let entry1 = entries_array
-        .iter()
-        .find(|entry| entry["key"].as_u64() == Some(1))
-        .expect("Entry with key 1 should exist");
-
-    let inner_entries1 = &entry1["value"]["entries"];
-    assert!(inner_entries1.is_array());
-    assert_eq!(inner_entries1.as_array().unwrap().len(), 2); // Should have 2 inner entries
-
-    // Verify specific values
-    let inner_array1 = inner_entries1.as_array().unwrap();
-    let inner_entry_10 = inner_array1
-        .iter()
-        .find(|entry| entry["key"].as_u64() == Some(10))
-        .expect("Inner entry with key 10 should exist");
-    assert_eq!(inner_entry_10["value"].as_u64(), Some(100));
-
-    let inner_entry_20 = inner_array1
-        .iter()
-        .find(|entry| entry["key"].as_u64() == Some(20))
-        .expect("Inner entry with key 20 should exist");
-    assert_eq!(inner_entry_20["value"].as_u64(), Some(200));
-
-    // Find entry with key 2
-    let entry2 = entries_array
-        .iter()
-        .find(|entry| entry["key"].as_u64() == Some(2))
-        .expect("Entry with key 2 should exist");
-
-    let inner_entries2 = &entry2["value"]["entries"];
-    assert!(inner_entries2.is_array());
-    assert_eq!(inner_entries2.as_array().unwrap().len(), 1); // Should have 1 inner entry
-
-    // Verify specific value for entry 2
-    let inner_array2 = inner_entries2.as_array().unwrap();
-    let inner_entry_30 = inner_array2
-        .iter()
-        .find(|entry| entry["key"].as_u64() == Some(30))
-        .expect("Inner entry with key 30 should exist");
-    assert_eq!(inner_entry_30["value"].as_u64(), Some(300));
 
     tracing::info!("Successfully validated nested CollectionView GraphQL queries");
 

@@ -48,6 +48,9 @@ impl Contract for ReportedSolutionsContract {
                 let register = inner_collection.load_entry_mut(&key2).await
                     .expect("Failed to load register view");
                 register.set(value);
+                let register = self.state.reported_reduced.load_entry_mut(&key1).await
+                    .expect("Failed to load register view");
+                register.set(key2);
             }
             ReportedSolutionsOperation::RemoveInnerEntry { key1, key2 } => {
                 let inner_collection = self.state.reported_solutions.load_entry_mut(&key1).await
@@ -57,6 +60,8 @@ impl Contract for ReportedSolutionsContract {
             }
             ReportedSolutionsOperation::RemoveOuterEntry { key1 } => {
                 self.state.reported_solutions.remove_entry(&key1)
+                    .expect("Failed to remove outer entry");
+                self.state.reported_reduced.remove_entry(&key1)
                     .expect("Failed to remove outer entry");
             }
         }
