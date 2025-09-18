@@ -4768,15 +4768,13 @@ async fn test_wasm_end_to_end_reported_solutions(config: impl LineraNetConfig) -
 
     // Test the nested GraphQL query
     let query = r#"
-        query {
-            reportedSolutions {
-                entries(input:{}) {
-                    key
-                    value {
-                        entries(input: {}) {
-                            key
-                            value
-                        }
+        reportedSolutions {
+            entries(input:{}) {
+                key
+                value {
+                    entries(input: {}) {
+                        key
+                        value
                     }
                 }
             }
