@@ -115,19 +115,33 @@ pub trait HashableView: View {
     /// How to compute hashes.
     type Hasher: Hasher;
 
-    /// Computes the hash of the values.
+    /// Computes the hash of the view.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision resistance must be applied (e.g. including the length of a
     /// collection of values).
     async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 
-    /// Computes the hash of the values.
+    /// Computes the hash of the view.
     ///
     /// Implementations do not need to include a type tag. However, the usual precautions
     /// to enforce collision resistance must be applied (e.g. including the length of a
     /// collection of values).
     async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
+}
+
+/// A view that supports hashing its values.
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait HistoricalHashableView: View {
+    /// How to compute hashes.
+    type Hasher: Hasher;
+
+    /// Computes the historical hash of the values.
+    ///
+    /// Implementations do not need to include a type tag. However, the usual precautions
+    /// to enforce collision resistance must be applied (e.g. including the length of a
+    /// collection of values).
+    async fn historical_hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError>;
 }
 
 /// The requirement for the hasher type in [`HashableView`].

@@ -38,7 +38,7 @@ use crate::{
 /// * Deletion of a specific key.
 /// * Deletion of all keys matching a specific prefix.
 /// * Insertion or replacement of a key with a value.
-#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore)]
+#[derive(Clone, Debug, Eq, PartialEq, WitType, WitLoad, WitStore, Serialize, Deserialize)]
 pub enum WriteOperation {
     /// Delete the given key.
     Delete {
@@ -60,7 +60,7 @@ pub enum WriteOperation {
 }
 
 /// A batch of write operations.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Batch {
     /// The write operations.
     pub operations: Vec<WriteOperation>,
@@ -363,11 +363,6 @@ impl Batch {
     }
 }
 
-/// Operation type tags for hashing
-const OPERATION_DELETE: u8 = 0;
-const OPERATION_DELETE_PREFIX: u8 = 1;
-const OPERATION_PUT: u8 = 2;
-
 impl Batch {
     /// Computes a hash of the batch operations for incremental hashing.
     ///
@@ -381,25 +376,7 @@ impl Batch {
 
         // Start with previous hash
         hasher.update_with_bytes(previous_hash.as_ref())?;
-
-        // Hash each operation
-        for operation in &self.operations {
-            match operation {
-                WriteOperation::Delete { key } => {
-                    hasher.update_with_bytes(&[OPERATION_DELETE])?;
-                    hasher.update_with_bytes(key)?;
-                }
-                WriteOperation::DeletePrefix { key_prefix } => {
-                    hasher.update_with_bytes(&[OPERATION_DELETE_PREFIX])?;
-                    hasher.update_with_bytes(key_prefix)?;
-                }
-	        WriteOperation::Put { key, value } => {
-                    hasher.update_with_bytes(&[OPERATION_PUT])?;
-                    hasher.update_with_bytes(key)?;
-                    hasher.update_with_bytes(value)?;
-                }
-            }
-        }
+        hasher.update_with_bcs_bytes(&self)?;
         Ok(hasher.finalize())
     }
 }

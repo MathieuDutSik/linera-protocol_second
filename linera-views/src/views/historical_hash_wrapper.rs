@@ -16,7 +16,7 @@ use crate::{
     common::from_bytes_option,
     context::Context,
     store::ReadableKeyValueStore as _,
-    views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
+    views::{ClonableView, HistoricalHashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
 /// A hash for `ContainerView` and storing of the hash for memoization purposes
@@ -150,33 +150,29 @@ impl<W, H> ClonableView for HistoricalHashContainerView<W::Context, W, H, H::Out
 where
     W: View + ClonableView,
     H: Hasher,
-    H::Output: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    H::Output: Serialize + DeserializeOwned + Send + Sync + PartialEq,
 {
     fn clone_unchecked(&mut self) -> Self {
         HistoricalHashContainerView {
             _phantom1: PhantomData,
             _phantom2: PhantomData,
-            stored_hash: self.stored_hash,
+            stored_hash: self.stored_hash.clone(),
             inner: self.inner.clone_unchecked(),
         }
     }
 }
 
-impl<W, H> HashableView for HistoricalHashContainerView<W::Context, W, H, H::Output>
+impl<W, H> HistoricalHashableView for HistoricalHashContainerView<W::Context, W, H, H::Output>
 where
     W: View,
     H: Hasher,
-    H::Output: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    H::Output: Serialize + DeserializeOwned + Send + Sync + PartialEq,
 {
     type Hasher = H;
 
-    async fn hash_mut(&mut self) -> Result<H::Output, ViewError> {
-        self.hash().await
-    }
-
-    async fn hash(&self) -> Result<H::Output, ViewError> {
+    async fn historical_hash(&self) -> Result<H::Output, ViewError> {
         ensure!(!self.has_pending_changes().await, ViewError::CannotProvideHistoricalHash);
-        Ok(self.stored_hash)
+        Ok(self.stored_hash.clone())
     }
 }
 
