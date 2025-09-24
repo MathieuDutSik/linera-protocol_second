@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{get_interval, get_uleb128_size},
+    views::Hasher,
     ViewError,
 };
 
@@ -361,6 +362,48 @@ impl Batch {
             .push(WriteOperation::DeletePrefix { key_prefix });
     }
 }
+
+/// Operation type tags for hashing
+const OPERATION_DELETE: u8 = 0;
+const OPERATION_DELETE_PREFIX: u8 = 1;
+const OPERATION_PUT: u8 = 2;
+
+impl Batch {
+    /// Computes a hash of the batch operations for incremental hashing.
+    ///
+    /// This method combines a previous hash with the batch operations to create
+    /// an incremental hash without needing to read the entire state.
+    pub fn compute_incremental_hash<H: Hasher>(
+        &self,
+        previous_hash: H::Output,
+    ) -> Result<H::Output, ViewError> {
+        let mut hasher = H::default();
+
+        // Start with previous hash
+        hasher.update_with_bytes(previous_hash.as_ref())?;
+
+        // Hash each operation
+        for operation in &self.operations {
+            match operation {
+                WriteOperation::Delete { key } => {
+                    hasher.update_with_bytes(&[OPERATION_DELETE])?;
+                    hasher.update_with_bytes(key)?;
+                }
+                WriteOperation::DeletePrefix { key_prefix } => {
+                    hasher.update_with_bytes(&[OPERATION_DELETE_PREFIX])?;
+                    hasher.update_with_bytes(key_prefix)?;
+                }
+	        WriteOperation::Put { key, value } => {
+                    hasher.update_with_bytes(&[OPERATION_PUT])?;
+                    hasher.update_with_bytes(key)?;
+                    hasher.update_with_bytes(value)?;
+                }
+            }
+        }
+        Ok(hasher.finalize())
+    }
+}
+
 
 /// A trait to expand `DeletePrefix` operations.
 ///

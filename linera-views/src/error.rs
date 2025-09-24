@@ -57,6 +57,10 @@ pub enum ViewError {
     #[error("missing database entries")]
     MissingEntries,
 
+    /// Cannot provide historical hash due to uncommited changes
+    #[error("cannot provided historical hash due to uncommited changes")]
+    CannotProvideHistoricalHash,
+
     /// The values are incoherent.
     #[error("post load values error")]
     PostLoadValuesError,
