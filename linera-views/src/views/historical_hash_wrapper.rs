@@ -21,8 +21,9 @@ use crate::{
 
 /// A hash for `ContainerView` and storing of the hash for memoization purposes
 #[derive(Debug)]
-pub struct HistoricalHashContainerView<C, W, O> {
-    _phantom: PhantomData<C>,
+pub struct HistoricalHashContainerView<C, W, H, O> {
+    _phantom1: PhantomData<C>,
+    _phantom2: PhantomData<H>,
     stored_hash: O,
     inner: W,
 }
@@ -42,32 +43,35 @@ fn get_default_hash<H: Hasher>() -> H::Output {
 }
 
 
-impl<C, W, O, C2> ReplaceContext<C2> for HistoricalHashContainerView<C, W, O>
+impl<C, W, H, C2> ReplaceContext<C2> for HistoricalHashContainerView<C, W, H, H::Output>
 where
-    W: HashableView<Hasher: Hasher<Output = O>, Context = C> + ReplaceContext<C2>,
-    <W as ReplaceContext<C2>>::Target: HashableView<Hasher: Hasher<Output = O>>,
-    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    W: View<Context = C> + ReplaceContext<C2>,
+    <W as ReplaceContext<C2>>::Target: View,
+    H: Hasher,
+    H::Output: Serialize + DeserializeOwned + Send + Sync,
     C: Context,
     C2: Context,
 {
-    type Target = HistoricalHashContainerView<C2, <W as ReplaceContext<C2>>::Target, O>;
+    type Target = HistoricalHashContainerView<C2, <W as ReplaceContext<C2>>::Target, H, H::Output>;
 
     async fn with_context(
         &mut self,
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         HistoricalHashContainerView {
-            _phantom: PhantomData,
-            stored_hash: self.stored_hash,
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            stored_hash: self.stored_hash.clone(),
             inner: self.inner.with_context(ctx).await,
         }
     }
 }
 
-impl<W, O> View for HistoricalHashContainerView<W::Context, W, O>
+impl<W, H> View for HistoricalHashContainerView<W::Context, W, H, H::Output>
 where
-    W: HashableView<Hasher: Hasher<Output = O>>,
-    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    W: View,
+    H: Hasher,
+    H::Output: Serialize + DeserializeOwned + Send + Sync + PartialEq,
 {
     const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
 
@@ -88,7 +92,7 @@ where
     fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let stored_hash = match hash {
-            None => get_default_hash::<W::Hasher>(),
+            None => get_default_hash::<H>(),
             Some(hash) => hash,
         };
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
@@ -98,7 +102,8 @@ where
             values.get(1..).ok_or(ViewError::PostLoadValuesError)?,
         )?;
         Ok(Self {
-            _phantom: PhantomData,
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
             stored_hash,
             inner,
         })
@@ -125,9 +130,9 @@ where
             let mut key_prefix = self.inner.context().base_key().bytes.clone();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
-            self.stored_hash = get_default_hash::<W::Hasher>();
+            self.stored_hash = get_default_hash::<H>();
         } else {
-            self.stored_hash = batch.compute_incremental_hash::<W::Hasher>(self.stored_hash)?;
+            self.stored_hash = batch.compute_incremental_hash::<H>(&self.stored_hash)?;
             let mut key = self.inner.context().base_key().bytes.clone();
             let tag = key.last_mut().unwrap();
             *tag = KeyTag::Hash as u8;
@@ -141,39 +146,41 @@ where
     }
 }
 
-impl<W, O> ClonableView for HistoricalHashContainerView<W::Context, W, O>
+impl<W, H> ClonableView for HistoricalHashContainerView<W::Context, W, H, H::Output>
 where
-    W: HashableView + ClonableView,
-    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
-    W::Hasher: Hasher<Output = O>,
+    W: View + ClonableView,
+    H: Hasher,
+    H::Output: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
 {
     fn clone_unchecked(&mut self) -> Self {
         HistoricalHashContainerView {
-            _phantom: PhantomData,
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
             stored_hash: self.stored_hash,
             inner: self.inner.clone_unchecked(),
         }
     }
 }
 
-impl<W, O> HashableView for HistoricalHashContainerView<W::Context, W, O>
+impl<W, H> HashableView for HistoricalHashContainerView<W::Context, W, H, H::Output>
 where
-    W: HashableView<Hasher: Hasher<Output = O>>,
-    O: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
+    W: View,
+    H: Hasher,
+    H::Output: Serialize + DeserializeOwned + Send + Sync + Copy + PartialEq,
 {
-    type Hasher = W::Hasher;
+    type Hasher = H;
 
-    async fn hash_mut(&mut self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+    async fn hash_mut(&mut self) -> Result<H::Output, ViewError> {
         self.hash().await
     }
 
-    async fn hash(&self) -> Result<<Self::Hasher as Hasher>::Output, ViewError> {
+    async fn hash(&self) -> Result<H::Output, ViewError> {
         ensure!(!self.has_pending_changes().await, ViewError::CannotProvideHistoricalHash);
         Ok(self.stored_hash)
     }
 }
 
-impl<C, W, O> Deref for HistoricalHashContainerView<C, W, O> {
+impl<C, W, H, O> Deref for HistoricalHashContainerView<C, W, H, O> {
     type Target = W;
 
     fn deref(&self) -> &W {
@@ -181,7 +188,7 @@ impl<C, W, O> Deref for HistoricalHashContainerView<C, W, O> {
     }
 }
 
-impl<C, W, O> DerefMut for HistoricalHashContainerView<C, W, O> {
+impl<C, W, H, O> DerefMut for HistoricalHashContainerView<C, W, H, O> {
     fn deref_mut(&mut self) -> &mut W {
         &mut self.inner
     }
@@ -193,12 +200,14 @@ mod graphql {
 
     use super::HistoricalHashContainerView;
     use crate::context::Context;
+    use crate::views::Hasher;
 
-    impl<C, W, O> async_graphql::OutputType for HistoricalHashContainerView<C, W, O>
+    impl<C, W, H> async_graphql::OutputType for HistoricalHashContainerView<C, W, H, H::Output>
     where
         C: Context,
+        H: Hasher,
         W: async_graphql::OutputType + Send + Sync,
-        O: Send + Sync,
+        H::Output: Send + Sync,
     {
         fn type_name() -> Cow<'static, str> {
             W::type_name()

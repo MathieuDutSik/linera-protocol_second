@@ -176,6 +176,13 @@ pub trait CryptoHashView: HashableView {
     async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError>;
 }
 
+/// A [`View`] that also supports crypto historical hash
+#[cfg_attr(not(web), trait_variant::make(Send))]
+pub trait CryptoHistoricalHashView: HashableView {
+    /// Computing the historical hash and attributing the type to it.
+    async fn crypto_historical_hash(&self) -> Result<CryptoHash, ViewError>;
+}
+
 /// A [`RootView`] that also supports crypto hash
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait CryptoHashRootView: RootView + CryptoHashView {}

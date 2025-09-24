@@ -375,7 +375,7 @@ impl Batch {
     /// an incremental hash without needing to read the entire state.
     pub fn compute_incremental_hash<H: Hasher>(
         &self,
-        previous_hash: H::Output,
+        previous_hash: &H::Output,
     ) -> Result<H::Output, ViewError> {
         let mut hasher = H::default();
 
