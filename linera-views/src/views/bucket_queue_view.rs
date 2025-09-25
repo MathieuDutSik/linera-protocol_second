@@ -6,6 +6,7 @@ use std::collections::{vec_deque::IterMut, VecDeque};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use allocative::Allocative;
 
 use crate::{
     batch::Batch,
@@ -72,6 +73,7 @@ impl StoredIndices {
 /// If position is not trivial, then the first index is the relevant
 /// bucket for the front and the second index is the position in the index.
 #[derive(Clone, Debug)]
+#[derive(Allocative)]
 struct Cursor {
     position: Option<(usize, usize)>,
 }
@@ -93,6 +95,7 @@ impl Cursor {
 }
 
 #[derive(Clone, Debug)]
+#[derive(Allocative)]
 enum Bucket<T> {
     Loaded { data: Vec<T> },
     NotLoaded { length: usize },
@@ -126,8 +129,12 @@ fn stored_indices<T>(stored_data: &VecDeque<(usize, Bucket<T>)>, position: usize
 /// The size `N` has to be chosen by taking into account the size of the type `T`
 /// and the basic size of a block. For example a total size of 100 bytes to 10 KB
 /// seems adequate.
+//#[allocative(bound = "T: Allocative")]
 #[derive(Debug)]
+#[derive(Allocative)]
+#[allocative(bound = "C, T: Allocative, const N: usize")]
 pub struct BucketQueueView<C, T, const N: usize> {
+    #[allocative(skip)]
     context: C,
     /// The buckets of stored data. If missing, then it has not been loaded. The first index is always loaded.
     stored_data: VecDeque<(usize, Bucket<T>)>,

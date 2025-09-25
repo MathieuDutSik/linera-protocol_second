@@ -10,9 +10,11 @@ use std::{
 };
 
 use async_lock::{RwLock, RwLockReadGuard};
+use allocative::{Allocative, Visitor};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
+use std::ops::Deref;
 
 use crate::{
     batch::Batch,
@@ -49,6 +51,14 @@ pub struct ByteCollectionView<C, W> {
     delete_storage_first: bool,
     updates: RwLock<BTreeMap<Vec<u8>, Update<W>>>,
 }
+
+impl<C, W: Allocative> Allocative for ByteCollectionView<C, W> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let updates = self.updates.try_read().expect("acquire a read on the updates");
+        updates.deref().visit(visitor);
+    }
+}
+
 
 /// A read-only accessor for a particular subview in a [`CollectionView`].
 pub enum ReadGuardedView<'a, W> {

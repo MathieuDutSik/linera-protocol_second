@@ -11,6 +11,7 @@ use std::{
     },
 };
 
+use allocative::Allocative;
 use serde::de::DeserializeOwned;
 
 use crate::ViewError;
@@ -20,6 +21,7 @@ type HasherOutputSize = <sha3::Sha3_256 as sha3::digest::OutputSizeUser>::Output
 pub type HasherOutput = generic_array::GenericArray<u8, HasherOutputSize>;
 
 #[derive(Clone, Debug)]
+#[derive(Allocative)]
 /// An update, for example to a view.
 pub enum Update<T> {
     /// The entry is removed.

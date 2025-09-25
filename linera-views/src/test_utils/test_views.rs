@@ -7,6 +7,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
+use allocative::Allocative;
 
 use crate::{
     self as linera_views,
@@ -433,6 +434,7 @@ impl TestView for TestQueueView<MemoryContext<()>> {
 
 /// Wrapper to test with a [`BucketQueueView`].
 #[derive(RootView, ClonableView)]
+#[derive(Allocative)]
 pub struct TestBucketQueueView<C> {
     queue: BucketQueueView<C, u16, 2>,
 }
