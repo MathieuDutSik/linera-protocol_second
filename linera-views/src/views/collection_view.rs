@@ -786,10 +786,16 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
 /// A view that supports accessing a collection of views of the same kind, indexed by a
 /// key, one subview at a time.
 #[derive(Debug)]
+#[derive(Allocative)]
+#[allocative(bound = "W: Allocative, C, I")]
 pub struct CollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
+
+
+
 
 impl<W: View, I> View for CollectionView<W::Context, I, W>
 where
@@ -1177,8 +1183,11 @@ where
 
 /// A map view that serializes the indices.
 #[derive(Debug)]
+#[derive(Allocative)]
+#[allocative(bound = "W: Allocative, C, I")]
 pub struct CustomCollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 

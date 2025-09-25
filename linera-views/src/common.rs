@@ -31,6 +31,7 @@ pub enum Update<T> {
 }
 
 #[derive(Clone, Debug)]
+#[derive(Allocative)]
 pub(crate) struct DeletionSet {
     pub(crate) delete_storage_first: bool,
     pub(crate) deleted_prefixes: BTreeSet<Vec<u8>>,
