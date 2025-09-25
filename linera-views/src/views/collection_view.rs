@@ -787,15 +787,12 @@ impl<W: HashableView> HashableView for ByteCollectionView<W::Context, W> {
 /// key, one subview at a time.
 #[derive(Debug)]
 #[derive(Allocative)]
-#[allocative(bound = "W: Allocative, C, I")]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct CollectionView<C, I, W> {
     collection: ByteCollectionView<C, W>,
     #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
-
-
-
 
 impl<W: View, I> View for CollectionView<W::Context, I, W>
 where

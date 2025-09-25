@@ -1058,8 +1058,11 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
 /// A view that supports accessing a collection of views of the same kind, indexed by keys,
 /// possibly several subviews at a time.
 #[derive(Debug)]
+#[derive(Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
@@ -1584,8 +1587,11 @@ where
 /// A view that supports accessing a collection of views of the same kind, indexed by an ordered key,
 /// possibly several subviews at a time.
 #[derive(Debug)]
+#[derive(Allocative)]
+#[allocative(bound = "C, I, W: Allocative")]
 pub struct ReentrantCustomCollectionView<C, I, W> {
     collection: ReentrantByteCollectionView<C, W>,
+    #[allocative(skip)]
     _phantom: PhantomData<I>,
 }
 
