@@ -9,8 +9,8 @@ use std::{
     mem,
 };
 
+use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuard};
-use allocative::{Allocative, Visitor};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -54,8 +54,12 @@ pub struct ByteCollectionView<C, W> {
 
 impl<C, W: Allocative> Allocative for ByteCollectionView<C, W> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let name = Key::new("ByteCollectionView");
+        let size = mem::size_of::<Self>();
+        let mut visitor = visitor.enter(name, size);
         let updates = self.updates.try_read().expect("acquire a read on the updates");
-        updates.deref().visit(visitor);
+        updates.deref().visit(&mut visitor);
+        visitor.exit();
     }
 }
 
