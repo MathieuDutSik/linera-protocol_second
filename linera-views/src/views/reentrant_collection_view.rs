@@ -10,10 +10,12 @@ use std::{
     sync::Arc,
 };
 
+use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
+use std::ops::Deref;
 
 use crate::{
     batch::Batch,
@@ -82,6 +84,36 @@ pub struct ReentrantByteCollectionView<C, W> {
     /// Entries that may have staged changes.
     updates: BTreeMap<Vec<u8>, Update<Arc<RwLock<W>>>>,
 }
+
+impl<C, W: Allocative> Allocative for ReentrantByteCollectionView<C, W> {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        let name = Key::new("ReentrantByteCollectionView");
+        let size = mem::size_of::<Self>();
+        let mut visitor = visitor.enter(name, size);
+
+        for (k, v) in &self.updates {
+            let key_name = Key::new("key");
+            visitor.visit_field(key_name, k);
+            //
+            match v {
+                Update::Removed => {
+                    let key = Key::new("update_removed");
+                    visitor.visit_field(key, &());
+                },
+                Update::Set(v) => {
+                    let key = Key::new("update_set");
+                    let v = v.try_read().expect("the view of ReentrantByteCollectionView");
+                    visitor.visit_field(key, v.deref());
+                }
+            }
+        }
+        visitor.exit();
+    }
+}
+
+
+
+
 
 impl<W, C2> ReplaceContext<C2> for ReentrantByteCollectionView<W::Context, W>
 where
