@@ -242,7 +242,11 @@ impl MultiPartitionBatch {
         self.keys_value_bytes.push((root_key, key, value));
     }
 
-    fn put_key_value<T: Serialize>(&mut self, root_key: Vec<u8>, value: &T) -> Result<(), ViewError> {
+    fn put_key_value<T: Serialize>(
+        &mut self,
+        root_key: Vec<u8>,
+        value: &T,
+    ) -> Result<(), ViewError> {
         let bytes = bcs::to_bytes(value)?;
         let key = DEFAULT_KEY.to_vec();
         self.keys_value_bytes.push((root_key, key, bytes));
@@ -356,9 +360,7 @@ impl BaseKey {
                 key.extend_from_slice(blob_id.hash.as_bytes().as_slice());
                 key
             }
-            BaseKey::Event(event_id) => {
-                event_root_key(&event_id.chain_id, &event_id.stream_id)
-            }
+            BaseKey::Event(event_id) => event_root_key(&event_id.chain_id, &event_id.stream_id),
             BaseKey::BlockExporterState(id) => {
                 let mut key = vec![INDEX_BLOCK_EXPORTER_STATE];
                 key.extend_from_slice(&id.to_le_bytes());
