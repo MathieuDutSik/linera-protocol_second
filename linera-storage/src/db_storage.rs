@@ -387,7 +387,7 @@ fn event_root_key(chain_id: &ChainId, stream_id: &StreamId) -> Vec<u8> {
 }
 
 fn is_chain_state(root_key: &[u8]) -> bool {
-    if root_key.len() == 0 {
+    if root_key.is_empty() {
         return false;
     }
     root_key[0] == INDEX_CHAIN_ID
