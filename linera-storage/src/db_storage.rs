@@ -319,9 +319,62 @@ enum BaseKey {
     NetworkDescription,
 }
 
+impl BaseKey {
+    fn root_key(&self) -> Vec<u8> {
+        match self {
+            BaseKey::ChainState(chain_id) => {
+                let mut key = vec![INDEX_CHAIN_ID];
+                key.extend_from_slice(chain_id.0.as_bytes().as_slice());
+                key
+            }
+            BaseKey::Certificate(hash) => {
+                let mut key = vec![INDEX_CERTIFICATE];
+                key.extend_from_slice(hash.as_bytes().as_slice());
+                key
+            }
+            BaseKey::ConfirmedBlock(hash) => {
+                let mut key = vec![INDEX_CONFIRMED_BLOCK];
+                key.extend_from_slice(hash.as_bytes().as_slice());
+                key
+            }
+            BaseKey::Blob(blob_id) => {
+                let mut key = vec![INDEX_BLOB_ID];
+                key.push(blob_id.blob_type as u8);
+                key.extend_from_slice(blob_id.hash.as_bytes().as_slice());
+                key
+            }
+            BaseKey::BlobState(blob_id) => {
+                let mut key = vec![INDEX_BLOB_STATE];
+                key.push(blob_id.blob_type as u8);
+                key.extend_from_slice(blob_id.hash.as_bytes().as_slice());
+                key
+            }
+            BaseKey::Event(event_id) => {
+                let mut key = vec![INDEX_EVENT_ID];
+                key.extend_from_slice(event_id.chain_id.0.as_bytes().as_slice());
+                key.extend(bcs::to_bytes(&event_id.stream_id).unwrap());
+                key
+            }
+            BaseKey::BlockExporterState(id) => {
+                let mut key = vec![INDEX_BLOCK_EXPORTER_STATE];
+                key.extend_from_slice(&id.to_le_bytes());
+                key
+            }
+            BaseKey::NetworkDescription => {
+                vec![INDEX_NETWORK_DESCRIPTION]
+            }
+        }
+    }
+}
+
 const INDEX_CHAIN_ID: u8 = 0;
+const INDEX_CERTIFICATE: u8 = 1;
+const INDEX_CONFIRMED_BLOCK: u8 = 2;
 const INDEX_BLOB_ID: u8 = 3;
+const INDEX_BLOB_STATE: u8 = 4;
 const INDEX_EVENT_ID: u8 = 5;
+const INDEX_BLOCK_EXPORTER_STATE: u8 = 6;
+const INDEX_NETWORK_DESCRIPTION: u8 = 7;
 const CHAIN_ID_LENGTH: usize = std::mem::size_of::<ChainId>();
 const BLOB_ID_LENGTH: usize = std::mem::size_of::<BlobId>();
 
