@@ -224,6 +224,9 @@ pub mod metrics {
     });
 }
 
+/// The default key used when the root_key contains the information.
+const DEFAULT_KEY: &[u8] = &[0];
+
 #[derive(Default)]
 struct MultiPartitionBatch {
     keys_value_bytes: Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>,
@@ -279,8 +282,7 @@ impl MultiPartitionBatch {
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let mut key = vec![0];
-        key.extend(bcs::to_bytes(&event_id.index)?);
+        let key = event_key(&event_id);
         let root_key = BaseKey::Event(event_id).root_key();
         self.put_key_value_bytes(root_key, key, value);
         Ok(())
@@ -354,10 +356,7 @@ impl BaseKey {
                 key
             }
             BaseKey::Event(event_id) => {
-                let mut key = vec![INDEX_EVENT_ID];
-                key.extend_from_slice(event_id.chain_id.0.as_bytes().as_slice());
-                key.extend(bcs::to_bytes(&event_id.stream_id).unwrap());
-                key
+                event_root_key(&event_id.chain_id, &event_id.stream_id)
             }
             BaseKey::BlockExporterState(id) => {
                 let mut key = vec![INDEX_BLOCK_EXPORTER_STATE];
@@ -369,6 +368,19 @@ impl BaseKey {
             }
         }
     }
+}
+
+fn event_key(event_id: &EventId) -> Vec<u8> {
+    let mut key = vec![0];
+    key.extend(bcs::to_bytes(&event_id.index).unwrap());
+    key
+}
+
+fn event_root_key(chain_id: &ChainId, stream_id: &StreamId) -> Vec<u8> {
+    let mut key = vec![INDEX_EVENT_ID];
+    key.extend_from_slice(chain_id.0.as_bytes().as_slice());
+    key.extend(bcs::to_bytes(stream_id).unwrap());
+    key
 }
 
 const INDEX_CHAIN_ID: u8 = 0;
@@ -616,7 +628,7 @@ where
             user_contracts: self.user_contracts.clone(),
             user_services: self.user_services.clone(),
         };
-        let root_key = bcs::to_bytes(&BaseKey::ChainState(chain_id))?;
+        let root_key = BaseKey::ChainState(chain_id).root_key();
         let store = self.database.open_exclusive(&root_key)?;
         let context = ViewContext::create_root_context(store, runtime_context).await?;
         ChainStateView::load(context).await
@@ -624,9 +636,9 @@ where
 
     #[instrument(level = "trace", target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let test = store.contains_key(&blob_key).await?;
+        let root_key = BaseKey::Blob(blob_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let test = store.contains_key(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(test)
@@ -634,16 +646,12 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(blob_count = blob_ids.len()))]
     async fn missing_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<BlobId>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let mut keys = Vec::new();
-        for blob_id in blob_ids {
-            let key = bcs::to_bytes(&BaseKey::Blob(*blob_id))?;
-            keys.push(key);
-        }
-        let results = store.contains_keys(keys).await?;
         let mut missing_blobs = Vec::new();
-        for (blob_id, result) in blob_ids.iter().zip(results) {
-            if !result {
+        for blob_id in blob_ids {
+            let root_key = BaseKey::Blob(*blob_id).root_key();
+            let store = self.database.open_shared(&root_key)?;
+            let test = store.contains_key(DEFAULT_KEY).await?;
+            if !test {
                 missing_blobs.push(*blob_id);
             }
         }
@@ -654,9 +662,9 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn contains_blob_state(&self, blob_id: BlobId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let test = store.contains_key(&blob_key).await?;
+        let root_key = BaseKey::BlobState(blob_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let test = store.contains_key(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -669,9 +677,9 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlock>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        let value = store.read_value(&block_key).await?;
+        let root_key = BaseKey::ConfirmedBlock(hash).root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let value = store.read_value(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_CONFIRMED_BLOCK_COUNTER
             .with_label_values(&[])
@@ -681,9 +689,9 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob_id))?;
-        let maybe_blob_bytes = store.read_value_bytes(&blob_key).await?;
+        let root_key = BaseKey::Blob(blob_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let maybe_blob_bytes = store.read_value_bytes(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER.with_label_values(&[]).inc();
         Ok(maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(blob_id, blob_bytes)))
@@ -694,31 +702,22 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::Blob(*blob_id)))
-            .collect::<Result<Vec<_>, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let maybe_blob_bytes = store.read_multi_values_bytes(blob_keys).await?;
+        let mut blobs = Vec::new();
+        for blob_id in blob_ids {
+            blobs.push(self.read_blob(*blob_id).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_BLOB_COUNTER
             .with_label_values(&[])
             .inc_by(blob_ids.len() as u64);
-
-        Ok(blob_ids
-            .iter()
-            .zip(maybe_blob_bytes)
-            .map(|(blob_id, maybe_blob_bytes)| {
-                maybe_blob_bytes.map(|blob_bytes| Blob::new_with_id_unchecked(*blob_id, blob_bytes))
-            })
-            .collect())
+        Ok(blobs)
     }
 
     #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob_id))]
     async fn read_blob_state(&self, blob_id: BlobId) -> Result<Option<BlobState>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        let blob_state = store.read_value::<BlobState>(&blob_state_key).await?;
+        let root_key = BaseKey::BlobState(blob_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let blob_state = store.read_value::<BlobState>(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATE_COUNTER
             .with_label_values(&[])
@@ -734,14 +733,10 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_state_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let blob_states = store
-            .read_multi_values::<BlobState>(blob_state_keys)
-            .await?;
+        let mut blob_states = Vec::new();
+        for blob_id in blob_ids {
+            blob_states.push(self.read_blob_state(*blob_id).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_BLOB_STATES_COUNTER
             .with_label_values(&[])
@@ -766,14 +761,13 @@ where
         if blob_ids.is_empty() {
             return Ok(());
         }
-        let blob_state_keys = blob_ids
-            .iter()
-            .map(|blob_id| bcs::to_bytes(&BaseKey::BlobState(*blob_id)))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let maybe_blob_states = store
-            .read_multi_values::<BlobState>(blob_state_keys)
-            .await?;
+        let mut maybe_blob_states = Vec::new();
+        for blob_id in blob_ids {
+            let root_key = BaseKey::BlobState(*blob_id).root_key();
+            let store = self.database.open_shared(&root_key)?;
+            let maybe_blob_state = store.read_value::<BlobState>(DEFAULT_KEY).await?;
+            maybe_blob_states.push(maybe_blob_state);
+        }
         let mut batch = MultiPartitionBatch::new();
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
             match maybe_blob_state {
@@ -799,15 +793,14 @@ where
         if blobs.is_empty() {
             return Ok(Vec::new());
         }
-        let blob_state_keys = blobs
-            .iter()
-            .map(|blob| bcs::to_bytes(&BaseKey::BlobState(blob.id())))
-            .collect::<Result<_, _>>()?;
-        let store = self.database.open_shared(&[])?;
-        let blob_states = store.contains_keys(blob_state_keys).await?;
         let mut batch = MultiPartitionBatch::new();
-        for (blob, has_state) in blobs.iter().zip(&blob_states) {
-            if *has_state {
+        let mut blob_states = Vec::new();
+        for blob in blobs {
+            let root_key = BaseKey::BlobState(blob.id()).root_key();
+            let store = self.database.open_shared(&root_key)?;
+            let has_state = store.contains_key(DEFAULT_KEY).await?;
+            blob_states.push(has_state);
+            if has_state {
                 batch.add_blob(blob)?;
             }
         }
@@ -843,9 +836,12 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(hash = %hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
-        let keys = Self::get_keys_for_certificates(&[hash])?;
-        let store = self.database.open_shared(&[])?;
-        let results = store.contains_keys(keys).await?;
+        let root_keys = Self::get_root_keys_for_certificates(&[hash]);
+        let mut results = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            results.push(store.contains_key(DEFAULT_KEY).await?);
+        }
         #[cfg(with_metrics)]
         metrics::CONTAINS_CERTIFICATE_COUNTER
             .with_label_values(&[])
@@ -858,16 +854,16 @@ where
         &self,
         hash: CryptoHash,
     ) -> Result<Option<ConfirmedBlockCertificate>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let keys = Self::get_keys_for_certificates(&[hash])?;
-        let values = store.read_multi_values_bytes(keys).await;
-        if values.is_ok() {
-            #[cfg(with_metrics)]
-            metrics::READ_CERTIFICATE_COUNTER
-                .with_label_values(&[])
-                .inc();
+        let root_keys = Self::get_root_keys_for_certificates(&[hash]);
+        let mut values = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            values.push(store.read_value_bytes(DEFAULT_KEY).await?);
         }
-        let values = values?;
+        #[cfg(with_metrics)]
+        metrics::READ_CERTIFICATE_COUNTER
+            .with_label_values(&[])
+            .inc();
         Self::deserialize_certificate(&values, hash)
     }
 
@@ -880,16 +876,16 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let keys = Self::get_keys_for_certificates(&hashes)?;
-        let store = self.database.open_shared(&[])?;
-        let values = store.read_multi_values_bytes(keys).await;
-        if values.is_ok() {
-            #[cfg(with_metrics)]
-            metrics::READ_CERTIFICATES_COUNTER
-                .with_label_values(&[])
-                .inc_by(hashes.len() as u64);
+        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let mut values = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            values.push(store.read_value_bytes(DEFAULT_KEY).await?);
         }
-        let values = values?;
+        #[cfg(with_metrics)]
+        metrics::READ_CERTIFICATES_COUNTER
+            .with_label_values(&[])
+            .inc_by(hashes.len() as u64);
         let mut certificates = Vec::new();
         for (pair, hash) in values.chunks_exact(2).zip(hashes) {
             let certificate = Self::deserialize_certificate(pair, hash)?;
@@ -913,9 +909,12 @@ where
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
-        let keys = Self::get_keys_for_certificates(&hashes)?;
-        let store = self.database.open_shared(&[])?;
-        let values = store.read_multi_values_bytes(keys).await?;
+        let root_keys = Self::get_root_keys_for_certificates(&hashes);
+        let mut values = Vec::new();
+        for root_key in root_keys {
+            let store = self.database.open_shared(&root_key)?;
+            values.push(store.read_value_bytes(DEFAULT_KEY).await?);
+        }
         #[cfg(with_metrics)]
         metrics::READ_CERTIFICATES_COUNTER
             .with_label_values(&[])
@@ -942,8 +941,9 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
+        let event_key = event_key(&event_id);
+        let root_key = BaseKey::Event(event_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
         let exists = store.contains_key(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::CONTAINS_EVENT_COUNTER.with_label_values(&[]).inc();
@@ -957,16 +957,14 @@ where
         stream_id: &StreamId,
         start_index: u32,
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
-        let mut prefix = vec![INDEX_EVENT_ID];
-        prefix.extend(bcs::to_bytes(chain_id).unwrap());
-        prefix.extend(bcs::to_bytes(stream_id).unwrap());
+        let root_key = event_root_key(chain_id, stream_id);
+        let store = self.database.open_shared(&root_key)?;
         let mut keys = Vec::new();
         let mut indices = Vec::new();
-        let store = self.database.open_shared(&[])?;
-        for short_key in store.find_keys_by_prefix(&prefix).await? {
+        for short_key in store.find_keys_by_prefix(DEFAULT_KEY).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
-                let mut key = prefix.clone();
+                let mut key = DEFAULT_KEY.to_vec();
                 key.extend(short_key);
                 keys.push(key);
                 indices.push(index);
@@ -995,9 +993,9 @@ where
 
     #[instrument(target = "telemetry_only", skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        let maybe_value = store.read_value(&key).await?;
+        let root_key = BaseKey::NetworkDescription.root_key();
+        let store = self.database.open_shared(&root_key)?;
+        let maybe_value = store.read_value(DEFAULT_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[])
@@ -1025,7 +1023,7 @@ where
         &self,
         block_exporter_id: u32,
     ) -> Result<Self::BlockExporterContext, ViewError> {
-        let root_key = bcs::to_bytes(&BaseKey::BlockExporterState(block_exporter_id))?;
+        let root_key = BaseKey::BlockExporterState(block_exporter_id).root_key();
         let store = self.database.open_exclusive(&root_key)?;
         Ok(ViewContext::create_root_context(store, block_exporter_id).await?)
     }
@@ -1039,15 +1037,15 @@ where
     Database::Error: Send + Sync,
 {
     #[instrument(target = "telemetry_only", skip_all)]
-    fn get_keys_for_certificates(hashes: &[CryptoHash]) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(hashes
+    fn get_root_keys_for_certificates(hashes: &[CryptoHash]) -> Vec<Vec<u8>> {
+        hashes
             .iter()
             .flat_map(|hash| {
-                let cert_key = bcs::to_bytes(&BaseKey::Certificate(*hash));
-                let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(*hash));
+                let cert_key = BaseKey::Certificate(*hash).root_key();
+                let block_key = BaseKey::ConfirmedBlock(*hash).root_key();
                 vec![cert_key, block_key]
             })
-            .collect::<Result<_, _>>()?)
+            .collect::<Vec<_>>()
     }
 
     #[instrument(target = "telemetry_only", skip_all)]
