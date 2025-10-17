@@ -243,7 +243,7 @@ impl MultiPartitionBatch {
 
     fn put_key_value<T: Serialize>(&mut self, root_key: Vec<u8>, value: &T) -> Result<(), ViewError> {
         let bytes = bcs::to_bytes(value)?;
-        let key = vec![0];
+        let key = DEFAULT_KEY.to_vec();
         self.keys_value_bytes.push((root_key, key, bytes));
         Ok(())
     }
@@ -252,7 +252,7 @@ impl MultiPartitionBatch {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
         let root_key = BaseKey::Blob(blob.id()).root_key();
-        let key = vec![0];
+        let key = DEFAULT_KEY.to_vec();
         self.put_key_value_bytes(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
@@ -931,8 +931,9 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(event_id = ?event_id))]
     async fn read_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        let store = self.database.open_shared(&[])?;
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id.clone()))?;
+        let event_key = event_key(&event_id);
+        let root_key = BaseKey::Event(event_id).root_key();
+        let store = self.database.open_shared(&root_key)?;
         let event = store.read_value_bytes(&event_key).await?;
         #[cfg(with_metrics)]
         metrics::READ_EVENT_COUNTER.with_label_values(&[]).inc();
@@ -1137,15 +1138,14 @@ where
         config: &Database::Config,
         namespace: &str,
     ) -> Result<Vec<BlobId>, ViewError> {
-        let database = Database::maybe_create_and_connect(config, namespace).await?;
-        let store = database.open_shared(&[])?;
-        let prefix = &[INDEX_BLOB_ID];
-        let keys = store.find_keys_by_prefix(prefix).await?;
+        let root_keys = Database::list_root_keys(config, namespace).await?;
         let mut blob_ids = Vec::new();
-        for key in keys {
-            let key_red = &key[..BLOB_ID_LENGTH];
-            let blob_id = bcs::from_bytes(key_red)?;
-            blob_ids.push(blob_id);
+        for root_key in root_keys {
+            if root_key.len() == 1 + BLOB_ID_LENGTH && root_key[0] == INDEX_BLOB_ID {
+                let root_key_red = &root_key[1..=BLOB_ID_LENGTH];
+                let blob_id = bcs::from_bytes(root_key_red)?;
+                blob_ids.push(blob_id);
+            }
         }
         Ok(blob_ids)
     }
