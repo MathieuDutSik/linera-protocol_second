@@ -386,6 +386,13 @@ fn event_root_key(chain_id: &ChainId, stream_id: &StreamId) -> Vec<u8> {
     key
 }
 
+fn is_chain_state(root_key: &[u8]) -> bool {
+    if root_key.len() == 0 {
+        return false;
+    }
+    root_key[0] == INDEX_CHAIN_ID
+}
+
 const INDEX_CHAIN_ID: u8 = 0;
 const INDEX_CERTIFICATE: u8 = 1;
 const INDEX_CONFIRMED_BLOCK: u8 = 2;
@@ -480,9 +487,9 @@ impl DualStoreRootKeyAssignment for ChainStatesFirstAssignment {
         if root_key.is_empty() {
             return Ok(StoreInUse::Second);
         }
-        let store = match bcs::from_bytes(root_key)? {
-            BaseKey::ChainState(_) => StoreInUse::First,
-            _ => StoreInUse::Second,
+        let store = match is_chain_state(root_key) {
+            true => StoreInUse::First,
+            false => StoreInUse::Second,
         };
         Ok(store)
     }
