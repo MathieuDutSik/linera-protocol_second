@@ -20,6 +20,7 @@ use linera_execution::{
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
+    batch::Batch,
     context::ViewContext,
     store::{
         KeyValueDatabase, KeyValueStore, ReadableKeyValueStore as _, WritableKeyValueStore as _,
@@ -1075,7 +1076,7 @@ where
         key: Vec<u8>,
         bytes: Vec<u8>,
     ) -> Result<(), ViewError> {
-        let mut batch = linera_views::batch::Batch::new();
+        let mut batch = Batch::new();
         batch.put_key_value_bytes(key, bytes);
         store.write_batch(batch).await?;
         Ok(())
