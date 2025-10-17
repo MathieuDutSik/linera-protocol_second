@@ -225,36 +225,38 @@ pub mod metrics {
 }
 
 #[derive(Default)]
-struct Batch {
-    key_value_bytes: Vec<(Vec<u8>, Vec<u8>)>,
+struct MultiPartitionBatch {
+    keys_value_bytes: Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>,
 }
 
-impl Batch {
+impl MultiPartitionBatch {
     fn new() -> Self {
         Self::default()
     }
 
-    fn put_key_value_bytes(&mut self, key: Vec<u8>, value: Vec<u8>) {
-        self.key_value_bytes.push((key, value));
+    fn put_key_value_bytes(&mut self, root_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) {
+        self.keys_value_bytes.push((root_key, key, value));
     }
 
-    fn put_key_value<T: Serialize>(&mut self, key: Vec<u8>, value: &T) -> Result<(), ViewError> {
+    fn put_key_value<T: Serialize>(&mut self, root_key: Vec<u8>, value: &T) -> Result<(), ViewError> {
         let bytes = bcs::to_bytes(value)?;
-        self.key_value_bytes.push((key, bytes));
+        let key = vec![0];
+        self.keys_value_bytes.push((root_key, key, bytes));
         Ok(())
     }
 
     fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.with_label_values(&[]).inc();
-        let blob_key = bcs::to_bytes(&BaseKey::Blob(blob.id()))?;
-        self.put_key_value_bytes(blob_key.to_vec(), blob.bytes().to_vec());
+        let root_key = BaseKey::Blob(blob.id()).root_key();
+        let key = vec![0];
+        self.put_key_value_bytes(root_key, key, blob.bytes().to_vec());
         Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
-        let blob_state_key = bcs::to_bytes(&BaseKey::BlobState(blob_id))?;
-        self.put_key_value(blob_state_key.to_vec(), blob_state)?;
+        let root_key = BaseKey::BlobState(blob_id).root_key();
+        self.put_key_value(root_key, blob_state)?;
         Ok(())
     }
 
@@ -267,18 +269,20 @@ impl Batch {
             .with_label_values(&[])
             .inc();
         let hash = certificate.hash();
-        let cert_key = bcs::to_bytes(&BaseKey::Certificate(hash))?;
-        let block_key = bcs::to_bytes(&BaseKey::ConfirmedBlock(hash))?;
-        self.put_key_value(cert_key.to_vec(), &certificate.lite_certificate())?;
-        self.put_key_value(block_key.to_vec(), certificate.value())?;
+        let cert_root_key = BaseKey::Certificate(hash).root_key();
+        let block_root_key = BaseKey::ConfirmedBlock(hash).root_key();
+        self.put_key_value(cert_root_key, &certificate.lite_certificate())?;
+        self.put_key_value(block_root_key, certificate.value())?;
         Ok(())
     }
 
     fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.with_label_values(&[]).inc();
-        let event_key = bcs::to_bytes(&BaseKey::Event(event_id))?;
-        self.put_key_value_bytes(event_key.to_vec(), value);
+        let mut key = vec![0];
+        key.extend(bcs::to_bytes(&event_id.index)?);
+        let root_key = BaseKey::Event(event_id).root_key();
+        self.put_key_value_bytes(root_key, key, value);
         Ok(())
     }
 
@@ -290,8 +294,8 @@ impl Batch {
         metrics::WRITE_NETWORK_DESCRIPTION
             .with_label_values(&[])
             .inc();
-        let key = bcs::to_bytes(&BaseKey::NetworkDescription)?;
-        self.put_key_value(key, information)?;
+        let root_key = BaseKey::NetworkDescription.root_key();
+        self.put_key_value(root_key, information)?;
         Ok(())
     }
 }
@@ -747,7 +751,7 @@ where
 
     #[instrument(target = "telemetry_only", skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         batch.add_blob(blob)?;
         self.write_batch(batch).await?;
         Ok(())
@@ -770,7 +774,7 @@ where
         let maybe_blob_states = store
             .read_multi_values::<BlobState>(blob_state_keys)
             .await?;
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for (maybe_blob_state, blob_id) in maybe_blob_states.iter().zip(blob_ids) {
             match maybe_blob_state {
                 None => {
@@ -801,7 +805,7 @@ where
             .collect::<Result<_, _>>()?;
         let store = self.database.open_shared(&[])?;
         let blob_states = store.contains_keys(blob_state_keys).await?;
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for (blob, has_state) in blobs.iter().zip(&blob_states) {
             if *has_state {
                 batch.add_blob(blob)?;
@@ -816,7 +820,7 @@ where
         if blobs.is_empty() {
             return Ok(());
         }
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
@@ -829,7 +833,7 @@ where
         blobs: &[Blob],
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
             batch.add_blob(blob)?;
         }
@@ -982,7 +986,7 @@ where
         &self,
         events: impl IntoIterator<Item = (EventId, Vec<u8>)> + Send,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
             batch.add_event(event_id, value)?;
         }
@@ -1006,7 +1010,7 @@ where
         &self,
         information: &NetworkDescription,
     ) -> Result<(), ViewError> {
-        let mut batch = Batch::new();
+        let mut batch = MultiPartitionBatch::new();
         batch.add_network_description(information)?;
         self.write_batch(batch).await?;
         Ok(())
@@ -1078,14 +1082,14 @@ where
         Ok(())
     }
 
-    #[instrument(target = "telemetry_only", skip_all, fields(batch_size = batch.key_value_bytes.len()))]
-    async fn write_batch(&self, batch: Batch) -> Result<(), ViewError> {
-        if batch.key_value_bytes.is_empty() {
+    #[instrument(target = "telemetry_only", skip_all, fields(batch_size = batch.keys_value_bytes.len()))]
+    async fn write_batch(&self, batch: MultiPartitionBatch) -> Result<(), ViewError> {
+        if batch.keys_value_bytes.is_empty() {
             return Ok(());
         }
         let mut futures = Vec::new();
-        for (key, bytes) in batch.key_value_bytes {
-            let store = self.database.open_shared(&[])?;
+        for (root_key, key, bytes) in batch.keys_value_bytes {
+            let store = self.database.open_shared(&root_key)?;
             futures.push(async move { Self::write_entry(&store, key, bytes).await });
         }
         futures::future::try_join_all(futures).await?;
