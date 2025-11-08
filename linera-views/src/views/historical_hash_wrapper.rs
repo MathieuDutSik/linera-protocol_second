@@ -133,12 +133,6 @@ where
         })
     }
 
-    async fn load(context: Self::Context) -> Result<Self, ViewError> {
-        let keys = Self::pre_load(&context)?;
-        let values = context.store().read_multi_values_bytes(keys).await?;
-        Self::post_load(context, &values)
-    }
-
     fn rollback(&mut self) {
         self.inner.rollback();
         self.hash = self.stored_hash;
