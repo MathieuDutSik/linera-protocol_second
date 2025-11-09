@@ -174,21 +174,43 @@ where
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut inner_batch = Batch::new();
-        self.inner.flush(&mut inner_batch)?;
-        let historical_hash = Self::make_historical_hash(self.stored_historical_hash, &inner_batch)?;
-        batch.operations.extend(inner_batch.operations);
-        if self.stored_historical_hash != Some(historical_hash) {
-            let mut key = self.inner.context().base_key().bytes.clone();
-            let tag = key.last_mut().unwrap();
-            *tag = KeyTag::HistoricalHash as u8;
-            batch.put_key_value(key, &historical_hash)?;
-            self.stored_historical_hash = Some(historical_hash);
-        }
         // Remember the historical hash.
-        self.historical_hash = Some(historical_hash);
+        let mut inner_batch = Batch::new();
+        let delete_view = self.inner.flush(&mut inner_batch)?;
+        if delete_view {
+            let mut key_prefix = self.inner.context().base_key().bytes.clone();
+            key_prefix.pop();
+            batch.delete_key_prefix(key_prefix);
+            self.stored_historical_hash = None;
+            self.historical_hash = None;
+            self.stored_state_hash = None;
+            self.state_hash = None;
+        } else {
+            // Computes the historical hash even if not asked
+            let historical_hash = Self::make_historical_hash(self.stored_historical_hash, &inner_batch)?;
+            batch.operations.extend(inner_batch.operations);
+            if self.stored_historical_hash != Some(historical_hash) {
+                let mut key = self.inner.context().base_key().bytes.clone();
+                let tag = key.last_mut().unwrap();
+                *tag = KeyTag::HistoricalHash as u8;
+                batch.put_key_value(key, &historical_hash)?;
+                self.stored_historical_hash = Some(historical_hash);
+            }
+            self.historical_hash = Some(historical_hash);
+            // Writes the state hash
+            if self.stored_state_hash != self.state_hash {
+                let mut key = self.inner.context().base_key().bytes.clone();
+                let tag = key.last_mut().unwrap();
+                *tag = KeyTag::StateHash as u8;
+                match &self.state_hash {
+                    None => batch.delete_key(key),
+                    Some(hash) => batch.put_key_value(key, hash)?,
+                }
+                self.stored_state_hash = self.state_hash;
+            }
+        }
         // Never delete the stored hash, even if the inner view was cleared.
-        Ok(false)
+        Ok(delete_view)
     }
 
     fn clear(&mut self) {
