@@ -12,7 +12,7 @@ use crate::{
     common::from_bytes_option,
     context::Context,
     register_view::RegisterView,
-    views::{ClonableView, Hasher, HasherOutput, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
+    views::{ClonableView, HashableView, Hasher, HasherOutput, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
 #[cfg(with_metrics)]
@@ -231,6 +231,50 @@ impl<W: ClonableView> HistoricallyHashableView<W::Context, W> {
         Ok(historical_hash)
     }
 }
+
+
+
+
+impl<W> HistoricallyHashableView<W::Context, W>
+where
+    W: HashableView,
+    W::Hasher: Hasher<Output = HasherOutput>,
+{
+    /// Returns the state hash of the view.
+    pub async fn state_hash(&mut self) -> Result<HasherOutput, ViewError> {
+        match self.state_hash {
+            Some(state_hash) => Ok(state_hash),
+            None => {
+                let new_state_hash = self.inner.hash_mut().await?;
+                self.state_hash = Some(new_state_hash);
+                Ok(new_state_hash)
+            }
+        }
+    }
+}
+
+impl<W> HistoricallyHashableView<W::Context, W>
+where
+    W: HashableView + ClonableView,
+    W::Hasher: Hasher<Output = HasherOutput>,
+{
+    /// Returns the historical or state hash of the view.
+    pub async fn historical_or_state_hash(&mut self) -> Result<HasherOutput, ViewError> {
+        let choice = self.choice.get();
+        match choice {
+            HashChoice::HistoricalHash => self.historical_hash().await,
+            HashChoice::StateHash => self.state_hash().await,
+        }
+    }
+}
+
+
+
+
+
+
+
+
 
 impl<C, W> Deref for HistoricallyHashableView<C, W> {
     type Target = W;
