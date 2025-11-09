@@ -1,19 +1,17 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     batch::Batch,
     common::from_bytes_option,
     context::Context,
-    store::ReadableKeyValueStore as _,
+    register_view::RegisterView,
     views::{ClonableView, Hasher, HasherOutput, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -43,10 +41,20 @@ pub struct HistoricallyHashableView<C, W> {
     stored_hash: Option<HasherOutput>,
     /// The inner view.
     inner: W,
+    /// The hash choice option
+    choice: RegisterView<C, HashChoice>,
     /// Memoized hash, if any.
     hash: Option<HasherOutput>,
-    /// Track context type.
-    _phantom: PhantomData<C>,
+}
+
+/// The possible choice for the hashing method.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub enum HashChoice {
+    /// The historical hash computed from the batch.
+    HistoricalHash,
+    /// The hash computed from the state of the view.
+    #[default]
+    StateHash,
 }
 
 /// Key tags to create the sub-keys of a `HistoricallyHashableView` on top of the base key.
@@ -54,6 +62,8 @@ pub struct HistoricallyHashableView<C, W> {
 enum KeyTag {
     /// Prefix for the indices of the view.
     Inner = MIN_VIEW_TAG,
+    /// Prefix for the hash choice.
+    Choice,
     /// Prefix for the hash.
     Hash,
 }
@@ -89,10 +99,10 @@ where
         ctx: impl FnOnce(&Self::Context) -> C2 + Clone,
     ) -> Self::Target {
         HistoricallyHashableView {
-            _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: self.hash,
-            inner: self.inner.with_context(ctx).await,
+            inner: self.inner.with_context(ctx.clone()).await,
+            choice: self.choice.with_context(ctx).await,
         }
     }
 }
@@ -101,7 +111,7 @@ impl<W> View for HistoricallyHashableView<W::Context, W>
 where
     W: View,
 {
-    const NUM_INIT_KEYS: usize = 1 + W::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = 2 + W::NUM_INIT_KEYS;
 
     type Context = W::Context;
 
@@ -120,16 +130,22 @@ where
     fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
-        let context = context.clone_with_base_key(base_key);
+        let context_inner = context.clone_with_base_key(base_key);
         let inner = W::post_load(
-            context,
-            values.get(1..).ok_or(ViewError::PostLoadValuesError)?,
+            context_inner,
+            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
+        let base_key = context.base_key().base_tag(KeyTag::Choice as u8);
+        let context_choice = context.clone_with_base_key(base_key);
+        let choice = RegisterView::post_load(
+            context_choice,
+            values.get(1..2).ok_or(ViewError::PostLoadValuesError)?,
         )?;
         Ok(Self {
-            _phantom: PhantomData,
             stored_hash: hash,
             hash,
             inner,
+            choice,
         })
     }
 
@@ -172,10 +188,10 @@ where
 {
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(HistoricallyHashableView {
-            _phantom: PhantomData,
             stored_hash: self.stored_hash,
             hash: self.hash,
             inner: self.inner.clone_unchecked()?,
+            choice: self.choice.clone_unchecked()?,
         })
     }
 }
