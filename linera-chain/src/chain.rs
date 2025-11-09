@@ -25,6 +25,7 @@ use linera_execution::{
 use linera_views::{
     bucket_queue_view::BucketQueueView,
     context::Context,
+    historical_hash_wrapper::HistoricallyHashableView,
     log_view::LogView,
     map_view::MapView,
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
@@ -241,7 +242,7 @@ where
     C: Clone + Context + Send + Sync + 'static,
 {
     /// Execution state, including system and user applications.
-    pub execution_state: ExecutionStateView<C>,
+    pub execution_state: HistoricallyHashableView<C, ExecutionStateView<C>>,
     /// Hash of the execution state.
     pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
 
@@ -406,6 +407,7 @@ where
             local_time,
         };
         self.execution_state
+            .get_mut()
             .query_application(context, query, service_runtime_endpoint)
             .await
             .with_execution_context(ChainExecutionContext::Query)
@@ -420,6 +422,7 @@ where
         application_id: ApplicationId,
     ) -> Result<ApplicationDescription, ChainError> {
         self.execution_state
+            .get_mut()
             .system
             .describe_application(application_id, &mut TransactionTracker::default())
             .await
@@ -486,16 +489,18 @@ where
 
     /// Invariant for the states of active chains.
     pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+        self.execution_state.get().system.is_active()
     }
 
     /// Initializes the chain if it is not active yet.
     pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
         // Initialize ourselves.
+        let chain_id = self.chain_id();
         if self
             .execution_state
+            .get_mut()
             .system
-            .initialize_chain(self.chain_id())
+            .initialize_chain(chain_id)
             .await
             .with_execution_context(ChainExecutionContext::Block)?
         {
@@ -505,10 +510,10 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self.execution_state.get().system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
+            self.execution_state.get().system.ownership.get().clone(),
             BlockHeight(0),
             local_time,
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
@@ -646,13 +651,14 @@ where
 
     pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
         self.execution_state
+            .get()
             .system
             .current_committee()
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
     pub fn ownership(&self) -> &ChainOwnership {
-        self.execution_state.system.ownership.get()
+        self.execution_state.get().system.ownership.get()
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
@@ -908,7 +914,7 @@ where
 
         self.initialize_if_needed(local_time).await?;
 
-        let chain_timestamp = *self.execution_state.system.timestamp.get();
+        let chain_timestamp = *self.execution_state.get().system.timestamp.get();
         ensure!(
             chain_timestamp <= block.timestamp,
             ChainError::InvalidBlockTimestamp {
@@ -927,17 +933,17 @@ where
             ChainError::InternalError("published_blobs mismatch".to_string())
         );
 
-        if *self.execution_state.system.closed.get() {
+        if *self.execution_state.get().system.closed.get() {
             ensure!(block.has_only_rejected_messages(), ChainError::ClosedChain);
         }
 
         Self::check_app_permissions(
-            self.execution_state.system.application_permissions.get(),
+            self.execution_state.get().system.application_permissions.get(),
             block,
         )?;
 
         Self::execute_block_inner(
-            &mut self.execution_state,
+            self.execution_state.get_mut(),
             &self.confirmed_log,
             &self.previous_message_blocks,
             &self.previous_event_blocks,
@@ -1013,7 +1019,7 @@ where
 
     /// Returns whether this is a child chain.
     pub fn is_child(&self) -> bool {
-        let Some(description) = self.execution_state.system.description.get() else {
+        let Some(description) = self.execution_state.get().system.description.get() else {
             // Root chains are always initialized, so this must be a child chain.
             return true;
         };
@@ -1106,8 +1112,8 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        let ownership = self.execution_state.system.ownership.get().clone();
+        let maybe_committee = self.execution_state.get().system.current_committee().into_iter();
+        let ownership = self.execution_state.get().system.ownership.get().clone();
         let fallback_owners =
             maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();

@@ -1729,7 +1729,7 @@ where
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ZERO, *chain.execution_state.get().system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
         chain.tip_state.get().next_block_height
@@ -1813,7 +1813,7 @@ where
     assert!(new_sender_chain.is_active());
     assert_eq!(
         Amount::ZERO,
-        *new_sender_chain.execution_state.system.balance.get()
+        *new_sender_chain.execution_state.get().system.balance.get()
     );
     assert_eq!(
         BlockHeight::from(1),
@@ -1828,7 +1828,7 @@ where
     assert!(new_recipient_chain.is_active());
     assert_eq!(
         Amount::MAX,
-        *new_recipient_chain.execution_state.system.balance.get()
+        *new_recipient_chain.execution_state.get().system.balance.get()
     );
     Ok(())
 }
@@ -1867,7 +1867,7 @@ where
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active());
-    assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ONE, *chain.execution_state.get().system.balance.get());
 
     // With the new optimization, transfers to the same chain should not create messages.
     let inbox = chain.inboxes.try_load_entry(&chain_1).await?;
@@ -1922,7 +1922,7 @@ where
     assert!(chain_1_state.is_active());
     assert_eq!(
         Amount::ZERO,
-        *chain_1_state.execution_state.system.balance.get()
+        *chain_1_state.execution_state.get().system.balance.get()
     );
 
     // Check the receiver chain has the inbox with the expected message
@@ -2000,7 +2000,7 @@ where
         .await?;
     let chain = env.worker().chain_state_view(chain_2).await?;
     assert!(chain.is_active());
-    assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
+    assert_eq!(Amount::ONE, *chain.execution_state.get().system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
         .inboxes
@@ -2264,7 +2264,7 @@ where
         let recipient_chain = env.worker().chain_state_view(chain_2).await?;
         assert!(recipient_chain.is_active());
         assert_eq!(
-            *recipient_chain.execution_state.system.balance.get(),
+            *recipient_chain.execution_state.get().system.balance.get(),
             Amount::from_tokens(4)
         );
         let ownership = &recipient_chain.manager.ownership.get();
@@ -2595,7 +2595,7 @@ where
         );
         assert!(admin_chain.outboxes.indices().await?.is_empty());
         assert_eq!(
-            *admin_chain.execution_state.system.admin_id.get(),
+            *admin_chain.execution_state.get().system.admin_id.get(),
             Some(admin_id)
         );
     }
@@ -2666,7 +2666,7 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            *user_chain.execution_state.system.admin_id.get(),
+            *user_chain.execution_state.get().system.admin_id.get(),
             Some(admin_id)
         );
         assert_no_removed_bundles(&user_chain).await;
@@ -2684,7 +2684,7 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
+        assert_eq!(user_chain.execution_state.get().system.committees.get().len(), 1);
     }
     // Make the child receive the pending messages.
     let certificate3 = env.make_certificate(ConfirmedBlock::new(
@@ -2748,10 +2748,10 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            *user_chain.execution_state.system.admin_id.get(),
+            *user_chain.execution_state.get().system.admin_id.get(),
             Some(admin_id)
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
+        assert_eq!(user_chain.execution_state.get().system.committees.get().len(), 2);
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -2855,10 +2855,10 @@ where
         user_chain.tip_state.get().next_block_height
     );
     assert_eq!(
-        *user_chain.execution_state.system.balance.get(),
+        *user_chain.execution_state.get().system.balance.get(),
         Amount::from_tokens(2)
     );
-    assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
+    assert_eq!(*user_chain.execution_state.get().system.epoch.get(), Epoch::ZERO);
 
     // .. and the message has gone through.
     let admin_chain = env.worker().chain_state_view(admin_id).await?;
@@ -2989,10 +2989,10 @@ where
             user_chain.tip_state.get().next_block_height
         );
         assert_eq!(
-            *user_chain.execution_state.system.balance.get(),
+            *user_chain.execution_state.get().system.balance.get(),
             Amount::from_tokens(2)
         );
-        assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
+        assert_eq!(*user_chain.execution_state.get().system.epoch.get(), Epoch::ZERO);
 
         // .. but the message hasn't gone through.
         let admin_chain = env.worker().chain_state_view(admin_id).await?;
@@ -4012,7 +4012,7 @@ where
     {
         let mut chain = env.worker().storage.load_chain(chain_id).await?;
         (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
+            chain.execution_state.get_mut().register_mock_application(0).await?;
         chain.save().await?;
     }
 
@@ -4090,7 +4090,7 @@ where
     {
         let mut chain = storage.load_chain(chain_1).await?;
         (application_id, application, _) =
-            chain.execution_state.register_mock_application(0).await?;
+            chain.execution_state.get_mut().register_mock_application(0).await?;
         chain.save().await?;
     }
 

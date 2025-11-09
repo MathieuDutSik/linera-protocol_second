@@ -36,6 +36,7 @@ use linera_execution::{
 use linera_storage::{Clock as _, ResultReadCertificates, Storage};
 use linera_views::{
     context::{Context, InactiveContext},
+    historical_hash_wrapper::HistoricallyHashableView,
     views::{ClonableView, ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::{oneshot, OwnedRwLockReadGuard, RwLock, RwLockWriteGuard};
@@ -59,7 +60,7 @@ where
     shared_chain_view: Option<Arc<RwLock<ChainStateView<StorageClient::Context>>>>,
     service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, HistoricallyHashableView<InactiveContext, ExecutionStateView<InactiveContext>>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
@@ -85,7 +86,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        execution_state_cache: Arc<ValueCache<CryptoHash, HistoricallyHashableView<InactiveContext, ExecutionStateView<InactiveContext>>>>,
         tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
@@ -747,6 +748,7 @@ where
         if let Some(committee) = self
             .chain
             .execution_state
+            .get()
             .system
             .committees
             .get()
@@ -882,6 +884,7 @@ where
                     .with_context(|ctx| {
                         chain
                             .execution_state
+                            .get()
                             .context()
                             .clone_with_base_key(ctx.base_key().bytes.clone())
                     })
@@ -1163,7 +1166,7 @@ where
                 found_block_height: height
             }
         );
-        let epoch = chain.execution_state.system.epoch.get();
+        let epoch = chain.execution_state.get().system.epoch.get();
         let chain_id = chain.chain_id();
         let key_pair = self.config.key_pair();
         let local_time = self.storage.clock().current_time();
@@ -1183,7 +1186,7 @@ where
     async fn vote_for_fallback(&mut self) -> Result<(), WorkerError> {
         let chain = &mut self.chain;
         if let (epoch, Some(entry)) = (
-            chain.execution_state.system.epoch.get(),
+            chain.execution_state.get().system.epoch.get(),
             chain.unskippable_bundles.front(),
         ) {
             let elapsed = self.storage.clock().current_time().delta_since(entry.seen);
@@ -1296,6 +1299,7 @@ where
                             .clone_with_base_key(ctx.base_key().bytes.clone())
                     })
                     .await
+                    .get_mut()
                     .query_application(context, query, self.service_runtime_endpoint.as_mut())
                     .await
                     .with_execution_context(ChainExecutionContext::Query)?;
@@ -1361,6 +1365,7 @@ where
             response.info.requested_owner_balance = self
                 .chain
                 .execution_state
+                .get()
                 .system
                 .balances
                 .get(&owner)
@@ -1530,13 +1535,14 @@ where
         let chain = &self.chain;
         let mut info = ChainInfo::from(chain);
         if query.request_committees {
-            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+            info.requested_committees = Some(chain.execution_state.get().system.committees.get().clone());
         }
         if query.request_owner_balance == AccountOwner::CHAIN {
-            info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
+            info.requested_owner_balance = Some(*chain.execution_state.get().system.balance.get());
         } else {
             info.requested_owner_balance = chain
                 .execution_state
+                .get()
                 .system
                 .balances
                 .get(&query.request_owner_balance)
@@ -1555,7 +1561,7 @@ where
         if query.request_pending_message_bundles {
             let mut bundles = Vec::new();
             let pairs = chain.inboxes.try_load_all_entries().await?;
-            let action = if *chain.execution_state.system.closed.get() {
+            let action = if *chain.execution_state.get().system.closed.get() {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
@@ -1694,8 +1700,8 @@ impl<'a> CrossChainUpdateHelper<'a> {
     {
         CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
-            current_epoch: *chain.execution_state.system.epoch.get(),
-            committees: chain.execution_state.system.committees.get(),
+            current_epoch: *chain.execution_state.get().system.epoch.get(),
+            committees: chain.execution_state.get().system.committees.get(),
         }
     }
 

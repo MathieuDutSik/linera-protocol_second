@@ -411,6 +411,7 @@ impl<Env: Environment> ChainClient<Env> {
             .chain_state_view()
             .await?
             .execution_state
+            .get()
             .system
             .event_subscriptions
             .indices()
@@ -541,6 +542,7 @@ impl<Env: Environment> ChainClient<Env> {
             .chain_state_view()
             .await?
             .execution_state
+            .get()
             .system
             .event_subscriptions
             .index_values()
@@ -754,6 +756,7 @@ impl<Env: Environment> ChainClient<Env> {
             .chain_state_view()
             .await?
             .execution_state
+            .get()
             .system
             .event_subscriptions
             .indices()

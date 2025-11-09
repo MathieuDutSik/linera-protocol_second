@@ -635,6 +635,7 @@ where
             .chain_state_view()
             .await?
             .execution_state
+            .get()
             .list_applications()
             .await?;
 

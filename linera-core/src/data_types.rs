@@ -295,7 +295,7 @@ where
     ChainRuntimeContext<S>: ExecutionRuntimeContext,
 {
     fn from(view: &ChainStateView<C>) -> Self {
-        let system_state = &view.execution_state.system;
+        let system_state = &view.execution_state.get().system;
         let tip_state = view.tip_state.get();
         ChainInfo {
             chain_id: view.chain_id(),
@@ -305,7 +305,7 @@ where
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,
-            timestamp: *view.execution_state.system.timestamp.get(),
+            timestamp: *view.execution_state.get().system.timestamp.get(),
             state_hash: *view.execution_state_hash.get(),
             requested_committees: None,
             requested_owner_balance: None,

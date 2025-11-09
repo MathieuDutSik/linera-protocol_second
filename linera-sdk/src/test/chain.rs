@@ -103,6 +103,7 @@ impl ActiveChain {
             .await
             .expect("Failed to load chain")
             .execution_state
+            .get()
             .system
             .epoch
             .get()
@@ -137,6 +138,7 @@ impl ActiveChain {
 
         chain_state
             .execution_state
+            .get()
             .system
             .balances
             .get(owner)
@@ -161,6 +163,7 @@ impl ActiveChain {
         for owner in owners {
             let balance = chain_state
                 .execution_state
+                .get()
                 .system
                 .balances
                 .get(&owner)
@@ -184,6 +187,7 @@ impl ActiveChain {
 
         chain_state
             .execution_state
+            .get()
             .system
             .balances
             .indices()
@@ -325,6 +329,7 @@ impl ActiveChain {
             .await
             .expect("Failed to query chain state view")
             .execution_state
+            .get()
             .system
             .event_subscriptions
             .index_values()
@@ -341,6 +346,7 @@ impl ActiveChain {
                         .await
                         .expect("Failed to query chain state view")
                         .execution_state
+                        .get()
                         .system
                         .stream_event_counts
                         .get(&stream_id)
@@ -579,7 +585,7 @@ impl ActiveChain {
             .chain_state_view(self.id())
             .await
             .expect("Failed to load chain");
-        *chain.execution_state.system.closed.get()
+        *chain.execution_state.get().system.closed.get()
     }
 
     /// Executes a `query` on an `application`'s state on this microchain.

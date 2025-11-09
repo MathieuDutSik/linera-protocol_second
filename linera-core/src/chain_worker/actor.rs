@@ -27,7 +27,10 @@ use linera_execution::{
     ServiceSyncRuntime,
 };
 use linera_storage::{Clock as _, Storage};
-use linera_views::context::InactiveContext;
+use linera_views::{
+    context::InactiveContext,
+    historical_hash_wrapper::HistoricallyHashableView,
+};
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
 use tracing::{debug, instrument, trace, Instrument as _};
 
@@ -199,7 +202,7 @@ where
     config: ChainWorkerConfig,
     storage: StorageClient,
     block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    execution_state_cache: Arc<ValueCache<CryptoHash, HistoricallyHashableView<InactiveContext, ExecutionStateView<InactiveContext>>>>,
     tracked_chains: Option<Arc<sync::RwLock<HashSet<ChainId>>>>,
     delivery_notifier: DeliveryNotifier,
     is_tracked: bool,
@@ -216,7 +219,7 @@ where
         config: ChainWorkerConfig,
         storage: StorageClient,
         block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
-        execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+        execution_state_cache: Arc<ValueCache<CryptoHash, HistoricallyHashableView<InactiveContext, ExecutionStateView<InactiveContext>>>>,
         tracked_chains: Option<Arc<RwLock<HashSet<ChainId>>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,

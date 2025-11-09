@@ -1,10 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Deref, DerefMut};
-
 use allocative::Allocative;
-use linera_base::visit_allocative_simple;
+use linera_base::{
+    crypto::{BcsHashable, CryptoHash},
+    visit_allocative_simple,
+};
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{Deserialize, Serialize};
@@ -300,25 +301,32 @@ where
     }
 }
 
-
-
-
-
-
-
-
-
-impl<C, W> Deref for HistoricallyHashableView<C, W> {
-    type Target = W;
-
-    fn deref(&self) -> &W {
-        &self.inner
+impl<W> HistoricallyHashableView<W::Context, W>
+where
+    W: HashableView + ClonableView,
+    W::Hasher: Hasher<Output = HasherOutput>,
+{
+    /// Returns the historical or state hash of the view.
+    pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
+        #[derive(Serialize, Deserialize)]
+        struct HistoricalHash(HasherOutput);
+        impl BcsHashable<'_> for HistoricalHash {}
+        let hash = self.historical_or_state_hash().await?;
+        Ok(CryptoHash::new(&HistoricalHash(hash)))
     }
 }
 
-impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
-    fn deref_mut(&mut self) -> &mut W {
-        // Clear the memoized hash.
+
+
+
+impl<C, W> HistoricallyHashableView<C, W> {
+    /// Gets a reference to the underlying view.
+    pub fn get(&self) -> &W {
+        &self.inner
+    }
+
+    /// Gets a mutable reference to the underlying view.
+    pub fn get_mut(&mut self) -> &mut W {
         self.historical_hash = None;
         self.state_hash = None;
         &mut self.inner
@@ -393,7 +401,7 @@ mod tests {
         let hash0 = view.historical_hash().await?;
 
         // Set a value
-        view.set(42);
+        view.get_mut().set(42);
         assert!(view.has_pending_changes().await);
 
         // Hash should change after modification
@@ -411,7 +419,7 @@ mod tests {
         assert_eq!(hash1, view.historical_hash().await?);
 
         // Make another modification
-        view.set(84);
+        view.get_mut().set(84);
         let hash2 = view.historical_hash().await?;
         assert_ne!(hash1, hash2);
 
@@ -425,7 +433,7 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Set initial value and flush
-        view.set(42);
+        view.get_mut().set(42);
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         context.store().write_batch(batch).await?;
@@ -450,7 +458,7 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Set and persist a value
-        view.set(42);
+        view.get_mut().set(42);
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         context.store().write_batch(batch).await?;
@@ -459,7 +467,7 @@ mod tests {
         assert!(!view.has_pending_changes().await);
 
         // Make a modification
-        view.set(84);
+        view.get_mut().set(84);
         assert!(view.has_pending_changes().await);
         let hash_modified = view.historical_hash().await?;
         assert_ne!(hash_before, hash_modified);
@@ -482,7 +490,7 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Set and persist a value
-        view.set(42);
+        view.get_mut().set(42);
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         context.store().write_batch(batch).await?;
@@ -512,7 +520,7 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Set a value
-        view.set(42);
+        view.get_mut().set(42);
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         context.store().write_batch(batch).await?;
@@ -527,7 +535,7 @@ mod tests {
         assert_eq!(original_hash, cloned_hash);
 
         // Modify the clone
-        cloned_view.set(84);
+        cloned_view.get_mut().set(84);
         let cloned_hash_after = cloned_view.historical_hash().await?;
         assert_ne!(original_hash, cloned_hash_after);
 
@@ -548,7 +556,7 @@ mod tests {
         assert!(!view.has_pending_changes().await);
 
         // Set a value
-        view.set(42);
+        view.get_mut().set(42);
         assert!(view.has_pending_changes().await);
 
         let hash_before_flush = view.historical_hash().await?;
@@ -562,7 +570,7 @@ mod tests {
         assert!(!view.has_pending_changes().await);
 
         // Make another change
-        view.set(84);
+        view.get_mut().set(84);
         let hash_after_second_change = view.historical_hash().await?;
 
         // The new hash should be based on the previous stored hash
@@ -578,12 +586,12 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Test Deref - we can access inner view methods directly
-        view.set(42);
-        assert_eq!(*view.get(), 42);
+        view.get_mut().set(42);
+        assert_eq!(*view.get().get(), 42);
 
         // Test DerefMut
-        view.set(84);
-        assert_eq!(*view.get(), 84);
+        view.get_mut().set(84);
+        assert_eq!(*view.get().get(), 84);
 
         Ok(())
     }
@@ -597,7 +605,7 @@ mod tests {
 
             let mut previous_hash = view.historical_hash().await?;
             for &value in values {
-                view.set(value);
+                view.get_mut().set(value);
                 if value % 2 == 0 {
                     // Immediately save after odd values.
                     let mut batch = Batch::new();
@@ -626,7 +634,7 @@ mod tests {
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         // Set and flush a value
-        view.set(42);
+        view.get_mut().set(42);
         let mut batch = Batch::new();
         view.flush(&mut batch)?;
         context.store().write_batch(batch).await?;
