@@ -170,14 +170,17 @@ where
     }
 
     async fn has_pending_changes(&self) -> bool {
-        self.inner.has_pending_changes().await || self.choice.has_pending_changes().await
+        self.inner.has_pending_changes().await ||
+            self.choice.has_pending_changes().await ||
+            self.stored_state_hash != self.state_hash
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        // Remember the historical hash.
+        // Computes the inner_batch
         let mut inner_batch = Batch::new();
         let delete_view = self.inner.flush(&mut inner_batch)?;
         if delete_view {
+            // Deleteting the view completely.
             let mut key_prefix = self.inner.context().base_key().bytes.clone();
             key_prefix.pop();
             batch.delete_key_prefix(key_prefix);
@@ -197,7 +200,7 @@ where
                 self.stored_historical_hash = Some(historical_hash);
             }
             self.historical_hash = Some(historical_hash);
-            // Writes the state hash
+            // Writes the state hash if needed.
             if self.stored_state_hash != self.state_hash {
                 let mut key = self.inner.context().base_key().bytes.clone();
                 let tag = key.last_mut().unwrap();
@@ -209,7 +212,7 @@ where
                 self.stored_state_hash = self.state_hash;
             }
         }
-        // Never delete the stored hash, even if the inner view was cleared.
+        // Returning whether the view is deleted or not.
         Ok(delete_view)
     }
 
