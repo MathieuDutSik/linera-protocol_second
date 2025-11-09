@@ -3,6 +3,8 @@
 
 use std::ops::{Deref, DerefMut};
 
+use allocative::Allocative;
+use linera_base::visit_allocative_simple;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{Deserialize, Serialize};
@@ -35,15 +37,20 @@ mod metrics {
 }
 
 /// Wrapper to compute the hash of the view based on its history of modifications.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
+#[allocative(bound = "C, W: Allocative")]
 pub struct HistoricallyHashableView<C, W> {
     /// The historical hash in storage.
+    #[allocative(visit = visit_allocative_simple)]
     stored_historical_hash: Option<HasherOutput>,
     /// Memoized historical hash, if any.
+    #[allocative(visit = visit_allocative_simple)]
     historical_hash: Option<HasherOutput>,
     /// The state hash in storage.
+    #[allocative(visit = visit_allocative_simple)]
     stored_state_hash: Option<HasherOutput>,
     /// Memoized state hash, if any.
+    #[allocative(visit = visit_allocative_simple)]
     state_hash: Option<HasherOutput>,
     /// The inner view.
     inner: W,
@@ -52,7 +59,7 @@ pub struct HistoricallyHashableView<C, W> {
 }
 
 /// The possible choice for the hashing method.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Allocative, Clone, Debug, Default, Serialize, Deserialize)]
 pub enum HashChoice {
     /// The historical hash computed from the batch.
     HistoricalHash,
