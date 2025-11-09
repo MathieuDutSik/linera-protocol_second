@@ -39,8 +39,12 @@ mod metrics {
 pub struct HistoricallyHashableView<C, W> {
     /// The historical hash in storage.
     stored_historical_hash: Option<HasherOutput>,
-    /// Memoized hash, if any.
+    /// Memoized historical hash, if any.
     historical_hash: Option<HasherOutput>,
+    /// The state hash in storage.
+    stored_state_hash: Option<HasherOutput>,
+    /// Memoized state hash, if any.
+    state_hash: Option<HasherOutput>,
     /// The inner view.
     inner: W,
     /// The hash choice option
@@ -64,8 +68,10 @@ enum KeyTag {
     Inner = MIN_VIEW_TAG,
     /// Prefix for the hash choice.
     Choice,
-    /// Prefix for the hash.
+    /// Prefix for the historical hash.
     HistoricalHash,
+    /// Prefix for the state hash.
+    StateHash,
 }
 
 impl<C, W> HistoricallyHashableView<C, W> {
@@ -101,6 +107,8 @@ where
         HistoricallyHashableView {
             stored_historical_hash: self.stored_historical_hash,
             historical_hash: self.historical_hash,
+            stored_state_hash: self.stored_state_hash,
+            state_hash: self.state_hash,
             inner: self.inner.with_context(ctx.clone()).await,
             choice: self.choice.with_context(ctx).await,
         }
@@ -111,7 +119,7 @@ impl<W> View for HistoricallyHashableView<W::Context, W>
 where
     W: View,
 {
-    const NUM_INIT_KEYS: usize = 2 + W::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = 3 + W::NUM_INIT_KEYS;
 
     type Context = W::Context;
 
@@ -121,6 +129,7 @@ where
 
     fn pre_load(context: &Self::Context) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut v = vec![context.base_key().base_tag(KeyTag::HistoricalHash as u8),
+                         context.base_key().base_tag(KeyTag::StateHash as u8),
                          context.base_key().base_tag(KeyTag::Choice as u8),
         ];
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
@@ -131,21 +140,24 @@ where
 
     fn post_load(context: Self::Context, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let historical_hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        let state_hash = from_bytes_option(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
+        let base_key = context.base_key().base_tag(KeyTag::Choice as u8);
+        let context_choice = context.clone_with_base_key(base_key);
+        let choice = RegisterView::post_load(
+            context_choice,
+            values.get(2..3).ok_or(ViewError::PostLoadValuesError)?,
+        )?;
         let base_key = context.base_key().base_tag(KeyTag::Inner as u8);
         let context_inner = context.clone_with_base_key(base_key);
         let inner = W::post_load(
             context_inner,
             values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
         )?;
-        let base_key = context.base_key().base_tag(KeyTag::Choice as u8);
-        let context_choice = context.clone_with_base_key(base_key);
-        let choice = RegisterView::post_load(
-            context_choice,
-            values.get(1..2).ok_or(ViewError::PostLoadValuesError)?,
-        )?;
         Ok(Self {
             stored_historical_hash: historical_hash,
             historical_hash,
+            stored_state_hash: state_hash,
+            state_hash,
             inner,
             choice,
         })
@@ -154,10 +166,11 @@ where
     fn rollback(&mut self) {
         self.inner.rollback();
         self.historical_hash = self.stored_historical_hash;
+        self.state_hash = self.stored_historical_hash;
     }
 
     async fn has_pending_changes(&self) -> bool {
-        self.inner.has_pending_changes().await
+        self.inner.has_pending_changes().await || self.choice.has_pending_changes().await
     }
 
     fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
@@ -172,7 +185,7 @@ where
             batch.put_key_value(key, &historical_hash)?;
             self.stored_historical_hash = Some(historical_hash);
         }
-        // Remember the hash.
+        // Remember the historical hash.
         self.historical_hash = Some(historical_hash);
         // Never delete the stored hash, even if the inner view was cleared.
         Ok(false)
@@ -181,6 +194,7 @@ where
     fn clear(&mut self) {
         self.inner.clear();
         self.historical_hash = None;
+        self.state_hash = None;
     }
 }
 
@@ -192,6 +206,8 @@ where
         Ok(HistoricallyHashableView {
             stored_historical_hash: self.stored_historical_hash,
             historical_hash: self.historical_hash,
+            stored_state_hash: self.stored_state_hash,
+            state_hash: self.state_hash,
             inner: self.inner.clone_unchecked()?,
             choice: self.choice.clone_unchecked()?,
         })
@@ -228,6 +244,7 @@ impl<C, W> DerefMut for HistoricallyHashableView<C, W> {
     fn deref_mut(&mut self) -> &mut W {
         // Clear the memoized hash.
         self.historical_hash = None;
+        self.state_hash = None;
         &mut self.inner
     }
 }
