@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadMultiIterator,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
@@ -616,31 +616,25 @@ pub struct ScyllaDbStoreReadMultiIterator {
     current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl crate::store::ReadMultiIterator<ScyllaDbStoreInternalError>
-    for ScyllaDbStoreReadMultiIterator
-{
+impl ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         loop {
             match &mut self.current_values {
                 None => match self.key_batches.next() {
                     Some(keys) => {
                         let values = {
-                            let store_ref = self.store.store.deref();
+                            let store = self.store.store.deref();
                             let root_key = self.store.root_key.clone();
                             let _guard = self.store.acquire().await;
-                            Box::pin(store_ref.read_multi_values_internal(&root_key, keys)).await?
+                            Box::pin(store.read_multi_values_internal(&root_key, keys)).await?
                         };
                         self.current_values = Some(values.into_iter());
                         continue;
                     }
-                    None => {
-                        return Ok(None);
-                    }
+                    None => return Ok(None),
                 },
                 Some(current_values) => match current_values.next() {
-                    Some(value) => {
-                        return Ok(value);
-                    }
+                    Some(value) => return Ok(value),
                     None => {
                         self.current_values = None;
                         continue;

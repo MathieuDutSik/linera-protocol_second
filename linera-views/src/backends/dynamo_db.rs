@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalConsistencyError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadMultiIterator,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
     FutureSyncExt as _,
@@ -819,9 +819,7 @@ pub struct DynamoDbStoreReadMultiIterator {
     current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError>
-    for DynamoDbStoreReadMultiIterator
-{
+impl ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
         loop {
             match &mut self.current_values {
@@ -831,14 +829,10 @@ impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError>
                         self.current_values = Some(values.into_iter());
                         continue;
                     }
-                    None => {
-                        return Ok(None);
-                    }
+                    None => return Ok(None),
                 },
                 Some(current_values) => match current_values.next() {
-                    Some(value) => {
-                        return Ok(value);
-                    }
+                    Some(value) => return Ok(value),
                     None => {
                         self.current_values = None;
                         continue;
