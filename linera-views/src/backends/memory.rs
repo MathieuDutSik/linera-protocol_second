@@ -128,13 +128,14 @@ impl WithError for MemoryStore {
 
 /// Iterator for reading multiple values from MemoryStore.
 /// All values are fetched upfront and returned one by one.
+/// None values indicate keys that don't exist.
 pub struct MemoryStoreReadMultiIterator {
-    values: std::vec::IntoIter<Vec<u8>>,
+    values: std::vec::IntoIter<Option<Vec<u8>>>,
 }
 
 impl crate::store::ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        Ok(self.values.next())
+        Ok(self.values.next().unwrap_or(None))
     }
 }
 
@@ -198,9 +199,9 @@ impl ReadableKeyValueStore for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
-        let values: Vec<Vec<u8>> = keys
+        let values: Vec<Option<Vec<u8>>> = keys
             .iter()
-            .filter_map(|key| map.get(key).cloned())
+            .map(|key| map.get(key).cloned())
             .collect();
         MemoryStoreReadMultiIterator {
             values: values.into_iter(),

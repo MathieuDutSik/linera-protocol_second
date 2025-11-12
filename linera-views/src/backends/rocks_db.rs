@@ -426,6 +426,7 @@ impl WithError for RocksDbStoreInternal {
 
 /// Iterator for reading multiple values from RocksDbStoreInternal.
 /// Data is fetched on first call to next() and then returned one by one.
+/// None values indicate keys that don't exist.
 pub struct RocksDbStoreReadMultiIterator {
     state: IteratorState,
 }
@@ -439,7 +440,7 @@ enum IteratorState {
     },
     /// Data has been fetched and we're iterating through values
     Ready {
-        values: std::vec::IntoIter<Vec<u8>>,
+        values: std::vec::IntoIter<Option<Vec<u8>>>,
     },
     /// Iterator is exhausted
     Done,
@@ -457,10 +458,9 @@ impl crate::store::ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStore
                     .spawn(move |x| executor.read_multi_values_bytes_internal(x), keys)
                     .await?;
 
-                // Filter out None values and collect only the present values
-                let values: Vec<Vec<u8>> = results.into_iter().flatten().collect();
-                let mut iter = values.into_iter();
-                let first = iter.next();
+                // Keep all values including None (for missing keys)
+                let mut iter = results.into_iter();
+                let first = iter.next().unwrap_or(None);
 
                 self.state = IteratorState::Ready { values: iter };
 
@@ -468,7 +468,7 @@ impl crate::store::ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStore
             }
             IteratorState::Ready { values } => {
                 match values.next() {
-                    Some(value) => Ok(Some(value)),
+                    Some(opt_value) => Ok(opt_value),
                     None => {
                         self.state = IteratorState::Done;
                         Ok(None)

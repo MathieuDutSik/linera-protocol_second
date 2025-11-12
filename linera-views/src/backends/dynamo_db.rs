@@ -812,12 +812,54 @@ impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
 
-/// Iterator for reading multiple values from DynamoDbStoreInternal.
-pub struct DynamoDbStoreReadMultiIterator;
+pub struct DynamoDbStoreReadMultiIterator {
+    store: DynamoDbStoreInternal,
+    key_batches: std::vec::IntoIter<Vec<Vec<u8>>>,
+    state: DynamoIteratorState,
+}
+
+enum DynamoIteratorState {
+    Pending,
+    Ready {
+        current_values: std::vec::IntoIter<Option<Vec<u8>>>,
+    },
+    Done,
+}
 
 impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
-        todo!("DynamoDbStoreReadMultiIterator::next not yet implemented")
+        loop {
+            match &mut self.state {
+                DynamoIteratorState::Pending => {
+                    match self.key_batches.next() {
+                        Some(keys) => {
+                            let values = self.store.read_batch_values_bytes(&keys).await?;
+                            let values_iter = values.into_iter();
+                            self.state = DynamoIteratorState::Ready {
+                                current_values: values_iter,
+                            };
+                            continue;
+                        }
+                        None => {
+                            self.state = DynamoIteratorState::Done;
+                            return Ok(None);
+                        }
+                    }
+                }
+                DynamoIteratorState::Ready { current_values } => {
+                    match current_values.next() {
+                        Some(opt_value) => {
+                            return Ok(opt_value);
+                        }
+                        None => {
+                            self.state = DynamoIteratorState::Pending;
+                            continue;
+                        }
+                    }
+                }
+                DynamoIteratorState::Done => return Ok(None),
+            }
+        }
     }
 }
 
@@ -885,8 +927,18 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        todo!("DynamoDbStoreInternal::read_multi_values_bytes_iter not yet implemented")
+    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        // Split keys into batches
+        let batches: Vec<Vec<Vec<u8>>> = keys
+            .chunks(MAX_BATCH_GET_ITEM_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect();
+
+        DynamoDbStoreReadMultiIterator {
+            store: self.clone(),
+            key_batches: batches.into_iter(),
+            state: DynamoIteratorState::Pending,
+        }
     }
 
     async fn find_keys_by_prefix(
