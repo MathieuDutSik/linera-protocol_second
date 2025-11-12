@@ -1221,6 +1221,17 @@ impl<C> WithError for ViewContainer<C> {
     type Error = ViewContainerError;
 }
 
+/// Iterator for reading multiple values from ViewContainer.
+#[cfg(with_testing)]
+pub struct ViewContainerReadMultiIterator;
+
+#[cfg(with_testing)]
+impl crate::store::ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, ViewContainerError> {
+        todo!()
+    }
+}
+
 #[cfg(with_testing)]
 /// The error type for [`ViewContainer`] operations.
 #[derive(Error, Debug)]
@@ -1242,6 +1253,8 @@ impl KeyValueStoreError for ViewContainerError {
 #[cfg(with_testing)]
 impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
+
+    type ReadMultiIterator = ViewContainerReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -1272,6 +1285,10 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     ) -> Result<Vec<Option<Vec<u8>>>, ViewContainerError> {
         let view = self.view.read().await;
         Ok(view.multi_get(keys).await?)
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn find_keys_by_prefix(

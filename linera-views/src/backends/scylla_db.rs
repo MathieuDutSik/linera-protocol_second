@@ -609,8 +609,19 @@ impl WithError for ScyllaDbStoreInternal {
     type Error = ScyllaDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from ScyllaDbStoreInternal.
+pub struct ScyllaDbStoreReadMultiIterator;
+
+impl crate::store::ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+        todo!("ScyllaDbStoreReadMultiIterator::next not yet implemented")
+    }
+}
+
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator = ScyllaDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -671,6 +682,10 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!("ScyllaDbStoreInternal::read_multi_values_bytes_iter not yet implemented")
     }
 
     async fn find_keys_by_prefix(

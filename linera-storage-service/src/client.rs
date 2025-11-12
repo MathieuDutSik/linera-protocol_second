@@ -91,8 +91,19 @@ impl WithError for StorageServiceStoreInternal {
     type Error = StorageServiceStoreError;
 }
 
+/// Iterator for reading multiple values from StorageServiceStoreInternal.
+pub struct StorageServiceStoreInternalReadMultiIterator;
+
+impl linera_views::store::ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
+        todo!()
+    }
+}
+
 impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator = StorageServiceStoreInternalReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -210,6 +221,10 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         } else {
             self.read_entries(message_index, num_chunks).await
         }
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn find_keys_by_prefix(

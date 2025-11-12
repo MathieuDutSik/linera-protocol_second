@@ -126,8 +126,22 @@ impl WithError for MemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from MemoryStore.
+/// All values are fetched upfront and returned one by one.
+pub struct MemoryStoreReadMultiIterator {
+    values: std::vec::IntoIter<Vec<u8>>,
+}
+
+impl crate::store::ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        Ok(self.values.next())
+    }
+}
+
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
+
+    type ReadMultiIterator = MemoryStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -177,6 +191,20 @@ impl ReadableKeyValueStore for MemoryStore {
             result.push(map.get(&key).cloned());
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let values: Vec<Vec<u8>> = keys
+            .iter()
+            .filter_map(|key| map.get(key).cloned())
+            .collect();
+        MemoryStoreReadMultiIterator {
+            values: values.into_iter(),
+        }
     }
 
     async fn find_keys_by_prefix(

@@ -86,6 +86,15 @@ impl WithError for KeyValueStore {
     type Error = KeyValueStoreError;
 }
 
+/// Iterator for reading multiple values from KeyValueStore.
+pub struct KeyValueStoreReadMultiIterator;
+
+impl linera_views::store::ReadMultiIterator<KeyValueStoreError> for KeyValueStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, KeyValueStoreError> {
+        todo!()
+    }
+}
+
 /// The error type for [`KeyValueStore`] operations.
 #[derive(Error, Debug)]
 pub enum KeyValueStoreError {
@@ -106,6 +115,8 @@ impl ReadableKeyValueStore for KeyValueStore {
     // The KeyValueStore of the system_api does not have limits
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator = KeyValueStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -150,6 +161,10 @@ impl ReadableKeyValueStore for KeyValueStore {
         let promise = self.wit_api.read_multi_values_bytes_new(&keys);
         yield_once().await;
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, KeyValueStoreError> {

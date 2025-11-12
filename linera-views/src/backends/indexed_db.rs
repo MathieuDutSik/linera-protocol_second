@@ -112,8 +112,19 @@ impl WithError for IndexedDbDatabase {
     type Error = IndexedDbStoreError;
 }
 
+/// Iterator for reading multiple values from IndexedDbStore.
+pub struct IndexedDbStoreReadMultiIterator;
+
+impl crate::store::ReadMultiIterator<IndexedDbStoreError> for IndexedDbStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
+        todo!("IndexedDbStoreReadMultiIterator::next not yet implemented")
+    }
+}
+
 impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
+
+    type ReadMultiIterator = IndexedDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -157,6 +168,10 @@ impl ReadableKeyValueStore for IndexedDbStore {
                 .map(|key| async move { self.read_value_bytes(&key).await }),
         )
         .await
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!("IndexedDbStore::read_multi_values_bytes_iter not yet implemented")
     }
 
     async fn find_keys_by_prefix(

@@ -146,12 +146,27 @@ where
     type Error = S::Error;
 }
 
+/// Iterator for reading multiple values from LruCachingStore.
+pub struct LruCachingStoreReadMultiIterator<I>(I);
+
+impl<I, E> crate::store::ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<I>
+where
+    I: crate::store::ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError,
+{
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, E> {
+        todo!("LruCachingStoreReadMultiIterator::next not yet implemented")
+    }
+}
+
 impl<K> ReadableKeyValueStore for LruCachingStore<K>
 where
     K: ReadableKeyValueStore,
 {
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
+
+    type ReadMultiIterator = LruCachingStoreReadMultiIterator<K::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -294,6 +309,10 @@ where
             }
         }
         Ok(result)
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!("LruCachingStore::read_multi_values_bytes_iter not yet implemented")
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

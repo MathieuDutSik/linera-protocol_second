@@ -302,11 +302,26 @@ where
     type Error = S::Error;
 }
 
+/// Iterator for reading multiple values from MeteredStore.
+pub struct MeteredStoreReadMultiIterator<I>(I);
+
+impl<I, E> crate::store::ReadMultiIterator<E> for MeteredStoreReadMultiIterator<I>
+where
+    I: crate::store::ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError,
+{
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, E> {
+        todo!()
+    }
+}
+
 impl<S> ReadableKeyValueStore for MeteredStore<S>
 where
     S: ReadableKeyValueStore,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE;
+
+    type ReadMultiIterator = MeteredStoreReadMultiIterator<S::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -379,6 +394,10 @@ where
             .with_label_values(&[])
             .observe(key_sizes as f64);
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

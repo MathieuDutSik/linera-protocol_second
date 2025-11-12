@@ -812,8 +812,19 @@ impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from DynamoDbStoreInternal.
+pub struct DynamoDbStoreReadMultiIterator;
+
+impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
+        todo!("DynamoDbStoreReadMultiIterator::next not yet implemented")
+    }
+}
+
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
+
+    type ReadMultiIterator = DynamoDbStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -872,6 +883,10 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!("DynamoDbStoreInternal::read_multi_values_bytes_iter not yet implemented")
     }
 
     async fn find_keys_by_prefix(

@@ -85,12 +85,27 @@ where
     type Error = ValueSplittingError<D::Error>;
 }
 
+/// Iterator for reading multiple values from ValueSplittingStore.
+pub struct ValueSplittingStoreReadMultiIterator<I>(I);
+
+impl<I, E> crate::store::ReadMultiIterator<ValueSplittingError<E>> for ValueSplittingStoreReadMultiIterator<I>
+where
+    I: crate::store::ReadMultiIterator<E>,
+    E: crate::store::KeyValueStoreError + 'static,
+{
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, ValueSplittingError<E>> {
+        todo!()
+    }
+}
+
 impl<S> ReadableKeyValueStore for ValueSplittingStore<S>
 where
     S: ReadableKeyValueStore,
     S::Error: 'static,
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
+
+    type ReadMultiIterator = ValueSplittingStoreReadMultiIterator<S::ReadMultiIterator>;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -200,6 +215,10 @@ where
             }
         }
         Ok(big_values)
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -424,9 +443,22 @@ impl WithError for LimitedTestMemoryStore {
     type Error = MemoryStoreError;
 }
 
+/// Iterator for reading multiple values from LimitedTestMemoryStore.
+#[cfg(with_testing)]
+pub struct LimitedTestMemoryStoreReadMultiIterator;
+
+#[cfg(with_testing)]
+impl crate::store::ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        todo!()
+    }
+}
+
 #[cfg(with_testing)]
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
+
+    type ReadMultiIterator = LimitedTestMemoryStoreReadMultiIterator;
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
@@ -453,6 +485,10 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
         self.inner.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        todo!()
     }
 
     async fn find_keys_by_prefix(
