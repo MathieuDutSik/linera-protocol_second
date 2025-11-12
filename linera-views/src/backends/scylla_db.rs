@@ -609,25 +609,18 @@ impl WithError for ScyllaDbStoreInternal {
     type Error = ScyllaDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from ScyllaDB.
 pub struct ScyllaDbStoreReadMultiIterator {
     store: ScyllaDbStoreInternal,
     key_batches: std::vec::IntoIter<Vec<Vec<u8>>>,
-    state: ScyllaIteratorState,
-}
-
-enum ScyllaIteratorState {
-    Pending,
-    Ready {
-        current_values: std::vec::IntoIter<Option<Vec<u8>>>,
-    },
-    Done,
+    current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
 impl crate::store::ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         loop {
-            match &mut self.state {
-                ScyllaIteratorState::Pending => {
+            match &mut self.current_values {
+                None => {
                     match self.key_batches.next() {
                         Some(keys) => {
                             let values = {
@@ -639,30 +632,25 @@ impl crate::store::ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbSto
                                 )
                                 .await?
                             };
-                            let values_iter = values.into_iter();
-                            self.state = ScyllaIteratorState::Ready {
-                                current_values: values_iter,
-                            };
+                            self.current_values = Some(values.into_iter());
                             continue;
                         }
                         None => {
-                            self.state = ScyllaIteratorState::Done;
                             return Ok(None);
                         }
                     }
                 }
-                ScyllaIteratorState::Ready { current_values } => {
+                Some(current_values) => {
                     match current_values.next() {
-                        Some(opt_value) => {
-                            return Ok(opt_value);
+                        Some(value) => {
+                            return Ok(value);
                         }
                         None => {
-                            self.state = ScyllaIteratorState::Pending;
+                            self.current_values = None;
                             continue;
                         }
                     }
                 }
-                ScyllaIteratorState::Done => return Ok(None),
             }
         }
     }
@@ -735,7 +723,6 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     }
 
     fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        // Split keys into batches
         let batches: Vec<Vec<Vec<u8>>> = keys
             .chunks(MAX_MULTI_KEYS)
             .map(|chunk| chunk.to_vec())
@@ -744,7 +731,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         ScyllaDbStoreReadMultiIterator {
             store: self.clone(),
             key_batches: batches.into_iter(),
-            state: ScyllaIteratorState::Pending,
+            current_values: None,
         }
     }
 

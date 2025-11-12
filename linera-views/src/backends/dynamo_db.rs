@@ -812,52 +812,40 @@ impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from DynamoDB.
 pub struct DynamoDbStoreReadMultiIterator {
     store: DynamoDbStoreInternal,
     key_batches: std::vec::IntoIter<Vec<Vec<u8>>>,
-    state: DynamoIteratorState,
-}
-
-enum DynamoIteratorState {
-    Pending,
-    Ready {
-        current_values: std::vec::IntoIter<Option<Vec<u8>>>,
-    },
-    Done,
+    current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
 impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
         loop {
-            match &mut self.state {
-                DynamoIteratorState::Pending => {
+            match &mut self.current_values {
+                None => {
                     match self.key_batches.next() {
                         Some(keys) => {
                             let values = self.store.read_batch_values_bytes(&keys).await?;
-                            let values_iter = values.into_iter();
-                            self.state = DynamoIteratorState::Ready {
-                                current_values: values_iter,
-                            };
+                            self.current_values = Some(values.into_iter());
                             continue;
                         }
                         None => {
-                            self.state = DynamoIteratorState::Done;
                             return Ok(None);
                         }
                     }
                 }
-                DynamoIteratorState::Ready { current_values } => {
+                Some(current_values) => {
                     match current_values.next() {
-                        Some(opt_value) => {
-                            return Ok(opt_value);
+                        Some(value) => {
+                            return Ok(value);
                         }
                         None => {
-                            self.state = DynamoIteratorState::Pending;
+                            self.current_values = None;
                             continue;
                         }
                     }
                 }
-                DynamoIteratorState::Done => return Ok(None),
             }
         }
     }
@@ -937,7 +925,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         DynamoDbStoreReadMultiIterator {
             store: self.clone(),
             key_batches: batches.into_iter(),
-            state: DynamoIteratorState::Pending,
+            current_values: None,
         }
     }
 
