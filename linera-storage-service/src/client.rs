@@ -94,7 +94,9 @@ impl WithError for StorageServiceStoreInternal {
 /// Iterator for reading multiple values from StorageServiceStoreInternal.
 pub struct StorageServiceStoreInternalReadMultiIterator;
 
-impl linera_views::store::ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
+impl linera_views::store::ReadMultiIterator<StorageServiceStoreError>
+    for StorageServiceStoreInternalReadMultiIterator
+{
     async fn next(&mut self) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
         todo!()
     }

@@ -199,10 +199,7 @@ impl ReadableKeyValueStore for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
-        let values: Vec<Option<Vec<u8>>> = keys
-            .iter()
-            .map(|key| map.get(key).cloned())
-            .collect();
+        let values: Vec<Option<Vec<u8>>> = keys.iter().map(|key| map.get(key).cloned()).collect();
         MemoryStoreReadMultiIterator {
             values: values.into_iter(),
         }

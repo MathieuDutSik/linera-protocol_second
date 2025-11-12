@@ -819,33 +819,31 @@ pub struct DynamoDbStoreReadMultiIterator {
     current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
+impl crate::store::ReadMultiIterator<DynamoDbStoreInternalError>
+    for DynamoDbStoreReadMultiIterator
+{
     async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
         loop {
             match &mut self.current_values {
-                None => {
-                    match self.key_batches.next() {
-                        Some(keys) => {
-                            let values = self.store.read_batch_values_bytes(&keys).await?;
-                            self.current_values = Some(values.into_iter());
-                            continue;
-                        }
-                        None => {
-                            return Ok(None);
-                        }
+                None => match self.key_batches.next() {
+                    Some(keys) => {
+                        let values = self.store.read_batch_values_bytes(&keys).await?;
+                        self.current_values = Some(values.into_iter());
+                        continue;
                     }
-                }
-                Some(current_values) => {
-                    match current_values.next() {
-                        Some(value) => {
-                            return Ok(value);
-                        }
-                        None => {
-                            self.current_values = None;
-                            continue;
-                        }
+                    None => {
+                        return Ok(None);
                     }
-                }
+                },
+                Some(current_values) => match current_values.next() {
+                    Some(value) => {
+                        return Ok(value);
+                    }
+                    None => {
+                        self.current_values = None;
+                        continue;
+                    }
+                },
             }
         }
     }

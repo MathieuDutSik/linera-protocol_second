@@ -449,7 +449,11 @@ enum IteratorState {
 impl crate::store::ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
         match &mut self.state {
-            IteratorState::Pending { keys, executor, spawn_mode } => {
+            IteratorState::Pending {
+                keys,
+                executor,
+                spawn_mode,
+            } => {
                 // Fetch all values
                 let keys = std::mem::take(keys);
                 let executor = executor.clone();
@@ -466,15 +470,13 @@ impl crate::store::ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStore
 
                 Ok(first)
             }
-            IteratorState::Ready { values } => {
-                match values.next() {
-                    Some(opt_value) => Ok(opt_value),
-                    None => {
-                        self.state = IteratorState::Done;
-                        Ok(None)
-                    }
+            IteratorState::Ready { values } => match values.next() {
+                Some(opt_value) => Ok(opt_value),
+                None => {
+                    self.state = IteratorState::Done;
+                    Ok(None)
                 }
-            }
+            },
             IteratorState::Done => Ok(None),
         }
     }

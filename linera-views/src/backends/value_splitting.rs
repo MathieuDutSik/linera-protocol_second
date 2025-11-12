@@ -88,7 +88,8 @@ where
 /// Iterator for reading multiple values from ValueSplittingStore.
 pub struct ValueSplittingStoreReadMultiIterator<I>(I);
 
-impl<I, E> crate::store::ReadMultiIterator<ValueSplittingError<E>> for ValueSplittingStoreReadMultiIterator<I>
+impl<I, E> crate::store::ReadMultiIterator<ValueSplittingError<E>>
+    for ValueSplittingStoreReadMultiIterator<I>
 where
     I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError + 'static,
