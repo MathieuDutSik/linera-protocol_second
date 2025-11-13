@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData, mem};
+use std::{borrow::Borrow, collections::BTreeMap, marker::PhantomData};
 
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -94,29 +94,33 @@ impl<C: Context> View for ByteSetView<C> {
         !self.updates.is_empty()
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
         let mut delete_view = false;
         if self.delete_storage_first {
             delete_view = true;
             batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            for (index, update) in mem::take(&mut self.updates) {
+            for (index, update) in self.updates.iter() {
                 if let Update::Set(_) = update {
-                    let key = self.context.base_key().base_index(&index);
+                    let key = self.context.base_key().base_index(index);
                     batch.put_key_value_bytes(key, Vec::new());
                     delete_view = false;
                 }
             }
         } else {
-            for (index, update) in mem::take(&mut self.updates) {
-                let key = self.context.base_key().base_index(&index);
+            for (index, update) in self.updates.iter() {
+                let key = self.context.base_key().base_index(index);
                 match update {
                     Update::Removed => batch.delete_key(key),
                     Update::Set(_) => batch.put_key_value_bytes(key, Vec::new()),
                 }
             }
         }
-        self.delete_storage_first = false;
         Ok(delete_view)
+    }
+
+    fn post_save(&mut self) {
+        self.delete_storage_first = false;
+        self.updates.clear();
     }
 
     fn clear(&mut self) {
@@ -426,8 +430,12 @@ impl<C: Context, I: Send + Sync + Serialize> View for SetView<C, I> {
         self.set.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.set.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.set.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.set.post_save()
     }
 
     fn clear(&mut self) {
@@ -691,8 +699,12 @@ where
         self.set.has_pending_changes().await
     }
 
-    fn flush(&mut self, batch: &mut Batch) -> Result<bool, ViewError> {
-        self.set.flush(batch)
+    fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
+        self.set.pre_save(batch)
+    }
+
+    fn post_save(&mut self) {
+        self.set.post_save()
     }
 
     fn clear(&mut self) {
