@@ -17,7 +17,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_key_range_for_prefix,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
         WritableKeyValueStore,
     },
 };
@@ -133,7 +133,7 @@ pub struct MemoryStoreReadMultiIterator {
     values: std::vec::IntoIter<Option<Vec<u8>>>,
 }
 
-impl crate::store::ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
+impl ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
         Ok(self.values.next())
     }

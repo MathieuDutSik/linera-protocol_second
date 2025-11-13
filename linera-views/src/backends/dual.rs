@@ -11,7 +11,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
         WritableKeyValueStore,
     },
 };
@@ -85,11 +85,11 @@ pub enum DualStoreReadMultiIterator<I1, I2> {
     Second(I2),
 }
 
-impl<I1, I2, E1, E2> crate::store::ReadMultiIterator<DualStoreError<E1, E2>>
+impl<I1, I2, E1, E2> ReadMultiIterator<DualStoreError<E1, E2>>
     for DualStoreReadMultiIterator<I1, I2>
 where
-    I1: crate::store::ReadMultiIterator<E1>,
-    I2: crate::store::ReadMultiIterator<E2>,
+    I1: ReadMultiIterator<E1>,
+    I2: ReadMultiIterator<E2>,
     E1: crate::store::KeyValueStoreError,
     E2: crate::store::KeyValueStoreError,
 {

@@ -18,7 +18,7 @@ use prometheus::{HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
 };
 
 #[derive(Clone)]
@@ -305,9 +305,9 @@ where
 /// Iterator for reading multiple values from MeteredStore.
 pub struct MeteredStoreReadMultiIterator<I>(I);
 
-impl<I, E> crate::store::ReadMultiIterator<E> for MeteredStoreReadMultiIterator<I>
+impl<I, E> ReadMultiIterator<E> for MeteredStoreReadMultiIterator<I>
 where
-    I: crate::store::ReadMultiIterator<E>,
+    I: ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {

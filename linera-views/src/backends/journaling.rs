@@ -26,7 +26,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError,
         WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
@@ -113,9 +113,9 @@ where
 /// Iterator for reading multiple values from JournalingKeyValueStore.
 pub struct JournalingKeyValueStoreReadMultiIterator<I>(I);
 
-impl<I, E> crate::store::ReadMultiIterator<E> for JournalingKeyValueStoreReadMultiIterator<I>
+impl<I, E> ReadMultiIterator<E> for JournalingKeyValueStoreReadMultiIterator<I>
 where
-    I: crate::store::ReadMultiIterator<E>,
+    I: ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError + From<JournalConsistencyError>,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {

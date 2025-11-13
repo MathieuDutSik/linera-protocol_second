@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
         WritableKeyValueStore,
     },
 };
@@ -96,7 +96,7 @@ where
     first_segments: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl<S, E> crate::store::ReadMultiIterator<ValueSplittingError<E>>
+impl<S, E> ReadMultiIterator<ValueSplittingError<E>>
     for ValueSplittingStoreReadMultiIterator<'_, S>
 where
     S: ReadableKeyValueStore<Error = E>,
@@ -523,7 +523,7 @@ impl WithError for LimitedTestMemoryStore {
 pub struct LimitedTestMemoryStoreReadMultiIterator;
 
 #[cfg(with_testing)]
-impl crate::store::ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator {
+impl ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
         panic!("LimitedTestMemoryStore does not support read_multi_values_bytes_iter")
     }

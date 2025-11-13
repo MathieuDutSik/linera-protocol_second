@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
 };
 use thiserror::Error;
 
@@ -89,7 +89,7 @@ impl WithError for KeyValueStore {
 /// Iterator for reading multiple values from KeyValueStore.
 pub struct KeyValueStoreReadMultiIterator;
 
-impl linera_views::store::ReadMultiIterator<KeyValueStoreError> for KeyValueStoreReadMultiIterator {
+impl ReadMultiIterator<KeyValueStoreError> for KeyValueStoreReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, KeyValueStoreError> {
         panic!("KeyValueStore does not support read_multi_values_bytes_iter")
     }

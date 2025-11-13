@@ -31,7 +31,7 @@ use crate::{
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     map_view::ByteMapView,
-    store::ReadableKeyValueStore,
+    store::{ReadableKeyValueStore, ReadMultiIterator},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -1226,7 +1226,7 @@ impl<C> WithError for ViewContainer<C> {
 pub struct ViewContainerReadMultiIterator;
 
 #[cfg(with_testing)]
-impl crate::store::ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator {
+impl ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ViewContainerError> {
         panic!("ViewContainer does not support read_multi_values_bytes_iter")
     }

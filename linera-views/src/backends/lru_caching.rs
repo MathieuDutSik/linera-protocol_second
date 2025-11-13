@@ -14,7 +14,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
 };
 
 #[cfg(with_metrics)]
@@ -153,9 +153,9 @@ pub struct LruCachingStoreReadMultiIterator<'a, I> {
     keys: std::iter::Cloned<std::slice::Iter<'a, Vec<u8>>>,
 }
 
-impl<I, E> crate::store::ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<'_, I>
+impl<I, E> ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<'_, I>
 where
-    I: crate::store::ReadMultiIterator<E>,
+    I: ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
