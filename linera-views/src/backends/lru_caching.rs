@@ -147,7 +147,11 @@ where
 }
 
 /// Iterator for reading multiple values from LruCachingStore.
-pub struct LruCachingStoreReadMultiIterator<I>(I);
+pub struct LruCachingStoreReadMultiIterator<I> {
+    inner: I,
+    cache: Option<Arc<Mutex<LruPrefixCache>>>,
+    keys: std::vec::IntoIter<Vec<u8>>,
+}
 
 impl<I, E> crate::store::ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<I>
 where
@@ -155,7 +159,43 @@ where
     E: crate::store::KeyValueStoreError,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
-        self.0.next().await
+        // Get the next key
+        let Some(key) = self.keys.next() else {
+            return Ok(None);
+        };
+
+        // If no cache, just delegate to inner iterator
+        let Some(cache) = &self.cache else {
+            return self.inner.next().await;
+        };
+
+        // Check cache for this key
+        {
+            let mut cache = cache.lock().unwrap();
+            if let Some(value) = cache.query_read_value(&key) {
+                #[cfg(with_metrics)]
+                metrics::READ_VALUE_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
+                return Ok(Some(value));
+            }
+        }
+
+        // Cache miss - fetch from inner iterator
+        #[cfg(with_metrics)]
+        metrics::READ_VALUE_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
+
+        let value = self.inner.next().await?;
+
+        // Update cache with the fetched value
+        if let Some(inner_value) = &value {
+            let mut cache = cache.lock().unwrap();
+            cache.insert_read_value(&key, inner_value);
+        }
+
+        Ok(value)
     }
 }
 
@@ -312,7 +352,12 @@ where
     }
 
     fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        LruCachingStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
+        LruCachingStoreReadMultiIterator {
+            inner: self.store.read_multi_values_bytes_iter(keys),
+            cache: self.cache.clone(),
+            #[allow(clippy::unnecessary_to_owned)]
+            keys: keys.to_vec().into_iter(),
+        }
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
