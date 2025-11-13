@@ -820,7 +820,7 @@ pub struct DynamoDbStoreReadMultiIterator {
 }
 
 impl ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, DynamoDbStoreInternalError> {
         loop {
             match &mut self.current_values {
                 None => match self.key_batches.next() {
@@ -832,7 +832,7 @@ impl ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIte
                     None => return Ok(None),
                 },
                 Some(current_values) => match current_values.next() {
-                    Some(value) => return Ok(value),
+                    Some(value) => return Ok(Some(value)),
                     None => {
                         self.current_values = None;
                         continue;

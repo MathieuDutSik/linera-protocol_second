@@ -428,56 +428,30 @@ impl WithError for RocksDbStoreInternal {
 /// Data is fetched on first call to next() and then returned one by one.
 /// None values indicate keys that don't exist.
 pub struct RocksDbStoreReadMultiIterator {
-    state: IteratorState,
-}
-
-enum IteratorState {
-    /// Initial state with keys to fetch and execution context
-    Pending {
-        keys: Vec<Vec<u8>>,
-        executor: RocksDbStoreExecutor,
-        spawn_mode: RocksDbSpawnMode,
-    },
-    /// Data has been fetched and we're iterating through values
-    Ready {
-        values: std::vec::IntoIter<Option<Vec<u8>>>,
-    },
-    /// Iterator is exhausted
-    Done,
+    keys: Vec<Vec<u8>>,
+    executor: RocksDbStoreExecutor,
+    spawn_mode: RocksDbSpawnMode,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
 impl crate::store::ReadMultiIterator<RocksDbStoreInternalError> for RocksDbStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
-        match &mut self.state {
-            IteratorState::Pending {
-                keys,
-                executor,
-                spawn_mode,
-            } => {
-                // Fetch all values
-                let keys = std::mem::take(keys);
-                let executor = executor.clone();
-                let spawn_mode = *spawn_mode;
-                let results = spawn_mode
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, RocksDbStoreInternalError> {
+        match &mut self.values {
+            None => {
+                let keys = std::mem::take(&mut self.keys);
+                let executor = self.executor.clone();
+                let results = self
+                    .spawn_mode
                     .spawn(move |x| executor.read_multi_values_bytes_internal(x), keys)
                     .await?;
 
-                // Keep all values including None (for missing keys)
                 let mut iter = results.into_iter();
-                let first = iter.next().unwrap_or(None);
-
-                self.state = IteratorState::Ready { values: iter };
+                let first = iter.next();
+                self.values = Some(iter);
 
                 Ok(first)
             }
-            IteratorState::Ready { values } => match values.next() {
-                Some(opt_value) => Ok(opt_value),
-                None => {
-                    self.state = IteratorState::Done;
-                    Ok(None)
-                }
-            },
-            IteratorState::Done => Ok(None),
+            Some(values) => Ok(values.next()),
         }
     }
 }
@@ -550,11 +524,10 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
 
     fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
         RocksDbStoreReadMultiIterator {
-            state: IteratorState::Pending {
-                keys: keys.to_vec(),
-                executor: self.executor.clone(),
-                spawn_mode: self.spawn_mode,
-            },
+            keys: keys.to_vec(),
+            executor: self.executor.clone(),
+            spawn_mode: self.spawn_mode,
+            values: None,
         }
     }
 

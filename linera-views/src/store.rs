@@ -42,7 +42,10 @@ pub trait WithError {
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ReadMultiIterator<E: KeyValueStoreError> {
     /// Returns the next value from the iterator.
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, E>;
+    /// Returns `Ok(None)` when iteration is complete.
+    /// Returns `Ok(Some(None))` when a key doesn't exist.
+    /// Returns `Ok(Some(Some(value)))` when a key exists with a value.
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E>;
 }
 
 /// Asynchronous read key-value operations.
@@ -306,7 +309,7 @@ pub mod inactive_store {
     }
 
     impl ReadMultiIterator<InactiveStoreError> for InactiveStoreReadMultiIterator {
-        async fn next(&mut self) -> Result<Option<Vec<u8>>, InactiveStoreError> {
+        async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, InactiveStoreError> {
             panic!("attempt to iterate over an inactive store!")
         }
     }

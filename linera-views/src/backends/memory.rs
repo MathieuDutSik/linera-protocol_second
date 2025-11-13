@@ -134,8 +134,8 @@ pub struct MemoryStoreReadMultiIterator {
 }
 
 impl crate::store::ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        Ok(self.values.next().unwrap_or(None))
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
+        Ok(self.values.next())
     }
 }
 

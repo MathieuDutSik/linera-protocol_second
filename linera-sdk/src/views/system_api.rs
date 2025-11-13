@@ -90,8 +90,8 @@ impl WithError for KeyValueStore {
 pub struct KeyValueStoreReadMultiIterator;
 
 impl linera_views::store::ReadMultiIterator<KeyValueStoreError> for KeyValueStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, KeyValueStoreError> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, KeyValueStoreError> {
+        panic!("KeyValueStore does not support read_multi_values_bytes_iter")
     }
 }
 

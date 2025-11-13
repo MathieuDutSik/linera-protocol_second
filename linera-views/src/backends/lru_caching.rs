@@ -154,8 +154,8 @@ where
     I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError,
 {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, E> {
-        todo!("LruCachingStoreReadMultiIterator::next not yet implemented")
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        self.0.next().await
     }
 }
 
@@ -311,8 +311,8 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        todo!("LruCachingStore::read_multi_values_bytes_iter not yet implemented")
+    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        LruCachingStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {

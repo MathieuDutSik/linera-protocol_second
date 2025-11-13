@@ -310,8 +310,8 @@ where
     I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError,
 {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, E> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
+        self.0.next().await
     }
 }
 

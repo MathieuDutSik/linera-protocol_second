@@ -1227,8 +1227,8 @@ pub struct ViewContainerReadMultiIterator;
 
 #[cfg(with_testing)]
 impl crate::store::ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, ViewContainerError> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ViewContainerError> {
+        panic!("ViewContainer does not support read_multi_values_bytes_iter")
     }
 }
 

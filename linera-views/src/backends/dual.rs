@@ -93,7 +93,7 @@ where
     E1: crate::store::KeyValueStoreError,
     E2: crate::store::KeyValueStoreError,
 {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, DualStoreError<E1, E2>> {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, DualStoreError<E1, E2>> {
         match self {
             Self::First(iter) => iter.next().await.map_err(DualStoreError::First),
             Self::Second(iter) => iter.next().await.map_err(DualStoreError::Second),

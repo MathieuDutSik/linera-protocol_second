@@ -14,7 +14,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound_option,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -47,6 +47,7 @@ pub struct IndexedDbDatabase {
 }
 
 /// A logical partition of [`IndexedDbDatabase`]
+#[derive(Clone)]
 pub struct IndexedDbStore {
     /// The database used for storing the data.
     pub database: Rc<IdbDatabase>,
@@ -113,11 +114,25 @@ impl WithError for IndexedDbDatabase {
 }
 
 /// Iterator for reading multiple values from IndexedDbStore.
-pub struct IndexedDbStoreReadMultiIterator;
+pub struct IndexedDbStoreReadMultiIterator {
+    store: IndexedDbStore,
+    keys: Vec<Vec<u8>>,
+    current_values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
 
-impl crate::store::ReadMultiIterator<IndexedDbStoreError> for IndexedDbStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, IndexedDbStoreError> {
-        todo!("IndexedDbStoreReadMultiIterator::next not yet implemented")
+impl ReadMultiIterator<IndexedDbStoreError> for IndexedDbStoreReadMultiIterator {
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, IndexedDbStoreError> {
+        match &mut self.current_values {
+            None => {
+                let keys = std::mem::take(&mut self.keys);
+                let values = self.store.read_multi_values_bytes(keys).await?;
+                let mut iter = values.into_iter();
+                let first = iter.next();
+                self.current_values = Some(iter);
+                Ok(first)
+            }
+            Some(current_values) => Ok(current_values.next()),
+        }
     }
 }
 
@@ -170,8 +185,12 @@ impl ReadableKeyValueStore for IndexedDbStore {
         .await
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        todo!("IndexedDbStore::read_multi_values_bytes_iter not yet implemented")
+    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        IndexedDbStoreReadMultiIterator {
+            store: self.clone(),
+            keys: keys.to_vec(),
+            current_values: None,
+        }
     }
 
     async fn find_keys_by_prefix(

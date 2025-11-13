@@ -94,8 +94,8 @@ where
     I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError + 'static,
 {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, ValueSplittingError<E>> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ValueSplittingError<E>> {
+        self.0.next().await.map_err(ValueSplittingError::InnerStoreError)
     }
 }
 
@@ -450,8 +450,8 @@ pub struct LimitedTestMemoryStoreReadMultiIterator;
 
 #[cfg(with_testing)]
 impl crate::store::ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
+        panic!("LimitedTestMemoryStore does not support read_multi_values_bytes_iter")
     }
 }
 

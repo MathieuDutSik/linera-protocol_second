@@ -97,8 +97,8 @@ pub struct StorageServiceStoreInternalReadMultiIterator;
 impl linera_views::store::ReadMultiIterator<StorageServiceStoreError>
     for StorageServiceStoreInternalReadMultiIterator
 {
-    async fn next(&mut self) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
-        todo!()
+    async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
+        panic!("StorageServiceStoreInternal does not support read_multi_values_bytes_iter")
     }
 }
 
