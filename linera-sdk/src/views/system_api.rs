@@ -116,7 +116,7 @@ impl ReadableKeyValueStore for KeyValueStore {
     // on the size of its values.
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator = KeyValueStoreReadMultiIterator;
+    type ReadMultiIterator<'a> = KeyValueStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -163,7 +163,7 @@ impl ReadableKeyValueStore for KeyValueStore {
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, _keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         todo!()
     }
 

@@ -846,7 +846,7 @@ impl ReadMultiIterator<DynamoDbStoreInternalError> for DynamoDbStoreReadMultiIte
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator = DynamoDbStoreReadMultiIterator;
+    type ReadMultiIterator<'a> = DynamoDbStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -907,7 +907,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         // Split keys into batches
         let batches: Vec<Vec<Vec<u8>>> = keys
             .chunks(MAX_BATCH_GET_ITEM_SIZE)

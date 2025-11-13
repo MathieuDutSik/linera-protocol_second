@@ -648,7 +648,7 @@ impl ReadMultiIterator<ScyllaDbStoreInternalError> for ScyllaDbStoreReadMultiIte
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator = ScyllaDbStoreReadMultiIterator;
+    type ReadMultiIterator<'a> = ScyllaDbStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -711,7 +711,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         let batches: Vec<Vec<Vec<u8>>> = keys
             .chunks(MAX_MULTI_KEYS)
             .map(|chunk| chunk.to_vec())

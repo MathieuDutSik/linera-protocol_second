@@ -86,31 +86,40 @@ where
 }
 
 /// Iterator for reading multiple values from ValueSplittingStore.
-pub struct ValueSplittingStoreReadMultiIterator<S, I> {
+pub struct ValueSplittingStoreReadMultiIterator<'a, S>
+where
+    S: ReadableKeyValueStore,
+{
     store: S,
-    keys: std::vec::IntoIter<Vec<u8>>,
-    inner: I,
+    keys: std::iter::Cloned<std::slice::Iter<'a, Vec<u8>>>,
+    big_keys: Vec<Vec<u8>>,
+    first_segments: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl<S, I, E> crate::store::ReadMultiIterator<ValueSplittingError<E>>
-    for ValueSplittingStoreReadMultiIterator<S, I>
+impl<S, E> crate::store::ReadMultiIterator<ValueSplittingError<E>>
+    for ValueSplittingStoreReadMultiIterator<'_, S>
 where
     S: ReadableKeyValueStore<Error = E>,
-    I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError + 'static,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ValueSplittingError<E>> {
+        // Lazily fetch all first segments on first call
+        if self.first_segments.is_none() {
+            let first_segments_vec = self.store
+                .read_multi_values_bytes(std::mem::take(&mut self.big_keys))
+                .await
+                .map_err(ValueSplittingError::InnerStoreError)?;
+            self.first_segments = Some(first_segments_vec.into_iter());
+        }
+
         // Get the next original key
         let Some(key) = self.keys.next() else {
             return Ok(None);
         };
 
-        // Get the next value from the inner iterator (first segment)
-        let value = self.inner.next().await.map_err(ValueSplittingError::InnerStoreError)?;
-
-        let Some(value) = value else {
-            return Ok(None);
-        };
+        // Get the next value from the first segments
+        let value = self.first_segments.as_mut().unwrap().next()
+            .expect("keys and first_segments should have same length");
 
         let Some(value) = value else {
             return Ok(Some(None));
@@ -156,7 +165,7 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
 
-    type ReadMultiIterator = ValueSplittingStoreReadMultiIterator<S, S::ReadMultiIterator>;
+    type ReadMultiIterator<'a> = ValueSplittingStoreReadMultiIterator<'a, S> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -268,7 +277,7 @@ where
         Ok(big_values)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         // Create big_keys (keys with [0,0,0,0] suffix) for the first segments
         let big_keys: Vec<Vec<u8>> = keys
             .iter()
@@ -281,9 +290,9 @@ where
 
         ValueSplittingStoreReadMultiIterator {
             store: self.store.clone(),
-            #[allow(clippy::unnecessary_to_owned)]
-            keys: keys.to_vec().into_iter(),
-            inner: self.store.read_multi_values_bytes_iter(&big_keys),
+            keys: keys.iter().cloned(),
+            big_keys,
+            first_segments: None,
         }
     }
 
@@ -524,7 +533,7 @@ impl crate::store::ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStor
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator = LimitedTestMemoryStoreReadMultiIterator;
+    type ReadMultiIterator<'a> = LimitedTestMemoryStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
@@ -553,7 +562,7 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         let _ = keys;
         LimitedTestMemoryStoreReadMultiIterator
     }

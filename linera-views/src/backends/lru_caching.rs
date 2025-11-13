@@ -147,13 +147,13 @@ where
 }
 
 /// Iterator for reading multiple values from LruCachingStore.
-pub struct LruCachingStoreReadMultiIterator<I> {
+pub struct LruCachingStoreReadMultiIterator<'a, I> {
     inner: I,
     cache: Option<Arc<Mutex<LruPrefixCache>>>,
-    keys: std::vec::IntoIter<Vec<u8>>,
+    keys: std::iter::Cloned<std::slice::Iter<'a, Vec<u8>>>,
 }
 
-impl<I, E> crate::store::ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<I>
+impl<I, E> crate::store::ReadMultiIterator<E> for LruCachingStoreReadMultiIterator<'_, I>
 where
     I: crate::store::ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError,
@@ -206,7 +206,7 @@ where
     // The LRU cache does not change the underlying store's size limits.
     const MAX_KEY_SIZE: usize = K::MAX_KEY_SIZE;
 
-    type ReadMultiIterator = LruCachingStoreReadMultiIterator<K::ReadMultiIterator>;
+    type ReadMultiIterator<'a> = LruCachingStoreReadMultiIterator<'a, K::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -351,12 +351,11 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         LruCachingStoreReadMultiIterator {
             inner: self.store.read_multi_values_bytes_iter(keys),
             cache: self.cache.clone(),
-            #[allow(clippy::unnecessary_to_owned)]
-            keys: keys.to_vec().into_iter(),
+            keys: keys.iter().cloned(),
         }
     }
 

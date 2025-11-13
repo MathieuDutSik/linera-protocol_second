@@ -142,7 +142,7 @@ impl crate::store::ReadMultiIterator<MemoryStoreError> for MemoryStoreReadMultiI
 impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator = MemoryStoreReadMultiIterator;
+    type ReadMultiIterator<'a> = MemoryStoreReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -194,7 +194,7 @@ impl ReadableKeyValueStore for MemoryStore {
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         let map = self
             .map
             .read()

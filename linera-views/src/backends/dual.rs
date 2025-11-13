@@ -113,8 +113,10 @@ where
         S2::MAX_KEY_SIZE
     };
 
-    type ReadMultiIterator =
-        DualStoreReadMultiIterator<S1::ReadMultiIterator, S2::ReadMultiIterator>;
+    type ReadMultiIterator<'a> =
+        DualStoreReadMultiIterator<S1::ReadMultiIterator<'a>, S2::ReadMultiIterator<'a>>
+    where
+        Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         match self {
@@ -189,7 +191,7 @@ where
         Ok(result)
     }
 
-    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         match self {
             Self::First(store) => {
                 DualStoreReadMultiIterator::First(store.read_multi_values_bytes_iter(keys))

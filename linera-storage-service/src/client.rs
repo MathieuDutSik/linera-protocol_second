@@ -105,7 +105,7 @@ impl linera_views::store::ReadMultiIterator<StorageServiceStoreError>
 impl ReadableKeyValueStore for StorageServiceStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    type ReadMultiIterator = StorageServiceStoreInternalReadMultiIterator;
+    type ReadMultiIterator<'a> = StorageServiceStoreInternalReadMultiIterator where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.max_stream_queries
@@ -225,7 +225,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+    fn read_multi_values_bytes_iter<'a>(&'a self, _keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
         todo!()
     }
 
