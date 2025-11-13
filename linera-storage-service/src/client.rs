@@ -92,13 +92,30 @@ impl WithError for StorageServiceStoreInternal {
 }
 
 /// Iterator for reading multiple values from StorageServiceStoreInternal.
-pub struct StorageServiceStoreInternalReadMultiIterator;
+pub struct StorageServiceStoreInternalReadMultiIterator {
+    store: StorageServiceStoreInternal,
+    keys: Vec<Vec<u8>>,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
 
 impl ReadMultiIterator<StorageServiceStoreError>
     for StorageServiceStoreInternalReadMultiIterator
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
-        panic!("StorageServiceStoreInternal does not support read_multi_values_bytes_iter")
+        match &mut self.values {
+            None => {
+                // Fetch all values on first call
+                let keys = std::mem::take(&mut self.keys);
+                let results = self.store.read_multi_values_bytes(keys).await?;
+
+                let mut iter = results.into_iter();
+                let first = iter.next();
+                self.values = Some(iter);
+
+                Ok(first)
+            }
+            Some(values) => Ok(values.next()),
+        }
     }
 }
 
@@ -225,8 +242,12 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, _keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
-        todo!()
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+        StorageServiceStoreInternalReadMultiIterator {
+            store: self.clone(),
+            keys: keys.to_vec(),
+            values: None,
+        }
     }
 
     async fn find_keys_by_prefix(

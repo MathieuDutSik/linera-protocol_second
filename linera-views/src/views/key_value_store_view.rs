@@ -1223,12 +1223,29 @@ impl<C> WithError for ViewContainer<C> {
 
 /// Iterator for reading multiple values from ViewContainer.
 #[cfg(with_testing)]
-pub struct ViewContainerReadMultiIterator;
+pub struct ViewContainerReadMultiIterator<C: Context> {
+    store: ViewContainer<C>,
+    keys: Vec<Vec<u8>>,
+    values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+}
 
 #[cfg(with_testing)]
-impl ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator {
+impl<C: Context> ReadMultiIterator<ViewContainerError> for ViewContainerReadMultiIterator<C> {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ViewContainerError> {
-        panic!("ViewContainer does not support read_multi_values_bytes_iter")
+        match &mut self.values {
+            None => {
+                // Fetch all values on first call
+                let keys = std::mem::take(&mut self.keys);
+                let results = self.store.read_multi_values_bytes(keys).await?;
+
+                let mut iter = results.into_iter();
+                let first = iter.next();
+                self.values = Some(iter);
+
+                Ok(first)
+            }
+            Some(values) => Ok(values.next()),
+        }
     }
 }
 
@@ -1254,7 +1271,7 @@ impl KeyValueStoreError for ViewContainerError {
 impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
     const MAX_KEY_SIZE: usize = <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE;
 
-    type ReadMultiIterator<'a> = ViewContainerReadMultiIterator where Self: 'a;
+    type ReadMultiIterator<'a> = ViewContainerReadMultiIterator<C> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         1
@@ -1287,8 +1304,12 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, _keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
-        todo!()
+    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+        ViewContainerReadMultiIterator {
+            store: self.clone(),
+            keys: keys.to_vec(),
+            values: None,
+        }
     }
 
     async fn find_keys_by_prefix(
