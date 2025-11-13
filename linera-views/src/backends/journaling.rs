@@ -161,8 +161,8 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    fn read_multi_values_bytes_iter(&self, _keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
-        todo!()
+    fn read_multi_values_bytes_iter(&self, keys: &[Vec<u8>]) -> Self::ReadMultiIterator {
+        JournalingKeyValueStoreReadMultiIterator(self.store.read_multi_values_bytes_iter(keys))
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
