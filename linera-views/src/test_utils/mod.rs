@@ -18,8 +18,8 @@ use crate::{
     },
     random::{generate_test_namespace, make_deterministic_rng, make_nondeterministic_rng},
     store::{
-        KeyValueDatabase, KeyValueStore, ReadableKeyValueStore, TestKeyValueDatabase,
-        WritableKeyValueStore,
+        KeyValueDatabase, KeyValueStore, ReadMultiIterator, ReadableKeyValueStore,
+        TestKeyValueDatabase, WritableKeyValueStore,
     },
 };
 
@@ -234,7 +234,17 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             values_single_read.push(store.read_value_bytes(key).await.unwrap());
         }
         let test_exists_direct = store.contains_keys(keys.clone()).await.unwrap();
-        let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+        let values_read = store.read_multi_values_bytes(keys.clone()).await.unwrap();
+        // Test read_multi_values_bytes_iter
+        let mut iter = store.read_multi_values_bytes_iter(&keys);
+        let mut values_from_iter = Vec::new();
+        loop {
+            match iter.next().await.unwrap() {
+                None => break,
+                Some(value) => values_from_iter.push(value),
+            }
+        }
+        assert_eq!(values_read, values_from_iter);
         assert_eq!(values, values_read);
         assert_eq!(values, values_single_read);
         let values_read_stat = values_read.iter().map(|x| x.is_some()).collect::<Vec<_>>();
@@ -470,7 +480,17 @@ where
     // We reconnect so that the read is not using the cache.
     let store = D::connect(&config, &namespace).await.unwrap();
     let store = store.open_exclusive(&[]).unwrap();
-    let values_read = store.read_multi_values_bytes(keys).await.unwrap();
+    let values_read = store.read_multi_values_bytes(keys.clone()).await.unwrap();
+    // Test read_multi_values_bytes_iter
+    let mut iter = store.read_multi_values_bytes_iter(&keys);
+    let mut values_from_iter = Vec::new();
+    loop {
+        match iter.next().await.unwrap() {
+            None => break,
+            Some(value) => values_from_iter.push(value),
+        }
+    }
+    assert_eq!(values_read, values_from_iter);
     assert_eq!(values, values_read);
 }
 

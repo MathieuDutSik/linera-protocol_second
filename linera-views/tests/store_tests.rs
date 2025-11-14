@@ -30,7 +30,7 @@ async fn test_read_multi_values_memory() {
     big_read_multi_values::<MemoryDatabase>(config, 2200000, 1000).await;
 }
 
-#[ignore]
+//#[ignore]
 #[cfg(with_dynamodb)]
 #[tokio::test]
 async fn test_read_multi_values_dynamo_db() {
@@ -39,7 +39,7 @@ async fn test_read_multi_values_dynamo_db() {
     big_read_multi_values::<DynamoDbDatabase>(config, 22000000, 1000).await;
 }
 
-#[ignore]
+//#[ignore]
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_read_multi_values_scylla_db() {

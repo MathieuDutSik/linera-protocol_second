@@ -31,7 +31,7 @@ use crate::{
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     map_view::ByteMapView,
-    store::{ReadableKeyValueStore, ReadMultiIterator},
+    store::{ReadMultiIterator, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 

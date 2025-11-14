@@ -159,43 +159,7 @@ where
     E: crate::store::KeyValueStoreError,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, E> {
-        // Get the next key
-        let Some(key) = self.keys.next() else {
-            return Ok(None);
-        };
-
-        // If no cache, just delegate to inner iterator
-        let Some(cache) = &self.cache else {
-            return self.inner.next().await;
-        };
-
-        // Check cache for this key
-        {
-            let mut cache = cache.lock().unwrap();
-            if let Some(value) = cache.query_read_value(&key) {
-                #[cfg(with_metrics)]
-                metrics::READ_VALUE_CACHE_HIT_COUNT
-                    .with_label_values(&[])
-                    .inc();
-                return Ok(Some(value));
-            }
-        }
-
-        // Cache miss - fetch from inner iterator
-        #[cfg(with_metrics)]
-        metrics::READ_VALUE_CACHE_MISS_COUNT
-            .with_label_values(&[])
-            .inc();
-
-        let value = self.inner.next().await?;
-
-        // Update cache with the fetched value
-        if let Some(inner_value) = &value {
-            let mut cache = cache.lock().unwrap();
-            cache.insert_read_value(&key, inner_value);
-        }
-
-        Ok(value)
+        self.inner.next().await
     }
 }
 
