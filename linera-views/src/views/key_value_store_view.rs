@@ -1304,10 +1304,10 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
         ViewContainerReadMultiIterator {
             store: self.clone(),
-            keys: keys.to_vec(),
+            keys,
             values: None,
         }
     }

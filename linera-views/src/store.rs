@@ -81,7 +81,7 @@ pub trait ReadableKeyValueStore: WithError {
     ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>;
 
     /// Returns an iterator for reading multiple values using the provided `keys`.
-    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a>;
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_>;
 
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
@@ -348,7 +348,7 @@ pub mod inactive_store {
             panic!("attempt to read from an inactive store!")
         }
 
-        fn read_multi_values_bytes_iter<'a>(&'a self, _keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+        fn read_multi_values_bytes_iter(&self, _keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
             InactiveStoreReadMultiIterator
         }
 

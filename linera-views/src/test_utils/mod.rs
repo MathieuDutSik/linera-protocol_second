@@ -236,7 +236,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         let test_exists_direct = store.contains_keys(keys.clone()).await.unwrap();
         let values_read = store.read_multi_values_bytes(keys.clone()).await.unwrap();
         // Test read_multi_values_bytes_iter
-        let mut iter = store.read_multi_values_bytes_iter(&keys);
+        let mut iter = store.read_multi_values_bytes_iter(keys.clone());
         let mut values_from_iter = Vec::new();
         loop {
             match iter.next().await.unwrap() {
@@ -482,7 +482,7 @@ where
     let store = store.open_exclusive(&[]).unwrap();
     let values_read = store.read_multi_values_bytes(keys.clone()).await.unwrap();
     // Test read_multi_values_bytes_iter
-    let mut iter = store.read_multi_values_bytes_iter(&keys);
+    let mut iter = store.read_multi_values_bytes_iter(keys);
     let mut values_from_iter = Vec::new();
     loop {
         match iter.next().await.unwrap() {

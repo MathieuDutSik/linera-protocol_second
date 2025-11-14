@@ -907,7 +907,7 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         Ok(results.into_iter().flatten().collect())
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
         // Split keys into batches
         let batches: Vec<Vec<Vec<u8>>> = keys
             .chunks(MAX_BATCH_GET_ITEM_SIZE)

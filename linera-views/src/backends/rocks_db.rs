@@ -522,7 +522,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
         RocksDbStoreReadMultiIterator {
             keys: keys.to_vec(),
             executor: self.executor.clone(),

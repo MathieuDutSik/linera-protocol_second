@@ -180,10 +180,10 @@ impl ReadableKeyValueStore for KeyValueStore {
         Ok(self.wit_api.read_multi_values_bytes_wait(promise))
     }
 
-    fn read_multi_values_bytes_iter<'a>(&'a self, keys: &'a [Vec<u8>]) -> Self::ReadMultiIterator<'a> {
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
         KeyValueStoreReadMultiIterator {
             store: self.clone(),
-            keys: keys.to_vec(),
+            keys,
             values: None,
         }
     }
