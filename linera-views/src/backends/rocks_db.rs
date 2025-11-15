@@ -29,7 +29,7 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},

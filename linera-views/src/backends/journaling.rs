@@ -26,7 +26,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError,
+        DirectKeyValueStore, KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,

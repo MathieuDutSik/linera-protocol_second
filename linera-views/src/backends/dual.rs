@@ -11,7 +11,7 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };

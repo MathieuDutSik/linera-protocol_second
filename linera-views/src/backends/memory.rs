@@ -17,7 +17,7 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_key_range_for_prefix,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };

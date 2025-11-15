@@ -19,7 +19,10 @@ use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
-    store::{KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
     FutureSyncExt as _,
 };
 use serde::de::DeserializeOwned;
@@ -98,9 +101,7 @@ pub struct StorageServiceStoreInternalReadMultiIterator {
     values: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
 }
 
-impl ReadMultiIterator<StorageServiceStoreError>
-    for StorageServiceStoreInternalReadMultiIterator
-{
+impl ReadMultiIterator<StorageServiceStoreError> for StorageServiceStoreInternalReadMultiIterator {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, StorageServiceStoreError> {
         match &mut self.values {
             None => {

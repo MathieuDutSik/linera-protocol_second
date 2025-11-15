@@ -9,7 +9,7 @@ use std::sync::Arc;
 use linera_base::ensure;
 use linera_views::{
     batch::Batch,
-    store::{ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
+    store::{ReadMultiIterator, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
 use thiserror::Error;
 

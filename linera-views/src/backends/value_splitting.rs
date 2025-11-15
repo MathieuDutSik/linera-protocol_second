@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -112,7 +112,10 @@ where
         self.current_index += 1;
 
         // Get the next value from the first segments iterator
-        let value = self.first_segments_iter.next().await
+        let value = self
+            .first_segments_iter
+            .next()
+            .await
             .map_err(ValueSplittingError::InnerStoreError)?
             .expect("keys and first_segments should have same length");
 
@@ -135,7 +138,10 @@ where
             segment_keys.push(segment_key);
         }
 
-        let segments = self.store.read_multi_values_bytes(segment_keys).await
+        let segments = self
+            .store
+            .read_multi_values_bytes(segment_keys)
+            .await
             .map_err(ValueSplittingError::InnerStoreError)?;
 
         for segment in segments {
@@ -518,12 +524,17 @@ impl WithError for LimitedTestMemoryStore {
 
 /// Iterator for reading multiple values from LimitedTestMemoryStore.
 #[cfg(with_testing)]
-pub struct LimitedTestMemoryStoreReadMultiIterator;
+pub struct LimitedTestMemoryStoreReadMultiIterator<I> {
+    inner: I,
+}
 
 #[cfg(with_testing)]
-impl ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator {
+impl<I> ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIterator<I>
+where
+    I: ReadMultiIterator<MemoryStoreError>,
+{
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, MemoryStoreError> {
-        panic!("LimitedTestMemoryStore does not support read_multi_values_bytes_iter")
+        self.inner.next().await
     }
 }
 
@@ -531,7 +542,7 @@ impl ReadMultiIterator<MemoryStoreError> for LimitedTestMemoryStoreReadMultiIter
 impl ReadableKeyValueStore for LimitedTestMemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
-    type ReadMultiIterator<'a> = LimitedTestMemoryStoreReadMultiIterator where Self: 'a;
+    type ReadMultiIterator<'a> = LimitedTestMemoryStoreReadMultiIterator<<MemoryStore as ReadableKeyValueStore>::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.inner.max_stream_queries()
@@ -561,8 +572,9 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
     }
 
     fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> Self::ReadMultiIterator<'_> {
-        let _ = keys;
-        LimitedTestMemoryStoreReadMultiIterator
+        LimitedTestMemoryStoreReadMultiIterator {
+            inner: self.inner.read_multi_values_bytes_iter(keys),
+        }
     }
 
     async fn find_keys_by_prefix(

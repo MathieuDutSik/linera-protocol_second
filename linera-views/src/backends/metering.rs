@@ -18,7 +18,10 @@ use prometheus::{HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]

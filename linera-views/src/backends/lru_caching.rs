@@ -14,7 +14,10 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, ReadMultiIterator, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -145,7 +148,6 @@ where
 {
     type Error = S::Error;
 }
-
 
 /// Iterator for reading multiple values from LruCachingStore when there is a cache.
 pub struct LruCachingStoreReadMultiIteratorInner<K, I> {
