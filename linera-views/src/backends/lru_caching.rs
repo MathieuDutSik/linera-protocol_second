@@ -182,15 +182,15 @@ where
                 }
             }
             // The key has been evicted. Should be rare.
-            #[cfg(with_metrics)]
-            metrics::READ_VALUE_CACHE_MISS_COUNT
-                .with_label_values(&[])
-                .inc();
             self.store.read_value_bytes(key).await?
         } else {
             // We unwrap since we know we are not at the end.
             self.inner.next().await?.unwrap()
         };
+        #[cfg(with_metrics)]
+        metrics::READ_VALUE_CACHE_MISS_COUNT
+            .with_label_values(&[])
+            .inc();
         {
             let mut cache = self.cache.lock().unwrap();
             cache.insert_read_value(key, &value);

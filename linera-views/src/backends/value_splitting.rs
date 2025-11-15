@@ -86,33 +86,24 @@ where
 }
 
 /// Iterator for reading multiple values from ValueSplittingStore.
-pub struct ValueSplittingStoreReadMultiIterator<S>
+pub struct ValueSplittingStoreReadMultiIterator<S, I>
 where
     S: ReadableKeyValueStore,
 {
     store: S,
     keys: Vec<Vec<u8>>,
-    big_keys: Vec<Vec<u8>>,
-    first_segments: Option<std::vec::IntoIter<Option<Vec<u8>>>>,
+    first_segments_iter: I,
     current_index: usize,
 }
 
-impl<S, E> ReadMultiIterator<ValueSplittingError<E>>
-    for ValueSplittingStoreReadMultiIterator<S>
+impl<S, I, E> ReadMultiIterator<ValueSplittingError<E>>
+    for ValueSplittingStoreReadMultiIterator<S, I>
 where
     S: ReadableKeyValueStore<Error = E>,
+    I: ReadMultiIterator<E>,
     E: crate::store::KeyValueStoreError + 'static,
 {
     async fn next(&mut self) -> Result<Option<Option<Vec<u8>>>, ValueSplittingError<E>> {
-        // Lazily fetch all first segments on first call
-        if self.first_segments.is_none() {
-            let first_segments_vec = self.store
-                .read_multi_values_bytes(std::mem::take(&mut self.big_keys))
-                .await
-                .map_err(ValueSplittingError::InnerStoreError)?;
-            self.first_segments = Some(first_segments_vec.into_iter());
-        }
-
         // Get the next original key
         if self.current_index >= self.keys.len() {
             return Ok(None);
@@ -120,8 +111,9 @@ where
         let key = &self.keys[self.current_index];
         self.current_index += 1;
 
-        // Get the next value from the first segments
-        let value = self.first_segments.as_mut().unwrap().next()
+        // Get the next value from the first segments iterator
+        let value = self.first_segments_iter.next().await
+            .map_err(ValueSplittingError::InnerStoreError)?
             .expect("keys and first_segments should have same length");
 
         let Some(value) = value else {
@@ -168,7 +160,7 @@ where
 {
     const MAX_KEY_SIZE: usize = S::MAX_KEY_SIZE - 4;
 
-    type ReadMultiIterator<'a> = ValueSplittingStoreReadMultiIterator<S> where Self: 'a;
+    type ReadMultiIterator<'a> = ValueSplittingStoreReadMultiIterator<S, S::ReadMultiIterator<'a>> where Self: 'a;
 
     fn max_stream_queries(&self) -> usize {
         self.store.max_stream_queries()
@@ -291,11 +283,13 @@ where
             })
             .collect();
 
+        // Create iterator for first segments
+        let first_segments_iter = self.store.read_multi_values_bytes_iter(big_keys);
+
         ValueSplittingStoreReadMultiIterator {
             store: self.store.clone(),
             keys,
-            big_keys,
-            first_segments: None,
+            first_segments_iter,
             current_index: 0,
         }
     }
