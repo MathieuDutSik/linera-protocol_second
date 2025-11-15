@@ -56,7 +56,7 @@ use crate::{
     context::{BaseKey, Context},
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    store::{ReadMultiIterator, ReadableKeyValueStore},
+    store::{KeyValueStoreError, ReadMultiIterator, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError},
 };
 
@@ -79,22 +79,19 @@ enum SlotState<V> {
 }
 
 /// Iterator for multi-get operations on ByteMapView.
-pub struct ByteMapViewMultiGet<'a, C, V>
-where
-    C: Context,
-    C::Store: 'a,
-{
+pub struct ByteMapViewMultiGet<V, I> {
     cached_iter: std::vec::IntoIter<SlotState<V>>,
-    store_iter: <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'a>,
+    store_iter: I,
 }
 
-impl<'a, C, V> ByteMapViewMultiGet<'a, C, V>
-where
-    C: Context,
-    V: DeserializeOwned,
-{
+impl<V, I> ByteMapViewMultiGet<V, I> {
     /// Returns the next value, or None if iteration is complete.
-    pub async fn next(&mut self) -> Result<Option<Option<V>>, ViewError> {
+    pub async fn next<E>(&mut self) -> Result<Option<Option<V>>, ViewError>
+    where
+        V: DeserializeOwned,
+        I: ReadMultiIterator<E>,
+        E: KeyValueStoreError,
+    {
         match self.cached_iter.next() {
             None => Ok(None),
             Some(SlotState::Cached(value)) => Ok(Some(value)),
@@ -432,7 +429,10 @@ where
     /// assert_eq!(value1, Some(String::from("Hello")));
     /// # })
     /// ```
-    pub fn multi_get_iter(&self, short_keys: Vec<Vec<u8>>) -> ByteMapViewMultiGet<'_, C, V> {
+    pub fn multi_get_iter(
+        &self,
+        short_keys: Vec<Vec<u8>>,
+    ) -> ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>> {
         let size = short_keys.len();
         let mut vector_query = Vec::new();
         let mut cached = Vec::with_capacity(size);
