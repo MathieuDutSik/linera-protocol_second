@@ -78,13 +78,13 @@ enum SlotState<V> {
     NeedsFetch,
 }
 
-/// Iterator for multi-get operations on ByteMapView.
-pub struct ByteMapViewMultiGet<V, I> {
+/// Iterator for multi-get operations on map views.
+pub struct MapViewMultiGet<V, I> {
     cached_iter: std::vec::IntoIter<SlotState<V>>,
     store_iter: I,
 }
 
-impl<V, I> ByteMapViewMultiGet<V, I> {
+impl<V, I> MapViewMultiGet<V, I> {
     /// Returns the next value, or None if iteration is complete.
     pub async fn next<E>(&mut self) -> Result<Option<Option<V>>, ViewError>
     where
@@ -432,7 +432,7 @@ where
     pub fn multi_get_iter(
         &self,
         short_keys: Vec<Vec<u8>>,
-    ) -> ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>> {
+    ) -> MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>> {
         let size = short_keys.len();
         let mut vector_query = Vec::new();
         let mut cached = Vec::with_capacity(size);
@@ -455,7 +455,7 @@ where
 
         let store_iter = self.context.store().read_multi_values_bytes_iter(vector_query);
 
-        ByteMapViewMultiGet {
+        MapViewMultiGet {
             cached_iter: cached.into_iter(),
             store_iter,
         }
@@ -1310,7 +1310,7 @@ where
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<
-        ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
+        MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
         ViewError,
     >
     where
@@ -1877,7 +1877,7 @@ where
         &self,
         indices: impl IntoIterator<Item = &'a Q>,
     ) -> Result<
-        ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
+        MapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
         ViewError,
     >
     where
