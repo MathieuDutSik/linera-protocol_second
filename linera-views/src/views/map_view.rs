@@ -84,31 +84,21 @@ where
     C: Context,
     C::Store: 'a,
 {
-    cached: Vec<SlotState<V>>,
+    cached_iter: std::vec::IntoIter<SlotState<V>>,
     store_iter: <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'a>,
-    current_index: usize,
-    store_position: usize,
 }
 
 impl<'a, C, V> ByteMapViewMultiGet<'a, C, V>
 where
     C: Context,
-    V: DeserializeOwned + Clone,
+    V: DeserializeOwned,
 {
     /// Returns the next value, or None if iteration is complete.
     pub async fn next(&mut self) -> Result<Option<Option<V>>, ViewError> {
-        if self.current_index >= self.cached.len() {
-            return Ok(None);
-        }
-
-        let index = self.current_index;
-        self.current_index += 1;
-
-        match &self.cached[index] {
-            SlotState::Cached(value) => Ok(Some(value.clone())),
-            SlotState::NeedsFetch => {
-                // Fetch from store iterator
-                self.store_position += 1;
+        match self.cached_iter.next() {
+            None => Ok(None),
+            Some(SlotState::Cached(value)) => Ok(Some(value)),
+            Some(SlotState::NeedsFetch) => {
                 let value_bytes = self.store_iter.next().await?;
                 let value = match value_bytes {
                     Some(bytes) => from_bytes_option(&bytes)?,
@@ -466,10 +456,8 @@ where
         let store_iter = self.context.store().read_multi_values_bytes_iter(vector_query);
 
         ByteMapViewMultiGet {
-            cached,
+            cached_iter: cached.into_iter(),
             store_iter,
-            current_index: 0,
-            store_position: 0,
         }
     }
 
