@@ -17,7 +17,7 @@ use linera_base::{
         ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
-    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, StreamId},
+    identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, OwnerSpender, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_views::{
@@ -80,6 +80,8 @@ pub struct SystemExecutionStateView<C> {
     pub balance: HashedRegisterView<C, Amount>,
     /// Balances attributed to a given owner.
     pub balances: HashedMapView<C, AccountOwner, Amount>,
+    /// Allowances for spending from one account by another.
+    pub allowances: HashedMapView<C, OwnerSpender, Amount>,
     /// The timestamp of the most recent block.
     pub timestamp: HashedRegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
@@ -109,6 +111,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             ownership: self.ownership.with_context(ctx.clone()).await,
             balance: self.balance.with_context(ctx.clone()).await,
             balances: self.balances.with_context(ctx.clone()).await,
+            allowances: self.allowances.with_context(ctx.clone()).await,
             timestamp: self.timestamp.with_context(ctx.clone()).await,
             closed: self.closed.with_context(ctx.clone()).await,
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
