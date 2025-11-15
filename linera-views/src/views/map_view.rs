@@ -1305,6 +1305,25 @@ where
         self.map.multi_get(short_keys).await
     }
 
+    /// Returns an iterator for reading multiple values at the given indices.
+    pub fn multi_get_iter<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<
+        ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
+        ViewError,
+    >
+    where
+        I: Borrow<Q>,
+        Q: Serialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| BaseKey::derive_short_key(index))
+            .collect::<Result<_, _>>()?;
+        Ok(self.map.multi_get_iter(short_keys))
+    }
+
     /// Reads the index-value pairs at the given positions, if any.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1851,6 +1870,25 @@ where
             .map(|index| index.to_custom_bytes())
             .collect::<Result<_, _>>()?;
         self.map.multi_get(short_keys).await
+    }
+
+    /// Returns an iterator for reading multiple values at the given indices.
+    pub fn multi_get_iter<'a, Q>(
+        &self,
+        indices: impl IntoIterator<Item = &'a Q>,
+    ) -> Result<
+        ByteMapViewMultiGet<V, <C::Store as ReadableKeyValueStore>::ReadMultiIterator<'_>>,
+        ViewError,
+    >
+    where
+        I: Borrow<Q>,
+        Q: CustomSerialize + 'a,
+    {
+        let short_keys = indices
+            .into_iter()
+            .map(|index| index.to_custom_bytes())
+            .collect::<Result<_, _>>()?;
+        Ok(self.map.multi_get_iter(short_keys))
     }
 
     /// Read index-value pairs at several positions, if any.
