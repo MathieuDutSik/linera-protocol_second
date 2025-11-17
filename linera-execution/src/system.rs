@@ -697,6 +697,31 @@ where
         }
     }
 
+    pub async fn approve(
+        &mut self,
+        authenticated_owner: Option<AccountOwner>,
+        authenticated_application_id: Option<ApplicationId>,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError> {
+        ensure!(
+            authenticated_owner == Some(owner)
+                || authenticated_application_id.map(AccountOwner::from) == Some(owner),
+            ExecutionError::UnauthenticatedTransferOwner
+        );
+
+        if amount == Amount::ZERO {
+            return Ok(());
+        }
+
+        let owner_spender = OwnerSpender::new(owner, spender);
+        let total_allowance = self.allowances.get_mut_or_default(&owner_spender).await?;
+        total_allowance.saturating_add_assign(amount);
+
+        Ok(())
+    }
+
     /// Debits an [`Amount`] of tokens from an account's balance.
     async fn debit(
         &mut self,

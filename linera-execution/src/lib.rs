@@ -798,6 +798,14 @@ pub trait ContractRuntime: BaseRuntime {
         amount: Amount,
     ) -> Result<(), ExecutionError>;
 
+    /// Approves spender to withdraw amount from owner's account.
+    fn approve(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        amount: Amount,
+    ) -> Result<(), ExecutionError>;
+
     /// Calls another application. Forwarded sessions will now be visible to
     /// `callee_id` (but not to the caller any more).
     fn try_call_application(
