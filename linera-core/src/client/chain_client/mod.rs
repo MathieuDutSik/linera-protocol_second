@@ -2145,6 +2145,82 @@ impl<Env: Environment> ChainClient<Env> {
     /// Creates an application by instantiating some bytecode.
     #[instrument(
         level = "trace",
+        skip(self, parameters, instantiation_argument, required_application_ids)
+    )]
+    pub async fn publish_and_create_application_untyped(
+        &self,
+        blobs: Vec<Blob>,
+        module_id: ModuleId,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, Error> {
+        let operation1 = SystemOperation::PublishModule { module_id };
+        let operation2 = SystemOperation::CreateApplication {
+            module_id,
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        };
+        self.execute_operations(vec![operation1.into(), operation2.into()], blobs)
+            .await?
+            .try_map(|certificate| {
+                // The first message of the only operation created the application.
+                let mut creation: Vec<_> = certificate
+                    .block()
+                    .created_blob_ids()
+                    .into_iter()
+                    .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                    .collect();
+                if creation.len() > 1 {
+                    return Err(Error::InternalError(
+                        "Unexpected number of application descriptions published",
+                    ));
+                }
+                let blob_id = creation.pop().ok_or(Error::InternalError(
+                    "ApplicationDescription blob not found.",
+                ))?;
+                let id = ApplicationId::new(blob_id.hash);
+                Ok((id, certificate))
+            })
+    }
+
+    /// Creates an application by instantiating some bytecode.
+    #[instrument(
+        level = "trace",
+        skip(self, parameters, instantiation_argument, required_application_ids)
+    )]
+    pub async fn publish_and_create_application<
+        A: Abi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    >(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+        parameters: &Parameters,
+        instantiation_argument: &InstantiationArgument,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId<A>, ConfirmedBlockCertificate)>, Error> {
+        let (blobs, module_id) = super::create_bytecode_blobs(contract, service, vm_runtime).await;
+        let parameters = serde_json::to_vec(parameters)?;
+        let instantiation_argument = serde_json::to_vec(instantiation_argument)?;
+        Ok(self
+            .publish_and_create_application_untyped(
+                blobs,
+                module_id,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            )
+            .await?
+            .map(|(app_id, cert)| (app_id.with_abi(), cert)))
+    }
+
+    /// Creates an application by instantiating some bytecode.
+    #[instrument(
+        level = "trace",
         skip(
             self,
             module_id,
