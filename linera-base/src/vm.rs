@@ -103,7 +103,7 @@ impl EvmOperation {
 
 /// The instantiation argument to EVM smart contracts.
 /// `value` is the amount being transferred.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct EvmInstantiation {
     /// The initial value put in the instantiation of the contract.
     pub value: alloy_primitives::U256,

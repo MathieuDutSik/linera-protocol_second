@@ -964,13 +964,16 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CreateInputs,
     ) -> Result<Option<CreateOutcome>, ExecutionError> {
+        tracing::info!("create_or_fail, step 1");
         if !self.db.is_revm_instantiated {
+            tracing::info!("create_or_fail, step 2 (is_revm_instantiate = false)");
             self.db.is_revm_instantiated = true;
             inputs.scheme = CreateScheme::Custom {
                 address: self.contract_address,
             };
             Ok(None)
         } else {
+            tracing::info!("create_or_fail, step 3 (is_revm_instantiate = true)");
             if inputs.value != U256::ZERO {
                 // decrease the balance of the contract address by the expected amount.
                 // We put the tokens in FAUCET_ADDRESS because we cannot transfer to
@@ -1055,13 +1058,17 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
+        tracing::info!("Contract::call_or_cail, step 0, inputs={:?}", inputs);
+        tracing::info!("Contract::call_or_cail, step 1, inputs.target_address={}", inputs.target_address);
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
+            tracing::info!("Contract::call_or_cail, step 2, None case");
             // Precompile calls are handled by the precompile code.
             // The EVM smart contract is being called
             return Ok(None);
         }
+        tracing::info!("Contract::call_or_cail, step 3, using runtime to do the call");
         // Handling the balances.
         if let CallValue::Transfer(value) = inputs.value {
             let source: AccountOwner = inputs.caller.into();
@@ -1215,13 +1222,16 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
         context: &mut Ctx<'_, Runtime>,
         inputs: &mut CallInputs,
     ) -> Result<Option<CallOutcome>, ExecutionError> {
+        tracing::info!("Service::call_or_cail, step 1, inputs.target_address={}", inputs.target_address);
         if self.precompile_addresses.contains(&inputs.target_address)
             || inputs.target_address == self.contract_address
         {
+            tracing::info!("Service::call_or_cail, step 2, None case");
             // Precompile calls are handled by the precompile code.
             // The EVM smart contract is being called
             return Ok(None);
         }
+        tracing::info!("Service::call_or_cail, step 3, using runtime to get the value");
         // Other smart contracts calls are handled by the runtime
         let target = address_to_user_application_id(inputs.target_address);
         let argument = get_call_service_argument(context, inputs)?;
@@ -1304,19 +1314,24 @@ where
     Runtime: ContractRuntime,
 {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
+        tracing::info!("REVM: instantiate");
         self.db.set_contract_address()?;
         let caller = self.get_msg_address()?;
         let instantiation_argument = serde_json::from_slice::<EvmInstantiation>(&argument)?;
         self.initialize_contract(instantiation_argument.value, caller)?;
         if has_selector(&self.module, INSTANTIATE_SELECTOR) {
+            tracing::info!("REVM: has some instantiation function");
             let argument = get_revm_instantiation_bytes(instantiation_argument.argument);
             let result = self.transact_commit(EvmTxKind::Call, argument, U256::ZERO, caller)?;
             self.write_logs(result.logs, "instantiate")?;
+        } else {
+            tracing::info!("REVM: does not have some instantiation function");
         }
         Ok(())
     }
 
     fn execute_operation(&mut self, operation: Vec<u8>) -> Result<Vec<u8>, ExecutionError> {
+        tracing::info!("REVM: execute_operation");
         self.db.set_contract_address()?;
         ensure_message_length(operation.len(), 4)?;
         if operation == GET_DEPLOYED_BYTECODE_SELECTOR {
@@ -1324,23 +1339,27 @@ where
         }
         let caller = self.get_msg_address()?;
         let (gas_final, output, logs) = if &operation[..4] == INTERPRETER_RESULT_SELECTOR {
+            tracing::info!("REVM: execute_operation, case INTERPRETER_RESULT_SELECTOR");
             ensure_message_length(operation.len(), 8)?;
             forbid_execute_operation_origin(&operation[4..8])?;
             let evm_call = bcs::from_bytes::<EvmOperation>(&operation[4..])?;
             let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.interpreter_result_and_logs()?
         } else {
+            tracing::info!("REVM: execute_operation, classical case");
             forbid_execute_operation_origin(&operation[..4])?;
             let evm_call = bcs::from_bytes::<EvmOperation>(&operation)?;
             let result = self.init_transact_commit(evm_call.argument, evm_call.value, caller)?;
             result.output_and_logs()
         };
+        tracing::info!("REVM: execute_operation, gas={:?} |output|={}", gas_final, output.len());
         self.consume_fuel(gas_final)?;
         self.write_logs(logs, "operation")?;
         Ok(output)
     }
 
     fn execute_message(&mut self, message: Vec<u8>) -> Result<(), ExecutionError> {
+        tracing::info!("REVM: execute_message");
         self.db.set_contract_address()?;
         ensure_selector_presence(
             &self.module,
@@ -1354,6 +1373,7 @@ where
     }
 
     fn process_streams(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        tracing::info!("REVM: execute_streams");
         self.db.set_contract_address()?;
         let operation = get_revm_process_streams_bytes(streams);
         ensure_selector_presence(
@@ -1368,6 +1388,7 @@ where
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {
+        tracing::info!("REVM: finalize");
         Ok(())
     }
 }
@@ -1385,7 +1406,9 @@ fn process_execution_result(
             output,
         } => {
             let mut gas_final = gas_used;
-            gas_final -= storage_stats.storage_costs();
+            let storage_costs = storage_stats.storage_costs();
+            tracing::info!("process_execution_result gas_final={} storage_costs={}", gas_final, storage_costs);
+            gas_final -= storage_costs;
             assert_eq!(gas_refunded, storage_stats.storage_refund());
             if !matches!(reason, SuccessReason::Return) {
                 Err(EvmExecutionError::NoReturnInterpreter {
@@ -1458,6 +1481,7 @@ where
         let mut vec_init = self.module.clone();
         let constructor_argument = self.db.constructor_argument()?;
         vec_init.extend_from_slice(&constructor_argument);
+        tracing::info!("REVM: initialize_contract |vec_init|={}", vec_init.len());
         let result = self.transact_commit(EvmTxKind::Create, vec_init, value, caller)?;
         result
             .check_contract_initialization(self.db.contract_address)
@@ -1501,20 +1525,24 @@ where
         value: U256,
         caller: Address,
     ) -> Result<ExecutionResultSuccess, ExecutionError> {
+        tracing::info!("REVM: transact_commit, step 1");
         self.db.caller = caller;
         self.db.value = value;
         self.db.deposit_funds()?;
+        tracing::info!("REVM: transact_commit, step 2");
         let data = Bytes::from(input);
         let kind = match ch {
             EvmTxKind::Create => TxKind::Create,
             EvmTxKind::Call => TxKind::Call(self.db.contract_address),
         };
+        tracing::info!("REVM: transact_commit, step 3");
         let inspector = CallInterceptorContract {
             db: self.db.clone(),
             contract_address: self.db.contract_address,
             precompile_addresses: precompile_addresses(),
             error: Arc::new(Mutex::new(None)),
         };
+        tracing::info!("REVM: transact_commit, step 4");
         let block_env = self.db.get_contract_block_env()?;
         let (max_size_evm_contract, gas_limit) = {
             let mut runtime = self.db.runtime.lock().unwrap();
@@ -1523,6 +1551,7 @@ where
             (max_size_evm_contract, gas_limit)
         };
         let nonce = self.db.get_nonce(&caller)?;
+        tracing::info!("REVM: transact_commit, step 6, nonce={nonce}");
         let result = {
             let mut ctx: revm_context::Context<
                 BlockEnv,
@@ -1561,10 +1590,19 @@ where
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
+        tracing::info!("REVM: transact_commit, step 7");
         self.db.process_any_error()?;
+        tracing::info!("REVM: transact_commit, step 8");
         let storage_stats = self.db.take_storage_stats();
+        tracing::info!("REVM: transact_commit, step 9");
         self.db.commit_changes()?;
+        tracing::info!("REVM: transact_commit, step 10");
         let result = process_execution_result(storage_stats, result)?;
+        tracing::info!("REVM: transact_commit, step 11");
+        {
+            let mut runtime = self.db.runtime.lock().unwrap();
+            tracing::info!("REVM: transact_commit, application_id={:?}", runtime.application_id()?);
+        }
         Ok(result)
     }
 
