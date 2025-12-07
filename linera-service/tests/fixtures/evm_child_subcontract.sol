@@ -33,6 +33,8 @@ contract CounterFactory {
 
     function createCounter(uint256 initialValue) public returns (address) {
         Counter newCounter = new Counter{value: 1000000000000000000}(initialValue);
+        uint256 value = newCounter.get_value();
+        require(value == initialValue, "We should have coherent values");
         counters.push(newCounter);
         return address(newCounter);
     }
