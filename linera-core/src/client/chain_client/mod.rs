@@ -1180,6 +1180,12 @@ impl<Env: Environment> ChainClient<Env> {
             // TODO(#2066): Remove boxing once the call-stack is shallower
             match Box::pin(self.execute_block(operations.clone(), blobs.clone())).await {
                 Ok(ExecuteBlockOutcome::Executed(certificate)) => {
+                    let execute_block_duration = execute_block_start.elapsed();
+                    info!(
+                        "Chain {:?} - Execute block: {} ms",
+                        self.chain_id,
+                        execute_block_duration.as_millis()
+                    );
                     self.send_timing(execute_block_start, TimingType::ExecuteBlock);
                     break Ok(ClientOutcome::Committed(certificate));
                 }
@@ -1208,6 +1214,12 @@ impl<Env: Environment> ChainClient<Env> {
             };
         };
 
+        let execute_operations_duration = timing_start.elapsed();
+        info!(
+            "Chain {:?} - Execute operations: {} ms",
+            self.chain_id,
+            execute_operations_duration.as_millis()
+        );
         self.send_timing(timing_start, TimingType::ExecuteOperations);
 
         result
@@ -1237,7 +1249,10 @@ impl<Env: Environment> ChainClient<Env> {
         let mutex = self.client_mutex();
         let _guard = mutex.lock_owned().await;
         // TODO(#5092): We shouldn't need to call this explicitly.
-        match self.process_pending_block_without_prepare().await? {
+        let start = Instant::now();
+        let result = self.process_pending_block_without_prepare().await?;
+        tracing::info!("process_pending_block_without_prepare(A), chain={:?} duration={}", self.chain_id, start.elapsed().as_millis());
+        match result {
             ClientOutcome::Committed(Some(certificate)) => {
                 return Ok(ExecuteBlockOutcome::Conflict(certificate))
             }
@@ -1250,7 +1265,9 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect pending messages and epoch changes after acquiring the lock to avoid
         // race conditions where messages valid for one block height are proposed at a
         // different height.
+        let start = Instant::now();
         let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        tracing::info!("prepend_epochs_messages_and_events      , chain={:?} duration={}", self.chain_id, start.elapsed().as_millis());
 
         if transactions.is_empty() {
             return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
@@ -1258,9 +1275,15 @@ impl<Env: Environment> ChainClient<Env> {
             )));
         }
 
+        let start = Instant::now();
         let block = self.new_pending_block(transactions, blobs).await?;
+        tracing::info!("new_pending_block                       , chain={:?} duration={}", self.chain_id, start.elapsed().as_millis());
 
-        match self.process_pending_block_without_prepare().await? {
+        let start = Instant::now();
+        let result = self.process_pending_block_without_prepare().await?;
+        tracing::info!("process_pending_block_without_prepare(B), chain={:?} duration={}", self.chain_id, start.elapsed().as_millis());
+
+        match result {
             ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
                 Ok(ExecuteBlockOutcome::Executed(certificate))
             }
