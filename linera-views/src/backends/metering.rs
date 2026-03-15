@@ -351,6 +351,10 @@ where
         self.store.root_key()
     }
 
+    fn hint_read_key_value(&self, key: &[u8], keep: bool) {
+        self.store.hint_read_key_value(key, keep);
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let _latency = self.counter.read_value_bytes_latency.measure_latency();
         self.counter

@@ -159,6 +159,7 @@ pub(crate) struct LruPrefixCache {
     find_keys_map: BTreeMap<Vec<u8>, FindKeysEntry>,
     find_key_values_map: BTreeMap<Vec<u8>, FindKeyValuesEntry>,
     queue: LinkedHashMap<CacheKey, usize, RandomState>,
+    prefetch_keys: LinkedHashMap<Vec<u8>, (), RandomState>,
     config: StorageCacheConfig,
     total_size: usize,
     total_value_size: usize,
@@ -176,6 +177,7 @@ impl LruPrefixCache {
             find_keys_map: BTreeMap::new(),
             find_key_values_map: BTreeMap::new(),
             queue: LinkedHashMap::new(),
+            prefetch_keys: LinkedHashMap::new(),
             config,
             total_size: 0,
             total_value_size: 0,
@@ -197,6 +199,17 @@ impl LruPrefixCache {
             .remove(&cache_key)
             .expect("cache_key should be present");
         self.queue.insert(cache_key, size);
+    }
+
+    /// A de-prioritized key needs to be put at the bottom of the queue.
+    fn move_cache_key_to_bottom(&mut self, cache_key: CacheKey) {
+        let size = self
+            .queue
+            .remove(&cache_key)
+            .expect("cache_key should be present");
+        let old_queue = std::mem::take(&mut self.queue);
+        self.queue.insert(cache_key, size);
+        self.queue.extend(old_queue);
     }
 
     /// Update sizes by decreasing and increasing.
@@ -820,6 +833,29 @@ impl LruPrefixCache {
         }
     }
 
+    /// Applies a read hint to the cache.
+    pub(crate) fn hint_read_key_value(&mut self, key: &[u8], keep: bool) {
+        if keep {
+            self.prefetch_keys.remove(key);
+            self.prefetch_keys.insert(key.to_vec(), ());
+            return;
+        }
+
+        self.prefetch_keys.remove(key);
+        let cache_key = CacheKey::Value(key.to_vec());
+        if self.queue.contains_key(&cache_key) {
+            self.move_cache_key_to_bottom(cache_key);
+        }
+    }
+
+    /// Consumes the current prefetch list.
+    pub(crate) fn take_prefetch_keys(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.prefetch_keys)
+            .into_iter()
+            .map(|(prefetch_key, ())| prefetch_key)
+            .collect()
+    }
+
     /// Returns the cached value, or `Some(None)` if the entry does not exist in the
     /// database. If `None` is returned, the entry might exist in the database but is
     /// not in the cache.
@@ -1143,6 +1179,7 @@ mod tests {
         assert!(cache.find_keys_map.is_empty());
         assert!(cache.find_key_values_map.is_empty());
         assert!(cache.queue.is_empty());
+        assert!(cache.prefetch_keys.is_empty());
     }
 
     #[test]
@@ -1284,6 +1321,35 @@ mod tests {
         // The queue should have key1 at the end (most recently used)
         let queue_keys = cache.queue.keys().collect::<Vec<_>>();
         assert_eq!(queue_keys[queue_keys.len() - 1], &CacheKey::Value(key1));
+    }
+
+    #[test]
+    fn test_hint_read_key_value_demotes_cached_value() {
+        let mut cache = create_test_cache(true);
+        let value = vec![42];
+        let key1 = vec![1];
+        let key2 = vec![2];
+
+        cache.insert_read_value(&key1, &Some(value.clone()));
+        cache.insert_read_value(&key2, &Some(value));
+        cache.hint_read_key_value(&key2, false);
+        cache.check_coherence();
+
+        let queue_keys = cache.queue.keys().collect::<Vec<_>>();
+        assert_eq!(queue_keys[0], &CacheKey::Value(key2));
+    }
+
+    #[test]
+    fn test_hint_read_key_value_prefetch_is_one_shot() {
+        let mut cache = create_test_cache(true);
+        let key1 = vec![1];
+        let key2 = vec![2];
+
+        cache.hint_read_key_value(&key1, true);
+        cache.hint_read_key_value(&key2, true);
+
+        assert_eq!(cache.take_prefetch_keys(), vec![key1, key2.clone()]);
+        assert!(cache.take_prefetch_keys().is_empty());
     }
 
     #[test]

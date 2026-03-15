@@ -100,6 +100,10 @@ where
         Ok(self.store.root_key()?)
     }
 
+    fn hint_read_key_value(&self, key: &[u8], keep: bool) {
+        self.store.hint_read_key_value(key, keep);
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut big_key = key.to_vec();
         big_key.extend(&[0, 0, 0, 0]);
@@ -434,6 +438,10 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
 
     fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
         self.inner.root_key()
+    }
+
+    fn hint_read_key_value(&self, key: &[u8], keep: bool) {
+        self.inner.hint_read_key_value(key, keep);
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {

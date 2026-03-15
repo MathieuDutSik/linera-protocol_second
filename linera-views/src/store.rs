@@ -53,6 +53,9 @@ pub trait ReadableKeyValueStore: WithError {
     /// Retrieves a `Vec<u8>` from the database using the provided `key`.
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+    /// Hints that a given key may be read soon or should be deprioritized in caches.
+    fn hint_read_key_value(&self, _key: &[u8], _keep: bool) {}
+
     /// Tests whether a key exists in the database
     async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error>;
 

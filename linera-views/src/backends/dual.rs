@@ -102,6 +102,13 @@ where
         })
     }
 
+    fn hint_read_key_value(&self, key: &[u8], keep: bool) {
+        match self {
+            Self::First(store) => store.hint_read_key_value(key, keep),
+            Self::Second(store) => store.hint_read_key_value(key, keep),
+        }
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let result = match self {
             Self::First(store) => store

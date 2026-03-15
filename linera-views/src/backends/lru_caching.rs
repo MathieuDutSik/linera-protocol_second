@@ -3,7 +3,10 @@
 
 //! Add LRU (least recently used) caching to a given store.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -161,6 +164,15 @@ where
         self.store.root_key()
     }
 
+    fn hint_read_key_value(&self, key: &[u8], keep: bool) {
+        let Some(cache) = &self.cache else {
+            self.store.hint_read_key_value(key, keep);
+            return;
+        };
+        let mut cache = cache.lock().unwrap();
+        cache.hint_read_key_value(key, keep);
+    }
+
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let Some(cache) = &self.cache else {
             return self.store.read_value_bytes(key).await;
@@ -180,9 +192,28 @@ where
         metrics::READ_VALUE_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
-        let value = self.store.read_value_bytes(key).await?;
+        let prefetch_keys = {
+            let mut cache = cache.lock().unwrap();
+            cache.take_prefetch_keys()
+        };
+        let prefetch_keys = prefetch_keys
+            .into_iter()
+            .filter(|prefetch_key| prefetch_key != key)
+            .collect::<Vec<_>>();
+        let mut values = if prefetch_keys.is_empty() {
+            vec![self.store.read_value_bytes(key).await?]
+        } else {
+            let mut read_keys = Vec::with_capacity(prefetch_keys.len() + 1);
+            read_keys.push(key.to_vec());
+            read_keys.extend(prefetch_keys.iter().cloned());
+            self.store.read_multi_values_bytes(&read_keys).await?
+        };
+        let value = values.remove(0);
         let mut cache = cache.lock().unwrap();
         cache.insert_read_value(key, &value);
+        for (prefetch_key, prefetch_value) in prefetch_keys.iter().zip(values.iter()) {
+            cache.insert_read_value(prefetch_key, prefetch_value);
+        }
         Ok(value)
     }
 
@@ -280,14 +311,35 @@ where
             }
         }
         if !miss_keys.is_empty() {
-            let values = self.store.read_multi_values_bytes(&miss_keys).await?;
+            let prefetch_keys = {
+                let mut cache = cache.lock().unwrap();
+                cache.take_prefetch_keys()
+            };
+            let mut seen_keys = keys.iter().cloned().collect::<BTreeSet<_>>();
+            let mut read_keys = miss_keys.clone();
+            let mut filtered_prefetch_keys = Vec::new();
+            for prefetch_key in prefetch_keys {
+                if seen_keys.insert(prefetch_key.clone()) {
+                    read_keys.push(prefetch_key.clone());
+                    filtered_prefetch_keys.push(prefetch_key);
+                }
+            }
+            let values = self.store.read_multi_values_bytes(&read_keys).await?;
             let mut cache = cache.lock().unwrap();
-            for (i, (key, value)) in cache_miss_indices
-                .into_iter()
-                .zip(miss_keys.into_iter().zip(values))
-            {
+            let requested_miss_count = miss_keys.len();
+            for (i, (key, value)) in cache_miss_indices.into_iter().zip(
+                miss_keys
+                    .into_iter()
+                    .zip(values.iter().take(requested_miss_count).cloned()),
+            ) {
                 cache.insert_read_value(&key, &value);
                 result[i] = value;
+            }
+            for (prefetch_key, prefetch_value) in filtered_prefetch_keys
+                .iter()
+                .zip(values.iter().skip(requested_miss_count))
+            {
+                cache.insert_read_value(prefetch_key, prefetch_value);
             }
         }
         Ok(result)
@@ -501,5 +553,150 @@ where
             inner_config,
             storage_cache_config,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, fmt, sync::Arc};
+
+    use tokio::sync::Mutex as AsyncMutex;
+
+    use super::*;
+    use crate::store::KeyValueStoreError;
+
+    #[derive(Debug)]
+    struct TestStoreError;
+
+    impl fmt::Display for TestStoreError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "test store error")
+        }
+    }
+
+    impl std::error::Error for TestStoreError {}
+
+    impl From<bcs::Error> for TestStoreError {
+        fn from(_: bcs::Error) -> Self {
+            Self
+        }
+    }
+
+    impl KeyValueStoreError for TestStoreError {
+        const BACKEND: &'static str = "test";
+    }
+
+    #[derive(Clone)]
+    struct TestStore {
+        root_key: Vec<u8>,
+        values: Arc<AsyncMutex<BTreeMap<Vec<u8>, Vec<u8>>>>,
+        read_value_calls: Arc<AsyncMutex<Vec<Vec<u8>>>>,
+        read_multi_calls: Arc<AsyncMutex<Vec<Vec<Vec<u8>>>>>,
+    }
+
+    impl TestStore {
+        fn new(entries: impl IntoIterator<Item = (Vec<u8>, Vec<u8>)>) -> Self {
+            Self {
+                root_key: Vec::new(),
+                values: Arc::new(AsyncMutex::new(entries.into_iter().collect())),
+                read_value_calls: Arc::new(AsyncMutex::new(Vec::new())),
+                read_multi_calls: Arc::new(AsyncMutex::new(Vec::new())),
+            }
+        }
+    }
+
+    impl WithError for TestStore {
+        type Error = TestStoreError;
+    }
+
+    impl ReadableKeyValueStore for TestStore {
+        const MAX_KEY_SIZE: usize = usize::MAX;
+
+        fn max_stream_queries(&self) -> usize {
+            usize::MAX
+        }
+
+        fn root_key(&self) -> Result<Vec<u8>, Self::Error> {
+            Ok(self.root_key.clone())
+        }
+
+        async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+            self.read_value_calls.lock().await.push(key.to_vec());
+            Ok(self.values.lock().await.get(key).cloned())
+        }
+
+        async fn contains_key(&self, key: &[u8]) -> Result<bool, Self::Error> {
+            Ok(self.values.lock().await.contains_key(key))
+        }
+
+        async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, Self::Error> {
+            let values = self.values.lock().await;
+            Ok(keys.iter().map(|key| values.contains_key(key)).collect())
+        }
+
+        async fn read_multi_values_bytes(
+            &self,
+            keys: &[Vec<u8>],
+        ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+            self.read_multi_calls.lock().await.push(keys.to_vec());
+            let values = self.values.lock().await;
+            Ok(keys.iter().map(|key| values.get(key).cloned()).collect())
+        }
+
+        async fn find_keys_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<Vec<u8>>, Self::Error> {
+            Ok(Vec::new())
+        }
+
+        async fn find_key_values_by_prefix(
+            &self,
+            _key_prefix: &[u8],
+        ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn read_value_uses_prefetch_multi_read_once() {
+        let inner = TestStore::new([(vec![1], vec![10]), (vec![2], vec![20])]);
+        let store = LruCachingStore::new(inner.clone(), DEFAULT_STORAGE_CACHE_CONFIG, true);
+
+        store.hint_read_key_value(&[2], true);
+        assert_eq!(store.read_value_bytes(&[1]).await.unwrap(), Some(vec![10]));
+        assert_eq!(store.read_value_bytes(&[2]).await.unwrap(), Some(vec![20]));
+
+        assert!(inner.read_value_calls.lock().await.is_empty());
+        assert_eq!(
+            inner.read_multi_calls.lock().await.as_slice(),
+            &[vec![vec![1], vec![2]]]
+        );
+    }
+
+    #[tokio::test]
+    async fn read_multi_values_uses_prefetch_multi_read_once() {
+        let inner = TestStore::new([
+            (vec![1], vec![10]),
+            (vec![2], vec![20]),
+            (vec![3], vec![30]),
+        ]);
+        let store = LruCachingStore::new(inner.clone(), DEFAULT_STORAGE_CACHE_CONFIG, true);
+
+        store.hint_read_key_value(&[3], true);
+        assert_eq!(
+            store
+                .read_multi_values_bytes(&[vec![1], vec![2]])
+                .await
+                .unwrap(),
+            vec![Some(vec![10]), Some(vec![20])]
+        );
+        assert_eq!(store.read_value_bytes(&[3]).await.unwrap(), Some(vec![30]));
+
+        assert!(inner.read_value_calls.lock().await.is_empty());
+        assert_eq!(
+            inner.read_multi_calls.lock().await.as_slice(),
+            &[vec![vec![1], vec![2], vec![3]]]
+        );
     }
 }
