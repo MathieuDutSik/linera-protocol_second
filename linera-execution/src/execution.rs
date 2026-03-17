@@ -206,7 +206,15 @@ pub enum UserAction {
     Instantiate(OperationContext, Vec<u8>),
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
+    Messages(Vec<UserMessageAction>),
     ProcessStreams(ProcessStreamsContext, Vec<StreamUpdate>),
+}
+
+pub struct UserMessageAction {
+    pub application_id: ApplicationId,
+    pub context: MessageContext,
+    pub bytes: Vec<u8>,
+    pub grant_index: usize,
 }
 
 impl UserAction {
@@ -214,6 +222,9 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.authenticated_owner,
             UserAction::Operation(context, _) => context.authenticated_owner,
+            UserAction::Messages(messages) => messages
+                .first()
+                .and_then(|message| message.context.authenticated_owner),
             UserAction::ProcessStreams(_, _) => None,
             UserAction::Message(context, _) => context.authenticated_owner,
         }
@@ -223,6 +234,11 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
+            UserAction::Messages(messages) => messages
+                .first()
+                .expect("bundle user actions should not be empty")
+                .context
+                .height,
             UserAction::ProcessStreams(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
@@ -232,6 +248,11 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
+            UserAction::Messages(messages) => messages
+                .first()
+                .expect("bundle user actions should not be empty")
+                .context
+                .round,
             UserAction::ProcessStreams(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
@@ -241,6 +262,11 @@ impl UserAction {
         match self {
             UserAction::Instantiate(context, _) => context.timestamp,
             UserAction::Operation(context, _) => context.timestamp,
+            UserAction::Messages(messages) => messages
+                .first()
+                .expect("bundle user actions should not be empty")
+                .context
+                .timestamp,
             UserAction::ProcessStreams(context, _) => context.timestamp,
             UserAction::Message(context, _) => context.timestamp,
         }

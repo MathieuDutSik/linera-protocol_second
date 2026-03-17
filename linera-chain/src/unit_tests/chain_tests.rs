@@ -27,7 +27,7 @@ use linera_execution::{
     test_utils::{ExpectedCall, MockApplication},
     BaseRuntime, ContractRuntime, ExecutionError, ExecutionRuntimeConfig, ExecutionRuntimeContext,
     Message, MessageKind, Operation, ResourceControlPolicy, ResourceTracker, ServiceRuntime,
-    SystemOperation, TestExecutionRuntimeContext,
+    SystemMessage, SystemOperation, TestExecutionRuntimeContext,
 };
 use linera_views::{
     context::{Context as _, MemoryContext, ViewContext},
@@ -42,7 +42,7 @@ use crate::{
         BlockExecutionOutcome, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         PostedMessage, ProposedBlock,
     },
-    test::{make_child_block, make_first_block, BlockTestExt, HttpServer},
+    test::{make_child_block, make_first_block, BlockTestExt, HttpServer, MessageTestExt as _},
     ChainError, ChainExecutionContext, ChainStateView,
 };
 
@@ -488,6 +488,156 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
     let value = ConfirmedBlock::new(outcome.with(block_with_accepted));
     chain.apply_confirmed_block(&value, time).await?;
 
+    Ok(())
+}
+
+/// Tests that a bundle with multiple messages for the same application only finalizes it once.
+#[tokio::test]
+async fn test_same_application_messages_share_one_user_action_per_bundle() -> anyhow::Result<()> {
+    let (application, application_id, mut chain, _block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy::default()).await?;
+
+    application.expect_call(ExpectedCall::execute_message(|_, message| {
+        assert_eq!(message, b"first");
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::execute_message(|_, message| {
+        assert_eq!(message, b"second");
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let chain_id = chain.chain_id();
+    let origin_chain_id = chain_id;
+    let bundle = IncomingBundle {
+        origin: origin_chain_id,
+        action: MessageAction::Accept,
+        bundle: MessageBundle {
+            height: BlockHeight::ZERO,
+            timestamp: time,
+            certificate_hash: CryptoHash::test_hash("bundle"),
+            transaction_index: 0,
+            messages: vec![
+                Message::User {
+                    application_id,
+                    bytes: b"first".to_vec(),
+                }
+                .to_posted(0, MessageKind::Simple),
+                Message::User {
+                    application_id,
+                    bytes: b"second".to_vec(),
+                }
+                .to_posted(1, MessageKind::Simple),
+            ],
+        },
+    };
+
+    let block = make_first_block(chain_id).with_incoming_bundle(bundle);
+    chain.execute_test_block_simple(block, time, &[]).await?;
+    Ok(())
+}
+
+/// Tests that a bundle with a system message followed by user messages uses the correct grants.
+#[tokio::test]
+async fn test_mixed_system_and_user_messages_in_bundle() -> anyhow::Result<()> {
+    let (application, application_id, mut chain, _block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy::default()).await?;
+
+    application.expect_call(ExpectedCall::execute_message(|_, message| {
+        assert_eq!(message, b"after_system");
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let chain_id = chain.chain_id();
+    let origin_chain_id = chain_id;
+    let owner = AccountOwner::CHAIN;
+    let bundle = IncomingBundle {
+        origin: origin_chain_id,
+        action: MessageAction::Accept,
+        bundle: MessageBundle {
+            height: BlockHeight::ZERO,
+            timestamp: time,
+            certificate_hash: CryptoHash::test_hash("mixed_bundle"),
+            transaction_index: 0,
+            messages: vec![
+                Message::System(SystemMessage::Credit {
+                    target: owner,
+                    amount: Amount::from_tokens(1),
+                    source: owner,
+                })
+                .to_posted(0, MessageKind::Simple),
+                Message::User {
+                    application_id,
+                    bytes: b"after_system".to_vec(),
+                }
+                .to_posted(1, MessageKind::Simple),
+            ],
+        },
+    };
+
+    let block = make_first_block(chain_id).with_incoming_bundle(bundle);
+    chain.execute_test_block_simple(block, time, &[]).await?;
+    Ok(())
+}
+
+/// Tests that a bundle with messages from different authenticated owners works correctly.
+#[tokio::test]
+async fn test_bundle_messages_with_different_authenticated_owners() -> anyhow::Result<()> {
+    let (application, application_id, mut chain, _block, time) =
+        prepare_test_with_dummy_mock_application(ResourceControlPolicy::default()).await?;
+
+    application.expect_call(ExpectedCall::execute_message(|_, message| {
+        assert_eq!(message, b"from_owner_a");
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::execute_message(|_, message| {
+        assert_eq!(message, b"from_owner_b");
+        Ok(())
+    }));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let chain_id = chain.chain_id();
+    let origin_chain_id = chain_id;
+    let owner_a = AccountOwner::CHAIN;
+    let owner_b = AccountOwner::from(AccountPublicKey::test_key(42));
+    let bundle = IncomingBundle {
+        origin: origin_chain_id,
+        action: MessageAction::Accept,
+        bundle: MessageBundle {
+            height: BlockHeight::ZERO,
+            timestamp: time,
+            certificate_hash: CryptoHash::test_hash("multi_owner_bundle"),
+            transaction_index: 0,
+            messages: vec![
+                PostedMessage {
+                    authenticated_owner: Some(owner_a),
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Simple,
+                    index: 0,
+                    message: Message::User {
+                        application_id,
+                        bytes: b"from_owner_a".to_vec(),
+                    },
+                },
+                PostedMessage {
+                    authenticated_owner: Some(owner_b),
+                    grant: Amount::ZERO,
+                    refund_grant_to: None,
+                    kind: MessageKind::Simple,
+                    index: 1,
+                    message: Message::User {
+                        application_id,
+                        bytes: b"from_owner_b".to_vec(),
+                    },
+                },
+            ],
+        },
+    };
+
+    let block = make_first_block(chain_id).with_incoming_bundle(bundle);
+    chain.execute_test_block_simple(block, time, &[]).await?;
     Ok(())
 }
 

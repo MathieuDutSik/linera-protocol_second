@@ -121,15 +121,63 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 self.resource_controller_mut()
                     .track_block_size_of(&incoming_bundle)
                     .with_execution_context(chain_execution_context)?;
-                for posted_message in incoming_bundle.messages() {
-                    Box::pin(self.execute_message_in_block(
-                        chain,
-                        posted_message,
-                        incoming_bundle,
-                        round,
-                        &mut txn_tracker,
-                    ))
-                    .await?;
+                match incoming_bundle.action {
+                    MessageAction::Accept => {
+                        let chain_execution_context =
+                            ChainExecutionContext::IncomingBundle(txn_tracker.transaction_index());
+                        ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
+                        let messages = incoming_bundle
+                            .messages()
+                            .map(|posted_message| {
+                                (
+                                    MessageContext {
+                                        chain_id: self.chain_id,
+                                        origin: incoming_bundle.origin,
+                                        is_bouncing: posted_message.is_bouncing(),
+                                        height: self.block_height,
+                                        round,
+                                        authenticated_owner: posted_message.authenticated_owner,
+                                        refund_grant_to: posted_message.refund_grant_to,
+                                        timestamp: self.timestamp,
+                                    },
+                                    posted_message.message.clone(),
+                                    posted_message.grant,
+                                )
+                            })
+                            .collect();
+                        let mut actor =
+                            ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
+                        let remaining_grants = Box::pin(actor.execute_message_bundle(messages))
+                            .await
+                            .with_execution_context(chain_execution_context)?;
+                        for (posted_message, grant) in incoming_bundle.messages().zip(remaining_grants) {
+                            let context = MessageContext {
+                                chain_id: self.chain_id,
+                                origin: incoming_bundle.origin,
+                                is_bouncing: posted_message.is_bouncing(),
+                                height: self.block_height,
+                                round,
+                                authenticated_owner: posted_message.authenticated_owner,
+                                refund_grant_to: posted_message.refund_grant_to,
+                                timestamp: self.timestamp,
+                            };
+                            actor
+                                .send_refund(context, grant)
+                                .with_execution_context(chain_execution_context)?;
+                        }
+                    }
+                    MessageAction::Reject => {
+                        for posted_message in incoming_bundle.messages() {
+                            Box::pin(self.execute_message_in_block(
+                                chain,
+                                posted_message,
+                                incoming_bundle,
+                                round,
+                                &mut txn_tracker,
+                            ))
+                            .await?;
+                        }
+                    }
                 }
             }
             Transaction::ExecuteOperation(operation) => {

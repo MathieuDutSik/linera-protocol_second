@@ -27,7 +27,7 @@ use reqwest::{header::HeaderMap, Client, Url};
 use tracing::{info_span, instrument, Instrument as _};
 
 use crate::{
-    execution::UserAction,
+    execution::{UserAction, UserMessageAction},
     runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
@@ -743,6 +743,12 @@ where
                 callback.respond(());
             }
 
+            PrepareUserMessageExecution { .. } | FinishUserMessageExecution { .. } => {
+                return Err(ExecutionError::InternalError(
+                    "bundle message execution requests must be handled by the bundle executor",
+                ));
+            }
+
             SetLocalTime {
                 local_time,
                 callback,
@@ -969,7 +975,7 @@ where
         );
         let is_free = matches!(
             &action,
-            UserAction::Message(..) | UserAction::ProcessStreams(..)
+            UserAction::Message(..) | UserAction::Messages(..) | UserAction::ProcessStreams(..)
         ) && self
             .resource_controller
             .policy()
@@ -1036,6 +1042,120 @@ where
         Ok(())
     }
 
+    async fn run_user_message_bundle_with_runtime(
+        &mut self,
+        messages: Vec<UserMessageAction>,
+        grants: &mut [Amount],
+    ) -> Result<(), ExecutionError> {
+        let first_application_id = messages
+            .first()
+            .expect("bundle user actions should not be empty")
+            .application_id;
+        let chain_id = self.state.context().extra().chain_id();
+        let controller = ResourceController::new(
+            self.resource_controller.policy().clone(),
+            self.resource_controller.tracker,
+            Amount::ZERO,
+        );
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+
+        let mut all_codes = Vec::new();
+        let mut all_descriptions = Vec::new();
+        let mut loaded_applications = BTreeSet::new();
+        for application_id in messages.iter().map(|message| message.application_id) {
+            let (codes, descriptions) = self.contract_and_dependencies(application_id).await?;
+            for (code, description) in codes.into_iter().zip(descriptions) {
+                let id = ApplicationId::from(&description);
+                if loaded_applications.insert(id) {
+                    all_codes.push(code);
+                    all_descriptions.push(description);
+                }
+            }
+        }
+
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+        let refund_grant_to = messages
+            .first()
+            .and_then(|message| message.context.refund_grant_to);
+        let action = UserAction::Messages(messages);
+
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(all_codes), move |codes| async move {
+                let runtime = ContractSyncRuntime::new(
+                    execution_state_sender,
+                    chain_id,
+                    refund_grant_to,
+                    controller,
+                    &action,
+                    allow_application_logs,
+                );
+
+                for (code, description) in codes.0.into_iter().zip(all_descriptions) {
+                    runtime.preload_contract(ApplicationId::from(&description), code, description)?;
+                }
+
+                runtime.run_action(first_application_id, chain_id, action)
+            })
+            .await;
+
+        async {
+            while let Some(request) = execution_state_receiver.next().await {
+                match request {
+                    ExecutionRequest::PrepareUserMessageExecution {
+                        grant_index,
+                        application_id,
+                        callback,
+                    } => {
+                        let grant = grants
+                            .get_mut(grant_index)
+                            .and_then(|grant| (!grant.is_zero()).then_some(grant));
+                        let initial_balance = self
+                            .resource_controller
+                            .with_state_and_grant(&mut self.state.system, grant)
+                            .await?
+                            .balance()?;
+                        let is_free = self.resource_controller.policy().is_free_app(&application_id);
+                        callback.respond((initial_balance, is_free));
+                    }
+                    ExecutionRequest::FinishUserMessageExecution {
+                        grant_index,
+                        initial_balance,
+                        final_balance,
+                        callback,
+                    } => {
+                        let grant = grants
+                            .get_mut(grant_index)
+                            .and_then(|grant| (!grant.is_zero()).then_some(grant));
+                        self.resource_controller
+                            .with_state_and_grant(&mut self.state.system, grant)
+                            .await?
+                            .merge_balance(initial_balance, final_balance)?;
+                        callback.respond(());
+                    }
+                    request => self.handle_request(request).await?,
+                }
+            }
+            Ok::<(), ExecutionError>(())
+        }
+        .instrument(info_span!("handle_runtime_requests"))
+        .await?;
+
+        let (result, controller) = contract_runtime_task.await??;
+        self.txn_tracker.add_operation_result(result);
+        self.resource_controller.tracker = controller.tracker;
+        Ok(())
+    }
+
     #[instrument(skip_all, fields(
         chain_id = %context.chain_id,
         block_height = %context.height,
@@ -1080,6 +1200,46 @@ where
         }
         self.process_subscriptions(context.into()).await?;
         Ok(())
+    }
+
+    pub async fn execute_message_bundle(
+        &mut self,
+        messages: Vec<(MessageContext, Message, Amount)>,
+    ) -> Result<Vec<Amount>, ExecutionError> {
+        let mut grants = Vec::with_capacity(messages.len());
+        let mut user_messages = Vec::new();
+
+        for (context, message, grant) in messages {
+            assert_eq!(context.chain_id, self.state.context().extra().chain_id());
+            let grant_index = grants.len();
+            match message {
+                Message::System(message) => {
+                    let outcome = self.state.system.execute_message(context, message).await?;
+                    self.txn_tracker.add_outgoing_messages(outcome);
+                    self.process_subscriptions(context.into()).await?;
+                    grants.push(grant);
+                }
+                Message::User {
+                    application_id,
+                    bytes,
+                } => {
+                    user_messages.push(UserMessageAction {
+                        application_id,
+                        context,
+                        bytes,
+                        grant_index,
+                    });
+                    grants.push(grant);
+                }
+            }
+        }
+
+        if !user_messages.is_empty() {
+            self.run_user_message_bundle_with_runtime(user_messages, &mut grants)
+                .await?;
+        }
+
+        Ok(grants)
     }
 
     #[instrument(skip_all, fields(
@@ -1500,6 +1660,21 @@ pub enum ExecutionRequest {
 
     AddOutgoingMessage {
         message: crate::OutgoingMessage,
+        #[debug(skip)]
+        callback: Sender<()>,
+    },
+
+    PrepareUserMessageExecution {
+        grant_index: usize,
+        application_id: ApplicationId,
+        #[debug(skip)]
+        callback: Sender<(Amount, bool)>,
+    },
+
+    FinishUserMessageExecution {
+        grant_index: usize,
+        initial_balance: Amount,
+        final_balance: Amount,
         #[debug(skip)]
         callback: Sender<()>,
     },

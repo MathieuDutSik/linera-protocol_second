@@ -1055,10 +1055,9 @@ impl ContractSyncRuntime {
                 chain_id,
                 action.height(),
                 action.round(),
-                if let UserAction::Message(context, _) = action {
-                    Some(context.into())
-                } else {
-                    None
+                match action {
+                    UserAction::Message(context, _) => Some(context.into()),
+                    _ => None,
                 },
                 execution_state_sender,
                 None,
@@ -1127,21 +1126,68 @@ impl ContractSyncRuntimeHandle {
             assert_eq!(runtime.height, action.height());
         }
 
-        let signer = action.signer();
-        let closure = move |code: &mut UserContractInstance| match action {
-            UserAction::Instantiate(_context, argument) => {
-                code.instantiate(argument).map(|()| None)
-            }
-            UserAction::Operation(_context, operation) => {
-                code.execute_operation(operation).map(Option::Some)
-            }
-            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
-            UserAction::ProcessStreams(_context, updates) => {
-                code.process_streams(updates).map(|()| None)
-            }
-        };
+        let result = match action {
+            UserAction::Instantiate(_context, argument) => self.execute(
+                application_id,
+                finalize_context.authenticated_owner,
+                move |code| code.instantiate(argument).map(|()| None),
+            )?,
+            UserAction::Operation(_context, operation) => self.execute(
+                application_id,
+                finalize_context.authenticated_owner,
+                move |code| code.execute_operation(operation).map(Option::Some),
+            )?,
+            UserAction::Message(_context, message) => self.execute(
+                application_id,
+                finalize_context.authenticated_owner,
+                move |code| code.execute_message(message).map(|()| None),
+            )?,
+            UserAction::Messages(messages) => {
+                for message in messages {
+                    let grant_index = message.grant_index;
+                    let (initial_balance, is_free) = self
+                        .inner()
+                        .execution_state_sender
+                        .send_request(|callback| ExecutionRequest::PrepareUserMessageExecution {
+                            grant_index,
+                            application_id: message.application_id,
+                            callback,
+                        })?
+                        .recv_response()?;
 
-        let result = self.execute(application_id, signer, closure)?;
+                    {
+                        let mut runtime = self.inner();
+                        runtime.executing_message = Some((&message.context).into());
+                        runtime.refund_grant_to = message.context.refund_grant_to;
+                        runtime.resource_controller.account = initial_balance;
+                        runtime.resource_controller.is_free = is_free;
+                    }
+
+                    self.execute(
+                        message.application_id,
+                        message.context.authenticated_owner,
+                        move |code| code.execute_message(message.bytes).map(|()| None),
+                    )?;
+
+                    let final_balance = self.inner().resource_controller.balance()?;
+                    self.inner()
+                        .execution_state_sender
+                        .send_request(|callback| ExecutionRequest::FinishUserMessageExecution {
+                            grant_index,
+                            initial_balance,
+                            final_balance,
+                            callback,
+                        })?
+                        .recv_response()?;
+                }
+                None
+            }
+            UserAction::ProcessStreams(_context, updates) => self.execute(
+                application_id,
+                finalize_context.authenticated_owner,
+                move |code| code.process_streams(updates).map(|()| None),
+            )?,
+        };
         self.finalize(finalize_context)?;
         Ok(result)
     }
