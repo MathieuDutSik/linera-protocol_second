@@ -577,7 +577,7 @@ where
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
-        let (chain_epoch, committee) = self.chain.current_committee()?;
+        let (chain_epoch, committee) = self.chain.current_committee().await?;
         certificate.check(committee)?;
         if self
             .chain
@@ -679,7 +679,7 @@ where
                 found_block_height: header.height,
             }
         );
-        let (epoch, committee) = self.chain.current_committee()?;
+        let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
         certificate.check(committee)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
@@ -793,6 +793,7 @@ where
             .system
             .committees
             .get()
+            .await?
             .get(&epoch)
         {
             certificate.check(committee)?;
@@ -892,7 +893,7 @@ where
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
-        let (epoch, _) = self.chain.current_committee()?;
+        let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
         let published_blobs = block
@@ -1086,7 +1087,7 @@ where
             }
         }
 
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
+        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain).await?;
         let recipient = self.chain_id();
         let bundles = helper.select_message_bundles(
             &origin,
@@ -1117,7 +1118,7 @@ where
         }
         inbox.observe_size_metric();
         drop(inbox);
-        if !self.config.allow_inactive_chains && !self.chain.is_active() {
+        if !self.config.allow_inactive_chains && !self.chain.is_active().await {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
@@ -1615,7 +1616,7 @@ where
             .await?
         {
             if !pending_blobs.validated.get() {
-                let (_, committee) = self.chain.current_committee()?;
+                let (_, committee) = self.chain.current_committee().await?;
                 let policy = committee.policy();
                 policy
                     .check_blob_size(blob.content())
@@ -1757,7 +1758,7 @@ where
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let signer = block.authenticated_signer;
-        let (_, committee) = self.chain.current_committee()?;
+        let (_, committee) = self.chain.current_committee().await?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
         self.chain
@@ -1807,7 +1808,7 @@ where
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
-        let (epoch, committee) = chain.current_committee()?;
+        let (epoch, committee) = chain.current_committee().await?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
@@ -1955,8 +1956,15 @@ where
         self.initialize_and_save_if_needed().await?;
         let mut info = ChainInfo::from(&self.chain);
         if query.request_committees {
-            info.requested_committees =
-                Some(self.chain.execution_state.system.committees.get().clone());
+            info.requested_committees = Some(
+                self.chain
+                    .execution_state
+                    .system
+                    .committees
+                    .get()
+                    .await?
+                    .clone(),
+            );
         }
         if query.request_owner_balance == AccountOwner::CHAIN {
             info.requested_owner_balance = Some(*self.chain.execution_state.system.balance.get());
@@ -2184,15 +2192,20 @@ pub(crate) struct CrossChainUpdateHelper<'a> {
 
 impl<'a> CrossChainUpdateHelper<'a> {
     /// Creates a new [`CrossChainUpdateHelper`].
-    fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
+    async fn new<C>(
+        config: &ChainWorkerConfig,
+        chain: &'a ChainStateView<C>,
+    ) -> Result<Self, WorkerError>
     where
         C: Context + Clone + 'static,
     {
-        CrossChainUpdateHelper {
+        let current_epoch = *chain.execution_state.system.epoch.get();
+        let committees = chain.execution_state.system.committees.get().await?;
+        Ok(CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
-            current_epoch: *chain.execution_state.system.epoch.get(),
-            committees: chain.execution_state.system.committees.get(),
-        }
+            current_epoch,
+            committees,
+        })
     }
 
     /// Checks basic invariants and deals with repeated heights and deprecated epochs.

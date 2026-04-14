@@ -25,6 +25,7 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
+    lazy_register_view::HashedLazyRegisterView,
     map_view::HashedMapView,
     register_view::HashedRegisterView,
     set_view::HashedSetView,
@@ -76,7 +77,7 @@ pub struct SystemExecutionStateView<C> {
     // Not using a `MapView` because the set active of committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
     // (e.g. the `OpenChain` operation).
-    pub committees: HashedRegisterView<C, BTreeMap<Epoch, Committee>>,
+    pub committees: HashedLazyRegisterView<C, BTreeMap<Epoch, Committee>>,
     /// Ownership of the chain.
     pub ownership: HashedRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
@@ -320,18 +321,19 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
+    pub async fn is_active(&self) -> bool {
         self.description.get().is_some()
             && self.ownership.get().is_active()
-            && self.current_committee().is_some()
+            && self.current_committee().await.is_some()
             && self.admin_chain_id.get().is_some()
     }
 
     /// Returns the current committee, if any.
-    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get();
-        let committee = self.committees.get().get(epoch)?;
-        Some((*epoch, committee))
+    pub async fn current_committee(&self) -> Option<(Epoch, &Committee)> {
+        let epoch = *self.epoch.get();
+        let committees = self.committees.get().await.ok()?;
+        let committee = committees.get(&epoch)?;
+        Some((epoch, committee))
     }
 
     async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
@@ -431,7 +433,7 @@ where
                         let committee =
                             bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().await?.insert(epoch, committee);
                         self.epoch.set(epoch);
                         txn_tracker.add_event(
                             StreamId::system(EPOCH_STREAM_NAME),
@@ -441,7 +443,7 @@ where
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         ensure!(
-                            self.committees.get_mut().remove(&epoch).is_some(),
+                            self.committees.get_mut().await?.remove(&epoch).is_some(),
                             ExecutionError::InvalidCommitteeRemoval
                         );
                         txn_tracker.add_event(
@@ -510,12 +512,12 @@ where
                 let blob_id = BlobId::new(bcs::from_bytes(&bytes)?, BlobType::Committee);
                 let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, committee);
+                self.committees.get_mut().await?.insert(epoch, committee);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
                 ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
+                    self.committees.get_mut().await?.remove(&epoch).is_some(),
                     ExecutionError::InvalidCommitteeRemoval
                 );
                 let admin_chain_id = self
@@ -836,20 +838,11 @@ where
             block_height,
             chain_index,
         };
+        let committees = self.committees.get().await?;
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
-            self.committees
-                .get()
-                .keys()
-                .min()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
-            self.committees
-                .get()
-                .keys()
-                .max()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
+            committees.keys().min().copied().unwrap_or(Epoch::ZERO),
+            committees.keys().max().copied().unwrap_or(Epoch::ZERO),
         );
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();

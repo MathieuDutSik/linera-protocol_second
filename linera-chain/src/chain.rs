@@ -479,8 +479,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+    pub async fn is_active(&self) -> bool {
+        self.execution_state.system.is_active().await
     }
 
     /// Initializes the chain if it is not active yet.
@@ -499,13 +499,17 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
             self.execution_state.system.ownership.get().clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            self.execution_state
+                .system
+                .current_committee()
+                .await
+                .into_iter()
+                .flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
         Ok(())
     }
@@ -607,10 +611,11 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
         self.execution_state
             .system
             .current_committee()
+            .await
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
@@ -733,6 +738,7 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -1028,6 +1034,7 @@ where
             .execution_state
             .system
             .current_committee()
+            .await
             .is_some_and(|(_epoch, committee)| {
                 committee
                     .policy()
@@ -1131,7 +1138,8 @@ where
         }
         let updated_streams = self.process_emitted_events(block).await?;
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
+            .await?;
 
         // Advance to next block height.
         let tip = self.tip_state.get_mut();
@@ -1260,19 +1268,25 @@ where
     }
 
     /// Resets the chain manager for the next block height.
-    fn reset_chain_manager(
+    async fn reset_chain_manager(
         &mut self,
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
         let ownership = self.execution_state.system.ownership.get().clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
-        self.manager
-            .reset(ownership, next_height, local_time, fallback_owners)
+        self.manager.reset(
+            ownership,
+            next_height,
+            local_time,
+            self.execution_state
+                .system
+                .current_committee()
+                .await
+                .into_iter()
+                .flat_map(|(_, committee)| committee.account_keys_and_weights()),
+        )
     }
 
     /// Updates the outboxes with the messages sent in the block.
