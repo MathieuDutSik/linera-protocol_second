@@ -340,8 +340,10 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // finalize calls for the block.
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
-    application.expect_call(ExpectedCall::default_finalize());
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
     let app_operation = Operation::User {
         application_id,
         bytes: b"foo".to_vec(),
@@ -383,8 +385,10 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     // But app operations continue to work.
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
     application.expect_call(ExpectedCall::execute_operation(|_, _| Ok(vec![])));
-    application.expect_call(ExpectedCall::default_finalize());
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
     let valid_block = make_child_block(&value)
         .with_operation(app_operation.clone())
         .with_operation(another_app_operation.clone());
@@ -479,7 +483,8 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
 
     // Test 2: An accepted message SHOULD satisfy the mandatory application requirement.
     application.expect_call(ExpectedCall::execute_message(|_, _| Ok(())));
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
     let accepted_bundle = IncomingBundle {
         origin: origin_chain_id,
         bundle: message_bundle,
@@ -530,7 +535,8 @@ async fn test_service_as_oracles(service_oracle_execution_times_ms: &[u64]) -> a
         }));
     }
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     chain.execute_test_block_simple(block, time, &[]).await?;
 
@@ -575,7 +581,8 @@ async fn test_service_as_oracle_exceeding_time_limit(
         }));
     }
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let result = chain.execute_test_block_simple(block, time, &[]).await;
 
@@ -639,7 +646,8 @@ async fn test_service_as_oracle_timeout_early_stop(
         }));
     }
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     let execution_start = Instant::now();
     let result = chain.execute_test_block_simple(block, time, &[]).await;
@@ -691,7 +699,8 @@ async fn test_service_as_oracle_response_size_limit(
         Ok(vec![0; response_size])
     }));
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     chain
         .execute_test_block_simple(block, time, &[])
@@ -750,7 +759,8 @@ async fn test_contract_http_response_size_limit(
         Ok(vec![])
     }));
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     chain
         .execute_test_block_simple(block, time, &[])
@@ -809,7 +819,8 @@ async fn test_service_http_response_size_limit(
         Ok(vec![])
     }));
 
-    application.expect_call(ExpectedCall::default_finalize());
+    application.expect_call(ExpectedCall::default_save());
+    application.expect_call(ExpectedCall::default_terminate());
 
     chain
         .execute_test_block_simple(block, time, &[])
