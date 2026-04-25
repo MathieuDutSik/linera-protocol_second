@@ -87,18 +87,18 @@ impl Contract for ControllerContract {
     type InstantiationArgument = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = ControllerState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         ControllerContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
+    fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
         // validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         log::info!(
             "Processing operation on chain {}: {operation:?}",
             self.runtime.chain_id()
@@ -171,7 +171,7 @@ impl Contract for ControllerContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         log::info!(
             "Processing message on chain {}: {message:?}",
             self.runtime.chain_id()
@@ -320,7 +320,7 @@ impl Contract for ControllerContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");
@@ -655,7 +655,6 @@ impl ControllerState {}
 
 #[cfg(test)]
 mod tests {
-    use futures::FutureExt as _;
     use linera_sdk::{views::View, Contract, ContractRuntime};
 
     use super::{ControllerContract, ControllerState};
@@ -674,10 +673,7 @@ mod tests {
             runtime,
         };
 
-        contract
-            .instantiate(())
-            .now_or_never()
-            .expect("Initialization of application state should not await anything");
+        contract.instantiate(());
 
         contract
     }

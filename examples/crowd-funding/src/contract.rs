@@ -32,13 +32,13 @@ impl Contract for CrowdFundingContract {
     type Parameters = ApplicationId<fungible::FungibleTokenAbi>;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CrowdFundingState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         CrowdFundingContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, argument: InstantiationArgument) {
+    fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
@@ -51,7 +51,7 @@ impl Contract for CrowdFundingContract {
         );
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Pledge { owner, amount } => {
                 if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
@@ -65,7 +65,7 @@ impl Contract for CrowdFundingContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::PledgeWithAccount { owner, amount } => {
                 assert_eq!(
@@ -79,7 +79,7 @@ impl Contract for CrowdFundingContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

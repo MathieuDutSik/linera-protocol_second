@@ -32,20 +32,20 @@ impl Contract for CreateAndCallContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CreateAndCallState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         CreateAndCallContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _value: ()) {
+    fn instantiate(&mut self, _value: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
         self.state.value.set(None);
     }
 
-    async fn execute_operation(&mut self, operation: CreateAndCallOperation) -> u64 {
+    fn execute_operation(&mut self, operation: CreateAndCallOperation) -> u64 {
         let CreateAndCallOperation::CreateAndCall(
             contract_bytes,
             service_bytes,
@@ -83,11 +83,11 @@ impl Contract for CreateAndCallContract {
             .call_application(true, application_id, &counter_operation)
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Create and call application doesn't support any cross-chain messages");
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

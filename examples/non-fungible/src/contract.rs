@@ -33,19 +33,19 @@ impl Contract for NonFungibleTokenContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = NonFungibleTokenState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         NonFungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, _state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Mint {
                 minter,
@@ -94,7 +94,7 @@ impl Contract for NonFungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Transfer {
                 mut nft,
@@ -127,7 +127,7 @@ impl Contract for NonFungibleTokenContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

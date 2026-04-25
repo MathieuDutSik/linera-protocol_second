@@ -34,18 +34,18 @@ impl Contract for SocialContract {
     type Parameters = ();
     type EventValue = Event;
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = SocialState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         SocialContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Subscribe { chain_id } => {
                 let app_id = self.runtime.application_id().forget_abi();
@@ -67,7 +67,7 @@ impl Contract for SocialContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Like { key } => self.runtime.emit(STREAM_NAME.into(), &Event::Like { key }),
 
@@ -77,7 +77,7 @@ impl Contract for SocialContract {
         };
     }
 
-    async fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
+    fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
         for update in updates {
             assert_eq!(update.stream_id.stream_name, STREAM_NAME.into());
             assert_eq!(
@@ -101,7 +101,7 @@ impl Contract for SocialContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

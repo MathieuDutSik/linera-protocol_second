@@ -35,18 +35,18 @@ impl Contract for RfqContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = RfqState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         RfqContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         if self.state.is_temp_chain() {
             // No operations should be executed directly on a temporary chain
             return;
@@ -184,7 +184,7 @@ impl Contract for RfqContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         let origin_chain_id = self
             .runtime
             .message_origin_chain_id()
@@ -301,7 +301,7 @@ impl Contract for RfqContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

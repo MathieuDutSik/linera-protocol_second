@@ -32,7 +32,7 @@ impl Contract for MatchingEngineContract {
     type Parameters = Parameters;
     type EventValue = ();
 
-    async fn load(mut runtime: ContractRuntime<Self>) -> Self {
+    fn load(mut runtime: ContractRuntime<Self>) -> Self {
         let parameters = runtime.application_parameters();
         let context = linera_views::context::ViewSyncContext::new_unchecked(
             runtime.key_value_store(),
@@ -44,13 +44,13 @@ impl Contract for MatchingEngineContract {
         MatchingEngineContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {}
+    fn instantiate(&mut self, _argument: ()) {}
 
     /// Executes an order operation, or closes the chain.
     ///
     /// If the chain is the one of the matching engine then the order is processed
     /// locally. Otherwise, it gets transmitted as a message to the chain of the engine.
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::ExecuteOrder { order } => {
                 self.runtime
@@ -88,7 +88,7 @@ impl Contract for MatchingEngineContract {
     }
 
     /// Execution of the order on the creation chain
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),
@@ -108,7 +108,7 @@ impl Contract for MatchingEngineContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

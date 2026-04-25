@@ -37,7 +37,7 @@ impl Contract for WrappedFungibleTokenContract {
         WrappedFungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, state: Self::InstantiationArgument) {
         self.runtime.application_parameters();
         for (k, v) in state.accounts {
             if v != Amount::ZERO {
@@ -46,7 +46,7 @@ impl Contract for WrappedFungibleTokenContract {
         }
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             WrappedFungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner);

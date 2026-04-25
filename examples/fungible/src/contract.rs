@@ -30,13 +30,13 @@ impl Contract for FungibleTokenContract {
     type InstantiationArgument = InitialState;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = FungibleTokenState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         FungibleTokenContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
@@ -50,7 +50,7 @@ impl Contract for FungibleTokenContract {
         self.state.initialize_accounts(state);
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             FungibleOperation::Balance { owner } => {
                 let balance = self.state.balance_or_default(&owner);
@@ -116,7 +116,7 @@ impl Contract for FungibleTokenContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Credit {
                 amount,
@@ -144,7 +144,7 @@ impl Contract for FungibleTokenContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

@@ -35,19 +35,19 @@ impl Contract for HexContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = HexState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         HexContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, arg: Timeouts) {
+    fn instantiate(&mut self, arg: Timeouts) {
         log::trace!("Instantiating");
         self.runtime.application_parameters(); // Verifies that these are empty.
         self.state.timeouts.set(arg);
     }
 
-    async fn execute_operation(&mut self, operation: Operation) -> HexOutcome {
+    fn execute_operation(&mut self, operation: Operation) -> HexOutcome {
         log::trace!("Handling operation {:?}", operation);
         let outcome = match operation {
             Operation::MakeMove { x, y } => self.execute_make_move(x, y),
@@ -64,7 +64,7 @@ impl Contract for HexContract {
         self.handle_winner(outcome)
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         log::trace!("Handling message {:?}", message);
         match message {
             Message::Start {
@@ -94,7 +94,7 @@ impl Contract for HexContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

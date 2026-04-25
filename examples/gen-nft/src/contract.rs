@@ -33,19 +33,19 @@ impl Contract for GenNftContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = GenNftState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         GenNftContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _state: Self::InstantiationArgument) {
+    fn instantiate(&mut self, _state: Self::InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         self.state.num_minted_nfts.set(0);
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             Operation::Mint { minter, prompt } => {
                 self.runtime
@@ -89,7 +89,7 @@ impl Contract for GenNftContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Transfer {
                 mut nft,
@@ -123,7 +123,7 @@ impl Contract for GenNftContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

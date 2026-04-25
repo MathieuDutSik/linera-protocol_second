@@ -34,18 +34,18 @@ impl Contract for AmmContract {
     type Parameters = Parameters;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = AmmState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         AmmContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         if self.runtime.chain_id() == self.runtime.application_creator_chain_id() {
             self.execute_order_local(operation);
         } else {
@@ -53,7 +53,7 @@ impl Contract for AmmContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),
@@ -308,7 +308,7 @@ impl Contract for AmmContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

@@ -32,13 +32,13 @@ impl Contract for EthereumTrackerContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EthereumTrackerState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
         EthereumTrackerContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, argument: InstantiationArgument) {
+    fn instantiate(&mut self, argument: InstantiationArgument) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
         let InstantiationArgument {
@@ -57,18 +57,18 @@ impl Contract for EthereumTrackerContract {
         self.read_initial();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         // The only input is updating the database
         match operation {
             Self::Operation::Update { to_block } => self.update(to_block),
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Messages not supported");
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");

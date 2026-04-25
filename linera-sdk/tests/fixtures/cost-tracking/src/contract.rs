@@ -321,20 +321,20 @@ impl Contract for CostTrackingContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CostTrackingState::load(runtime.root_view_storage_context())
             .expect("Failed to load state");
 
         CostTrackingContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         self.runtime.application_parameters();
         self.state.counter.set(0);
         self.state.data.set(String::new());
     }
 
-    async fn execute_operation(&mut self, operation: Operation) {
+    fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::RunAll => {
                 self.run_all().await;
@@ -342,7 +342,7 @@ impl Contract for CostTrackingContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Message) {
+    fn execute_message(&mut self, message: Message) {
         match message {
             Message::Ping => {
                 // No-op, just for benchmarking message reception
@@ -350,7 +350,7 @@ impl Contract for CostTrackingContract {
         }
     }
 
-    async fn store(mut self) {
+    fn store(mut self) {
         self.state
             .save()
             .expect("Failed to save state");
