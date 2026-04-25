@@ -548,7 +548,7 @@ fn run_sync_byte_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<
                 let val = rng.gen_range(0..5) as u8;
                 let key_prefix = vec![val];
                 view.map.remove_by_prefix(key_prefix.clone());
-                remove_by_prefix(&mut new_state_map, key_prefix);
+                remove_by_prefix(&mut new_state_map, &key_prefix);
             }
             if choice == 3 {
                 view.clear();
@@ -601,7 +601,7 @@ fn run_sync_byte_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<
                     .filter(|&x| x.0[0] == u)
                     .cloned()
                     .collect::<Vec<_>>();
-                let part_key_values = view.map.key_values_by_prefix(vec![u])?;
+                let part_key_values = view.map.key_values_by_prefix(&[u])?;
                 assert_eq!(part_state_vec, part_key_values);
             }
             let keys_vec = all_keys.iter().cloned().collect::<Vec<_>>();
@@ -628,8 +628,8 @@ fn run_sync_byte_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<
     Ok(())
 }
 
-fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: Vec<u8>) {
-    map.retain(|key, _| !key.starts_with(&key_prefix));
+fn remove_by_prefix<V>(map: &mut BTreeMap<Vec<u8>, V>, key_prefix: &[u8]) {
+    map.retain(|key, _| !key.starts_with(key_prefix));
 }
 
 #[test]

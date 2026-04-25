@@ -410,6 +410,7 @@ where
     /// *value = 42;
     /// assert_eq!(queue.elements().unwrap(), vec![42]);
     /// ```
+    #[allow(clippy::iter_not_returning_iterator)]
     pub fn iter_mut(&mut self) -> Result<IterMut<'_, T>, ViewError> {
         self.load_all()?;
         Ok(self.new_back_values.iter_mut())

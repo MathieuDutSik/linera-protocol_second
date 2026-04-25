@@ -380,32 +380,31 @@ where
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// map.insert(vec![1, 2], String::from("Bonjour"));
     /// map.insert(vec![1, 3], String::from("Bonjour"));
-    /// let prefix = vec![1];
     /// let mut count = 0;
     /// map.for_each_key_while(
     ///     |_key| {
     ///         count += 1;
     ///         Ok(count < 3)
     ///     },
-    ///     prefix,
+    ///     &[1],
     /// )
     /// .unwrap();
     /// assert_eq!(count, 2);
     /// ```
-    pub fn for_each_key_while<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub fn for_each_key_while<F>(&self, mut f: F, prefix: &[u8]) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.clone()));
+        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.to_vec()));
         let mut update = updates.next();
-        if !self.deletion_set.contains_prefix_of(&prefix) {
+        if !self.deletion_set.contains_prefix_of(prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
-                .range(get_key_range_for_prefix(prefix.clone()));
+                .range(get_key_range_for_prefix(prefix.to_vec()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
-            let base = self.context.base_key().base_index(&prefix);
+            let base = self.context.base_key().base_index(prefix);
             for index in self.context.store().find_keys_by_prefix(&base)? {
                 loop {
                     match update {
@@ -451,18 +450,17 @@ where
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// let mut count = 0;
-    /// let prefix = Vec::new();
     /// map.for_each_key(
     ///     |_key| {
     ///         count += 1;
     ///         Ok(())
     ///     },
-    ///     prefix,
+    ///     &[],
     /// )
     /// .unwrap();
     /// assert_eq!(count, 1);
     /// ```
-    pub fn for_each_key<F>(&self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub fn for_each_key<F>(&self, mut f: F, prefix: &[u8]) -> Result<(), ViewError>
     where
         F: FnMut(&[u8]) -> Result<(), ViewError> + Send,
     {
@@ -492,13 +490,12 @@ where
     /// ```
     pub fn keys(&self) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
-        let prefix = Vec::new();
         self.for_each_key(
             |key| {
                 keys.push(key.to_vec());
                 Ok(())
             },
-            prefix,
+            &[],
         )?;
         Ok(keys)
     }
@@ -514,21 +511,20 @@ where
     /// map.insert(vec![1, 2], String::from("Bonjour"));
     /// map.insert(vec![1, 3], String::from("Hallo"));
     /// assert_eq!(
-    ///     map.keys_by_prefix(vec![1]).unwrap(),
+    ///     map.keys_by_prefix(&[1]).unwrap(),
     ///     vec![vec![1, 2], vec![1, 3]]
     /// );
     /// ```
-    pub fn keys_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>, ViewError> {
+    pub fn keys_by_prefix(&self, prefix: &[u8]) -> Result<Vec<Vec<u8>>, ViewError> {
         let mut keys = Vec::new();
-        let prefix_clone = prefix.clone();
         self.for_each_key(
             |key| {
-                let mut big_key = prefix.clone();
+                let mut big_key = prefix.to_vec();
                 big_key.extend(key);
                 keys.push(big_key);
                 Ok(())
             },
-            prefix_clone,
+            prefix,
         )?;
         Ok(keys)
     }
@@ -547,13 +543,12 @@ where
     /// ```
     pub fn count(&self) -> Result<usize, ViewError> {
         let mut count = 0;
-        let prefix = Vec::new();
         self.for_each_key(
             |_key| {
                 count += 1;
                 Ok(())
             },
-            prefix,
+            &[],
         )?;
         Ok(count)
     }
@@ -562,21 +557,21 @@ where
     fn for_each_key_value_or_bytes_while<'a, F>(
         &'a self,
         mut f: F,
-        prefix: Vec<u8>,
+        prefix: &[u8],
     ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.clone()));
+        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.to_vec()));
         let mut update = updates.next();
-        if !self.deletion_set.contains_prefix_of(&prefix) {
+        if !self.deletion_set.contains_prefix_of(prefix) {
             let iter = self
                 .deletion_set
                 .deleted_prefixes
-                .range(get_key_range_for_prefix(prefix.clone()));
+                .range(get_key_range_for_prefix(prefix.to_vec()));
             let mut suffix_closed_set = SuffixClosedSetIterator::new(prefix_len, iter);
-            let base = self.context.base_key().base_index(&prefix);
+            let base = self.context.base_key().base_index(prefix);
             for (index, bytes) in self.context.store().find_key_values_by_prefix(&base)? {
                 loop {
                     match update {
@@ -628,13 +623,12 @@ where
     /// map.insert(vec![1, 2], String::from("Bonjour"));
     /// map.insert(vec![1, 3], String::from("Hallo"));
     /// let mut part_keys = Vec::new();
-    /// let prefix = vec![1];
     /// map.for_each_key_value_while(
     ///     |key, _value| {
     ///         part_keys.push(key.to_vec());
     ///         Ok(part_keys.len() < 2)
     ///     },
-    ///     prefix,
+    ///     &[1],
     /// )
     /// .unwrap();
     /// assert_eq!(part_keys.len(), 2);
@@ -642,7 +636,7 @@ where
     pub fn for_each_key_value_while<'a, F>(
         &'a self,
         mut f: F,
-        prefix: Vec<u8>,
+        prefix: &[u8],
     ) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], Cow<'a, V>) -> Result<bool, ViewError> + Send,
@@ -665,18 +659,17 @@ where
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![0, 1], String::from("Hello"));
     /// let mut count = 0;
-    /// let prefix = Vec::new();
     /// map.for_each_key_value(
     ///     |_key, _value| {
     ///         count += 1;
     ///         Ok(())
     ///     },
-    ///     prefix,
+    ///     &[],
     /// )
     /// .unwrap();
     /// assert_eq!(count, 1);
     /// ```
-    pub fn for_each_key_value<'a, F>(&'a self, mut f: F, prefix: Vec<u8>) -> Result<(), ViewError>
+    pub fn for_each_key_value<'a, F>(&'a self, mut f: F, prefix: &[u8]) -> Result<(), ViewError>
     where
         F: FnMut(&[u8], Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
@@ -703,24 +696,22 @@ where
     /// # let context = SyncMemoryContext::new_for_testing(());
     /// let mut map = SyncByteMapView::load(context).unwrap();
     /// map.insert(vec![1, 2], String::from("Hello"));
-    /// let prefix = vec![1];
     /// assert_eq!(
-    ///     map.key_values_by_prefix(prefix).unwrap(),
+    ///     map.key_values_by_prefix(&[1]).unwrap(),
     ///     vec![(vec![1, 2], String::from("Hello"))]
     /// );
     /// ```
-    pub fn key_values_by_prefix(&self, prefix: Vec<u8>) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
+    pub fn key_values_by_prefix(&self, prefix: &[u8]) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
         let mut key_values = Vec::new();
-        let prefix_copy = prefix.clone();
         self.for_each_key_value(
             |key, value| {
-                let mut big_key = prefix.clone();
+                let mut big_key = prefix.to_vec();
                 big_key.extend(key);
                 let value = value.into_owned();
                 key_values.push((big_key, value));
                 Ok(())
             },
-            prefix_copy,
+            prefix,
         )?;
         Ok(key_values)
     }
@@ -739,7 +730,7 @@ where
     /// );
     /// ```
     pub fn key_values(&self) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
-        self.key_values_by_prefix(Vec::new())
+        self.key_values_by_prefix(&[])
     }
 }
 
@@ -1059,13 +1050,12 @@ where
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key_while(
             |key| {
                 let index = BaseKey::deserialize_value(key)?;
                 f(index)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1091,13 +1081,12 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key(
             |key| {
                 let index = BaseKey::deserialize_value(key)?;
                 f(index)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1123,13 +1112,12 @@ where
     where
         F: FnMut(I, Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key_value(
             |key, value| {
                 let index = BaseKey::deserialize_value(key)?;
                 f(index, value)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1176,7 +1164,7 @@ where
                 indices.push(bcs::from_bytes(key)?);
                 Ok(())
             },
-            Vec::new(),
+            &[],
         )?;
         Ok(indices)
     }
@@ -1512,13 +1500,12 @@ where
     where
         F: FnMut(I) -> Result<bool, ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key_while(
             |key| {
                 let index = I::from_custom_bytes(key)?;
                 f(index)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1545,13 +1532,12 @@ where
     where
         F: FnMut(I) -> Result<(), ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key(
             |key| {
                 let index = I::from_custom_bytes(key)?;
                 f(index)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1579,13 +1565,12 @@ where
     where
         F: FnMut(I, Cow<'a, V>) -> Result<bool, ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key_value_while(
             |key, value| {
                 let index = I::from_custom_bytes(key)?;
                 f(index, value)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
@@ -1612,13 +1597,12 @@ where
     where
         F: FnMut(I, Cow<'a, V>) -> Result<(), ViewError> + Send,
     {
-        let prefix = Vec::new();
         self.map.for_each_key_value(
             |key, value| {
                 let index = I::from_custom_bytes(key)?;
                 f(index, value)
             },
-            prefix,
+            &[],
         )?;
         Ok(())
     }
