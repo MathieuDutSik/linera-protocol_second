@@ -323,7 +323,6 @@ impl Contract for CostTrackingContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CostTrackingState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
 
         CostTrackingContract { state, runtime }
@@ -351,10 +350,9 @@ impl Contract for CostTrackingContract {
         }
     }
 
-    async fn store(self) {
+    async fn store(mut self) {
         self.state
-            .save_and_drop()
-            .await
+            .save()
             .expect("Failed to save state");
     }
 }

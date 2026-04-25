@@ -37,7 +37,6 @@ impl Contract for HexContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = HexState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         HexContract { state, runtime }
     }
@@ -60,7 +59,6 @@ impl Contract for HexContract {
                 timeouts,
             } => {
                 self.execute_start(players, board_size, fee_budget, timeouts)
-                    .await
             }
         };
         self.handle_winner(outcome)
@@ -86,7 +84,6 @@ impl Contract for HexContract {
                         .state
                         .game_chains
                         .get_mut_or_default(owner)
-                        .await
                         .unwrap();
                     chain_set.retain(|game_chain| game_chain.chain_id != origin_chain_id);
                     if chain_set.is_empty() {
@@ -97,10 +94,9 @@ impl Contract for HexContract {
         }
     }
 
-    async fn store(self) {
+    async fn store(mut self) {
         self.state
-            .save_and_drop()
-            .await
+            .save()
             .expect("Failed to save state");
     }
 }
@@ -143,7 +139,7 @@ impl HexContract {
         HexOutcome::Winner(active.other())
     }
 
-    async fn execute_start(
+    fn execute_start(
         &mut self,
         players: [AccountOwner; 2],
         board_size: u16,
@@ -163,7 +159,6 @@ impl HexContract {
             self.state
                 .game_chains
                 .get_mut_or_default(owner)
-                .await
                 .unwrap()
                 .insert(GameChain { chain_id });
         }

@@ -91,7 +91,6 @@ impl ControllerState {
         let local_pending_services = self
             .local_pending_services
             .index_values()
-            .await
             .expect("storage")
             .into_iter()
             .map(|(service_id, pending_service)| {

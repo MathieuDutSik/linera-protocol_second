@@ -34,7 +34,6 @@ impl Contract for CreateAndCallContract {
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = CreateAndCallState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         CreateAndCallContract { state, runtime }
     }
@@ -88,10 +87,9 @@ impl Contract for CreateAndCallContract {
         panic!("Create and call application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
+    async fn store(mut self) {
         self.state
-            .save_and_drop()
-            .await
+            .save()
             .expect("Failed to save state");
     }
 }

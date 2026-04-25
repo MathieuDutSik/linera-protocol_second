@@ -75,7 +75,6 @@ impl QueryRoot {
         self.state
             .results
             .read_front(count)
-            .await
             .unwrap_or_default()
     }
 
