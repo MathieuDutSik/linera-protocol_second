@@ -38,7 +38,7 @@ impl CostTrackingContract {
     }
 
     /// Test storage read operations.
-    async fn test_storage_read(&mut self) {
+    fn test_storage_read(&mut self) {
         self.log_entry("before_storage_read");
         let value = self.state.counter.get();
         black_box(value);
@@ -46,7 +46,7 @@ impl CostTrackingContract {
     }
 
     /// Test storage write operations.
-    async fn test_storage_write(&mut self) {
+    fn test_storage_write(&mut self) {
         self.log_entry("before_storage_write");
         self.state.counter.set(42);
         self.log_entry("after_storage_write");
@@ -203,7 +203,7 @@ impl CostTrackingContract {
     }
 
     /// Test MapView operations.
-    async fn test_map_operations(&mut self) {
+    fn test_map_operations(&mut self) {
         // Test insert
         self.log_entry("before_map_insert");
         self.state.map.insert(&"key1".to_string(), 100).unwrap();
@@ -211,7 +211,7 @@ impl CostTrackingContract {
 
         // Test get
         self.log_entry("before_map_get");
-        let value = self.state.map.get(&"key1".to_string()).await.unwrap();
+        let value = self.state.map.get(&"key1".to_string()).unwrap();
         black_box(&value);
         self.log_entry("after_map_get");
 
@@ -221,7 +221,6 @@ impl CostTrackingContract {
             .state
             .map
             .contains_key(&"key1".to_string())
-            .await
             .unwrap();
         black_box(&contains);
         self.log_entry("after_map_contains_key");
@@ -276,12 +275,12 @@ impl CostTrackingContract {
     }
 
     /// Run all cost tracking operations.
-    async fn run_all(&mut self) {
+    fn run_all(&mut self) {
         self.log_entry("start");
 
         // Storage operations
-        self.test_storage_read().await;
-        self.test_storage_write().await;
+        self.test_storage_read();
+        self.test_storage_write();
 
         // JSON serialization/deserialization
         self.test_json_serialization();
@@ -303,7 +302,7 @@ impl CostTrackingContract {
         self.test_vector_operations();
 
         // MapView operations
-        self.test_map_operations().await;
+        self.test_map_operations();
 
         // Transfer operations
         self.test_transfer();
@@ -337,7 +336,7 @@ impl Contract for CostTrackingContract {
     fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::RunAll => {
-                self.run_all().await;
+                self.run_all();
             }
         }
     }
