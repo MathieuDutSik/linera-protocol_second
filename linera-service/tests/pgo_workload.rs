@@ -201,8 +201,11 @@ impl MatchingEngineApp {
             account_owner.to_value()
         );
         let response_body = self.0.query(query).await.unwrap();
-        serde_json::from_value(response_body["accountInfo"]["entry"]["value"]["orders"].clone())
-            .unwrap()
+        let orders_value = &response_body["accountInfo"]["entry"]["value"]["orders"];
+        if orders_value.is_null() {
+            return Vec::new();
+        }
+        serde_json::from_value(orders_value.clone()).unwrap()
     }
 
     async fn order(&self, order: matching_engine::Order) -> Value {
@@ -333,7 +336,120 @@ async fn test_pgo_workload() -> Result<()> {
     let owner1 = get_account_owner(&client1);
     let owner2 = get_account_owner(&client2);
 
+    // =================================================================
+    // Pre-compile all wasm examples and deploy apps that use the CLI
+    // (client.publish_and_create) BEFORE starting node services,
+    // because the node service holds the RocksDB lock.
+    // =================================================================
+    tracing::info!("=== PGO: Building wasm examples ===");
+
+    // 1. Social
+    use social::SocialAbi;
+    let (social_contract, social_service) = client_admin.build_example("social").await?;
+    let social_module_id = client_admin
+        .publish_module::<SocialAbi, (), ()>(
+            social_contract, social_service, VmRuntime::Wasm, None,
+        )
+        .await?;
+    let social_app_id = client_admin
+        .create_application(&social_module_id, &(), &(), &[], None)
+        .await?;
+
+    // 2. Fungible (for allowances test)
+    // Tokens deployed on chain_admin, so owner_admin must hold them (only chain owner can sign).
+    let fungible_accounts = BTreeMap::from([
+        (owner_admin, Amount::from_tokens(150)),
+    ]);
+    let fungible_state = fungible::InitialState { accounts: fungible_accounts };
+    let fungible_params = fungible::Parameters::new("FUN");
+    let fungible_app_id =
+        publish_and_create_fungible(&client_admin, "fungible", &fungible_params, &fungible_state, None).await?;
+
+    // 3. Native fungible
+    let native_fungible_state = fungible::InitialState {
+        accounts: BTreeMap::from([
+            (owner_admin, Amount::from_tokens(80)),
+        ]),
+    };
+    let native_fungible_params = fungible::Parameters::new("NAT");
+    let native_fungible_app_id = publish_and_create_fungible(
+        &client_admin,
+        "native-fungible",
+        &native_fungible_params,
+        &native_fungible_state,
+        None,
+    ).await?;
+
+    // 4. Non-fungible
+    use non_fungible::NonFungibleTokenAbi;
+    let (nft_contract, nft_service) = client_admin.build_example("non-fungible").await?;
+    let nft_app_id = client_admin
+        .publish_and_create::<NonFungibleTokenAbi, (), ()>(
+            nft_contract, nft_service, VmRuntime::Wasm, &(), &(), &[], None,
+        )
+        .await?;
+
+    // 5. Crowd-funding: fungible token + crowd-funding app
+    use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
+    let cf_state = fungible::InitialState {
+        accounts: BTreeMap::from([(owner_admin, Amount::from_tokens(100))]),
+    };
+    let cf_params = fungible::Parameters::new("CFT");
+    let (cf_contract_f, cf_service_f) = client_admin.build_example("fungible").await?;
+    let cf_fungible_id = client_admin
+        .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            cf_contract_f, cf_service_f, VmRuntime::Wasm,
+            &cf_params, &cf_state, &[], None,
+        )
+        .await?;
+    let cf_crowd_state = InstantiationArgument {
+        owner: owner_admin,
+        deadline: Timestamp::from(u64::MAX),
+        target: Amount::from_tokens(10),
+    };
+    let (cf_contract_crowd, cf_service_crowd) = client_admin.build_example("crowd-funding").await?;
+    let crowd_app_id = client_admin
+        .publish_and_create::<
+            CrowdFundingAbi,
+            ApplicationId<FungibleTokenAbi>,
+            InstantiationArgument,
+        >(
+            cf_contract_crowd, cf_service_crowd, VmRuntime::Wasm,
+            &cf_fungible_id, &cf_crowd_state, &[cf_fungible_id.forget_abi()], None,
+        )
+        .await?;
+
+    // 6. Matching engine: two fungible tokens on client1/client2 + engine on admin
+    use matching_engine::{MatchingEngineAbi, OrderNature, Price};
+    let me_state_a = fungible::InitialState {
+        accounts: BTreeMap::from([(owner1, Amount::from_tokens(1000))]),
+    };
+    let (me_contract_fa, me_service_fa) = client1.build_example("fungible").await?;
+    let me_token_a = client1
+        .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            me_contract_fa, me_service_fa, VmRuntime::Wasm,
+            &fungible::Parameters::new("MEA"), &me_state_a, &[], None,
+        )
+        .await?;
+    let me_state_b = fungible::InitialState {
+        accounts: BTreeMap::from([(owner2, Amount::from_tokens(1000))]),
+    };
+    let (me_contract_fb, me_service_fb) = client2.build_example("fungible").await?;
+    let me_token_b = client2
+        .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
+            me_contract_fb, me_service_fb, VmRuntime::Wasm,
+            &fungible::Parameters::new("MEB"), &me_state_b, &[], None,
+        )
+        .await?;
+    let (me_contract, me_service) = client_admin.build_example("matching-engine").await?;
+
+    // 7. AMM: pre-build wasm only (deploy via node service since it needs the tokens)
+    use amm::{AmmAbi, Parameters as AmmParameters};
+    let (amm_contract_fungible, amm_service_fungible) = client_admin.build_example("fungible").await?;
+    let (amm_contract, amm_service) = client_admin.build_example("amm").await?;
+
     // ----- Start node services -----
+    tracing::info!("=== PGO: Starting node services ===");
     let port_admin = get_node_port().await;
     let port1 = get_node_port().await;
     let port2 = get_node_port().await;
@@ -352,16 +468,6 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: Social (50 posts) ===");
     {
-        use social::SocialAbi;
-
-        let (contract, service) = client_admin.build_example("social").await?;
-        let module_id = client_admin
-            .publish_module::<SocialAbi, (), ()>(contract, service, VmRuntime::Wasm, None)
-            .await?;
-        let social_app_id = client_admin
-            .create_application(&module_id, &(), &(), &[], None)
-            .await?;
-
         let app_social_admin =
             ns_admin.make_application(&chain_admin, &social_app_id)?;
         let app_social1 = ns1.make_application(&chain1, &social_app_id)?;
@@ -399,24 +505,14 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: Allowances fungible ===");
     {
-        // Deploy "fungible" token
-        let accounts = BTreeMap::from([
-            (owner1, Amount::from_tokens(100)),
-            (owner2, Amount::from_tokens(50)),
-        ]);
-        let state = fungible::InitialState { accounts };
-        let params = fungible::Parameters::new("FUN");
-        let fungible_app_id =
-            publish_and_create_fungible(&client_admin, "fungible", &params, &state, None).await?;
-
         let app_f_admin =
             FungibleApp(ns_admin.make_application(&chain_admin, &fungible_app_id)?);
 
-        // Transfers
+        // Transfers from owner_admin (chain owner) to other chains
         for i in 0..10 {
             app_f_admin
                 .transfer(
-                    &owner1,
+                    &owner_admin,
                     Amount::from_tokens(1),
                     Account {
                         chain_id: chain1,
@@ -427,42 +523,24 @@ async fn test_pgo_workload() -> Result<()> {
             tracing::info!("Fungible transfer {} done", i);
         }
 
-        // Allowances
+        // Allowances: owner_admin approves owner1 to spend
         app_f_admin
-            .approve(&owner1, &owner2, Amount::from_tokens(20))
+            .approve(&owner_admin, &owner1, Amount::from_tokens(20))
             .await;
         app_f_admin
-            .approve(&owner1, &owner2, Amount::from_tokens(10))
+            .approve(&owner_admin, &owner1, Amount::from_tokens(10))
             .await;
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-        // Deploy "native-fungible" token
-        let accounts_native = BTreeMap::from([
-            (owner1, Amount::from_tokens(50)),
-            (owner2, Amount::from_tokens(30)),
-        ]);
-        let state_native = fungible::InitialState {
-            accounts: accounts_native,
-        };
-        let params_native = fungible::Parameters::new("NAT");
-        let native_fungible_app_id = publish_and_create_fungible(
-            &client_admin,
-            "native-fungible",
-            &params_native,
-            &state_native,
-            None,
-        )
-        .await?;
-
         let app_nf_admin =
             FungibleApp(ns_admin.make_application(&chain_admin, &native_fungible_app_id)?);
 
-        // More transfers with native fungible
+        // More transfers with native fungible from owner_admin
         for i in 0..10 {
             app_nf_admin
                 .transfer(
-                    &owner1,
+                    &owner_admin,
                     Amount::from_tokens(1),
                     Account {
                         chain_id: chain2,
@@ -481,21 +559,6 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: Non-fungible ===");
     {
-        use non_fungible::NonFungibleTokenAbi;
-
-        let (contract, service) = client_admin.build_example("non-fungible").await?;
-        let nft_app_id = client_admin
-            .publish_and_create::<NonFungibleTokenAbi, (), ()>(
-                contract,
-                service,
-                VmRuntime::Wasm,
-                &(),
-                &(),
-                &[],
-                None,
-            )
-            .await?;
-
         let app_nft_admin =
             NonFungibleApp(ns_admin.make_application(&chain_admin, &nft_app_id)?);
 
@@ -544,25 +607,6 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: Crowd-funding ===");
     {
-        use crowd_funding::{CrowdFundingAbi, InstantiationArgument};
-
-        // Deploy a fresh fungible for crowd-funding
-        let accounts = BTreeMap::from([(owner_admin, Amount::from_tokens(100))]);
-        let state = fungible::InitialState { accounts };
-        let params = fungible::Parameters::new("CFT");
-        let (contract_f, service_f) = client_admin.build_example("fungible").await?;
-        let cf_fungible_id = client_admin
-            .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-                contract_f,
-                service_f,
-                VmRuntime::Wasm,
-                &params,
-                &state,
-                &[],
-                None,
-            )
-            .await?;
-
         let app_cf_fungible =
             FungibleApp(ns_admin.make_application(&chain_admin, &cf_fungible_id)?);
 
@@ -579,31 +623,6 @@ async fn test_pgo_workload() -> Result<()> {
             .await;
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        // Deploy crowd-funding
-        let deadline = Timestamp::from(u64::MAX);
-        let target = Amount::from_tokens(10);
-        let state_crowd = InstantiationArgument {
-            owner: owner_admin,
-            deadline,
-            target,
-        };
-        let (contract_crowd, service_crowd) = client_admin.build_example("crowd-funding").await?;
-        let crowd_app_id = client_admin
-            .publish_and_create::<
-                CrowdFundingAbi,
-                ApplicationId<FungibleTokenAbi>,
-                InstantiationArgument,
-            >(
-                contract_crowd,
-                service_crowd,
-                VmRuntime::Wasm,
-                &cf_fungible_id,
-                &state_crowd,
-                &[cf_fungible_id.forget_abi()],
-                None,
-            )
-            .await?;
 
         let app_crowd2 = ns2.make_application(&chain2, &crowd_app_id)?;
 
@@ -630,56 +649,16 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: Matching engine (50 bids + 50 asks) ===");
     {
-        use matching_engine::{MatchingEngineAbi, OrderNature, Parameters, Price};
-
-        // Create two fresh fungible tokens for the matching engine
-        let accounts_a = BTreeMap::from([(owner1, Amount::from_tokens(1000))]);
-        let state_a = fungible::InitialState {
-            accounts: accounts_a,
-        };
-        let (contract_fa, service_fa) = client1.build_example("fungible").await?;
-        let params_a = fungible::Parameters::new("MEA");
-        let token_a = client1
-            .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-                contract_fa,
-                service_fa,
-                VmRuntime::Wasm,
-                &params_a,
-                &state_a,
-                &[],
-                None,
-            )
-            .await?;
-
-        let accounts_b = BTreeMap::from([(owner2, Amount::from_tokens(1000))]);
-        let state_b = fungible::InitialState {
-            accounts: accounts_b,
-        };
-        let (contract_fb, service_fb) = client2.build_example("fungible").await?;
-        let params_b = fungible::Parameters::new("MEB");
-        let token_b = client2
-            .publish_and_create::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
-                contract_fb,
-                service_fb,
-                VmRuntime::Wasm,
-                &params_b,
-                &state_b,
-                &[],
-                None,
-            )
-            .await?;
-
-        // Deploy matching engine on admin chain
-        let (contract_me, service_me) = client_admin.build_example("matching-engine").await?;
-        let me_params = Parameters {
-            tokens: [token_a, token_b],
+        // Deploy matching engine on admin chain via node service
+        let me_params = matching_engine::Parameters {
+            tokens: [me_token_a, me_token_b],
             price_decimals: 0,
         };
         let me_module_id = ns_admin
-            .publish_module::<MatchingEngineAbi, Parameters, ()>(
+            .publish_module::<MatchingEngineAbi, matching_engine::Parameters, ()>(
                 &chain_admin,
-                contract_me,
-                service_me,
+                me_contract,
+                me_service,
                 VmRuntime::Wasm,
             )
             .await?;
@@ -689,7 +668,7 @@ async fn test_pgo_workload() -> Result<()> {
                 &me_module_id,
                 &me_params,
                 &(),
-                &[token_a.forget_abi(), token_b.forget_abi()],
+                &[me_token_a.forget_abi(), me_token_b.forget_abi()],
             )
             .await?;
 
@@ -772,17 +751,12 @@ async fn test_pgo_workload() -> Result<()> {
     // =====================================================================
     tracing::info!("=== PGO: AMM ===");
     {
-        use amm::{AmmAbi, Parameters};
-
-        let (contract_fungible, service_fungible) = client_admin.build_example("fungible").await?;
-        let (contract_amm, service_amm) = client_admin.build_example("amm").await?;
-
-        // Create two fungible tokens on admin chain
+        // Create two fungible tokens on admin chain via node service
         let fungible_module_id = ns_admin
             .publish_module::<FungibleTokenAbi, fungible::Parameters, fungible::InitialState>(
                 &chain_admin,
-                contract_fungible,
-                service_fungible,
+                amm_contract_fungible,
+                amm_service_fungible,
                 VmRuntime::Wasm,
             )
             .await?;
@@ -853,15 +827,15 @@ async fn test_pgo_workload() -> Result<()> {
 
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-        // Deploy AMM
-        let amm_params = Parameters {
+        // Deploy AMM via node service
+        let amm_params = AmmParameters {
             tokens: [amm_token0, amm_token1],
         };
         let amm_module_id = ns_admin
-            .publish_module::<AmmAbi, Parameters, ()>(
+            .publish_module::<AmmAbi, AmmParameters, ()>(
                 &chain_admin,
-                contract_amm,
-                service_amm,
+                amm_contract,
+                amm_service,
                 VmRuntime::Wasm,
             )
             .await?;
