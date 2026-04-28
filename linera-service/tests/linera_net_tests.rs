@@ -3888,6 +3888,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     Ok(())
 }
 
+#[cfg(feature = "engine-benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -4008,9 +4009,6 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
         MatchingEngineApp(node_service_a.make_application(&chain_a, &application_id_matching)?);
     let app_matching_b =
         MatchingEngineApp(node_service_b.make_application(&chain_b, &application_id_matching)?);
-    let app_matching_admin = MatchingEngineApp(
-        node_service_admin.make_application(&chain_admin, &application_id_matching)?,
-    );
 
     // Build 50 bid orders from owner_a at prices 1..=50
     let bids: Vec<matching_engine::Order> = (1..=num_orders as u64)
@@ -4077,6 +4075,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
     Ok(())
 }
 
+#[cfg(feature = "engine-benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

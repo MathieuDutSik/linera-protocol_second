@@ -1442,7 +1442,7 @@ impl ContractSyncRuntimeHandle {
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
-        Ok(result?)
+        result
     }
 }
 
