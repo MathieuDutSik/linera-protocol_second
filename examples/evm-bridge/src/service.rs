@@ -85,7 +85,6 @@ impl EvmBridgeService {
         self.state
             .processed_deposits
             .contains(&bytes)
-            .await
             .expect("failed to check processed deposits")
     }
 
