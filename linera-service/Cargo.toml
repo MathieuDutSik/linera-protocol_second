@@ -74,7 +74,7 @@ storage-service = [
     "linera-storage-runtime/storage-service",
 ]
 opentelemetry = ["linera-rpc/opentelemetry"]
-benchmark = []
+engine-benchmark = []
 
 [dependencies]
 alloy-primitives.workspace = true

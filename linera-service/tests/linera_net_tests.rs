@@ -421,6 +421,7 @@ impl MatchingEngineApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
+    #[cfg(feature = "engine-benchmark")]
     async fn multiple_orders(&self, orders: &[matching_engine::Order]) -> Value {
         let mutations: Vec<String> = orders
             .iter()
@@ -3749,7 +3750,7 @@ async fn test_wasm_end_to_end_matching_engine(config: impl LineraNetConfig) -> R
     Ok(())
 }
 
-#[cfg(feature = "benchmark")]
+#[cfg(feature = "engine-benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
@@ -3953,7 +3954,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
     Ok(())
 }
 
-#[cfg(feature = "benchmark")]
+#[cfg(feature = "engine-benchmark")]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]

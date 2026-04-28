@@ -1663,7 +1663,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
- "futures",
  "linera-sdk",
  "log",
  "serde",
