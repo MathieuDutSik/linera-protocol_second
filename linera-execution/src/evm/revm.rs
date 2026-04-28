@@ -1325,11 +1325,7 @@ where
         self.execute_no_return_operation(operation, "process_streams", value, caller)
     }
 
-    fn save(&mut self) -> Result<(), ExecutionError> {
-        Ok(())
-    }
-
-    fn terminate(&mut self) -> Result<(), ExecutionError> {
+    fn finalize(&mut self) -> Result<(), ExecutionError> {
         Ok(())
     }
 }

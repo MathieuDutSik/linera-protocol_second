@@ -52,15 +52,10 @@ pub enum RuntimeCommand {
         /// for tracker accumulation during finalize calls.
         tracker: Box<ResourceTracker>,
     },
-    /// Drop all loaded contract instances without finalizing (for checkpoint rollback).
-    DropAllInstances,
-    /// Save all loaded contract instances for checkpointing.
-    ///
-    /// Calls `save()` on all loaded contracts so their in-memory state is flushed to the
-    /// host's key-value store. Unlike `FinalizeAll`, this does not call `terminate()` or
-    /// shut down the runtime thread. Contract instances remain loaded and can continue
-    /// processing subsequent actions.
-    SaveAllInstances,
+    /// Snapshot the Wasm state (memory + globals) of all loaded contract instances.
+    SnapshotAllInstances,
+    /// Restore all loaded contract instances from their Wasm snapshots.
+    RestoreAllInstances,
 }
 
 /// Payload for `RuntimeCommand::Execute`.

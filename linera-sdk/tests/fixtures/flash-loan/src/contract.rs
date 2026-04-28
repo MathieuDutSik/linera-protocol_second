@@ -60,32 +60,28 @@ impl Contract for FlashLoanContract {
         panic!("Flash-loan application doesn't support cross-chain messages");
     }
 
-    async fn save(&mut self) {
-        self.state.save().await.expect("Failed to save state");
-    }
-
-    /// Validate that all loans have been repaid with sufficient interest.
+    /// Validate that all loans have been repaid with sufficient interest, then save.
     ///
     /// This runs at the end of the block. Cross-application calls are not allowed here,
     /// so we check the accounting tracked in our own state. The actual token transfers
     /// were performed via the fungible token during `execute_operation`.
-    async fn terminate(mut self) {
+    async fn store(mut self) {
         let total_borrowed = *self.state.total_borrowed.get();
         let total_repaid = *self.state.total_repaid.get();
-        if total_borrowed == Amount::ZERO {
-            return;
+        if total_borrowed > Amount::ZERO {
+            let params = self.runtime.application_parameters();
+            let interest_millionths = params.interest_millionths as u128;
+            let borrowed_attos = u128::from(total_borrowed);
+            let min_interest = Amount::from_attos(borrowed_attos * interest_millionths / 1_000_000);
+            let min_repayment = total_borrowed.saturating_add(min_interest);
+            assert!(
+                total_repaid >= min_repayment,
+                "Flash loan store: insufficient repayment. \
+                 Repaid: {total_repaid}, required: {min_repayment} \
+                 (borrowed: {total_borrowed}, min interest: {min_interest})"
+            );
         }
-        let params = self.runtime.application_parameters();
-        let interest_millionths = params.interest_millionths as u128;
-        let borrowed_attos = u128::from(total_borrowed);
-        let min_interest = Amount::from_attos(borrowed_attos * interest_millionths / 1_000_000);
-        let min_repayment = total_borrowed.saturating_add(min_interest);
-        assert!(
-            total_repaid >= min_repayment,
-            "Flash loan terminate: insufficient repayment. \
-             Repaid: {total_repaid}, required: {min_repayment} \
-             (borrowed: {total_borrowed}, min interest: {min_interest})"
-        );
+        self.state.save().await.expect("Failed to save state");
     }
 }
 

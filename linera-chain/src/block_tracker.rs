@@ -507,13 +507,12 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         self.operation_results.truncate(*operation_results_len);
     }
 
-    /// Drops all loaded contract instances on the runtime thread without finalizing.
+    /// Snapshots the Wasm state of all loaded contract instances on the runtime thread.
     ///
-    /// Used during checkpoint rollback to discard stale in-memory contract state.
-    /// The runtime thread continues running and can accept new actions. When no
-    /// block-level runtime thread is running (e.g. on web), this is a no-op because
-    /// per-action runtimes don't persist instances across actions.
-    pub async fn drop_runtime_instances<C>(
+    /// Captures memory and globals of all loaded Wasm instances so they can be
+    /// restored later with `restore_runtime_snapshots`. When no block-level runtime
+    /// thread is running (e.g. on web), this is a no-op.
+    pub async fn snapshot_runtime_instances<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
@@ -528,12 +527,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         };
 
         command_tx
-            .send(RuntimeCommand::DropAllInstances)
+            .send(RuntimeCommand::SnapshotAllInstances)
             .map_err(|_| {
                 ChainError::InternalError("Runtime thread stopped unexpectedly".to_string())
             })?;
 
-        // Wait for the acknowledgment (ActionComplete with Ok(None)).
         let mut txn_tracker = TransactionTracker::default();
         let mut actor = ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
         let receiver = self
@@ -553,13 +551,12 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         Ok(())
     }
 
-    /// Saves all loaded contract instances on the runtime thread.
+    /// Restores all loaded contract instances from their Wasm snapshots on the runtime thread.
     ///
-    /// Calls `save()` on all loaded contracts so their in-memory state is flushed to the
-    /// host's key-value store. Contract instances remain loaded and can continue processing.
-    /// Used before checkpointing to ensure the chain's view captures all pending state.
-    /// When no block-level runtime thread is running (e.g. on web), this is a no-op.
-    pub async fn save_runtime_instances<C>(
+    /// Undoes any Wasm-level state changes (memory, globals) that occurred since
+    /// the last `snapshot_runtime_instances` call. When no block-level runtime thread
+    /// is running (e.g. on web), this is a no-op.
+    pub async fn restore_runtime_snapshots<C>(
         &mut self,
         chain: &mut ExecutionStateView<C>,
     ) -> Result<(), ChainError>
@@ -574,12 +571,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         };
 
         command_tx
-            .send(RuntimeCommand::SaveAllInstances)
+            .send(RuntimeCommand::RestoreAllInstances)
             .map_err(|_| {
                 ChainError::InternalError("Runtime thread stopped unexpectedly".to_string())
             })?;
 
-        // Wait for the acknowledgment (ActionComplete).
         let mut txn_tracker = TransactionTracker::default();
         let mut actor = ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
         let receiver = self
@@ -587,10 +583,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .as_mut()
             .expect("execution_state_receiver should match command_tx presence");
         while let Some(request) = receiver.next().await {
-            if let ExecutionRequest::ActionComplete { result, .. } = request {
-                result.map_err(|error| {
-                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-                })?;
+            if let ExecutionRequest::ActionComplete { .. } = request {
                 break;
             }
             actor

@@ -6178,6 +6178,7 @@ dependencies = [
  "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
+ "meta-counter",
  "native-fungible",
  "non-fungible",
  "nonzero_lit",

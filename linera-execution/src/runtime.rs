@@ -135,6 +135,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     user_context: UserInstance::UserContext,
     /// Whether contract log messages should be output.
     allow_application_logs: bool,
+    /// Wasm instance snapshots for checkpoint/restore, keyed by application ID.
+    wasm_snapshots: HashMap<ApplicationId, Box<dyn std::any::Any + Send>>,
 }
 
 /// The runtime status of an application.
@@ -343,6 +345,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             scheduled_operations: Vec::new(),
             user_context,
             allow_application_logs,
+            wasm_snapshots: HashMap::new(),
         }
     }
 
@@ -1215,10 +1218,9 @@ impl ContractSyncRuntime {
                     break;
                 }
 
-                RuntimeCommand::DropAllInstances => {
-                    handle.drop_all_instances();
+                RuntimeCommand::SnapshotAllInstances => {
+                    handle.snapshot_all_instances();
 
-                    // Signal completion through the state request channel.
                     let sender = handle.inner().execution_state_sender.clone();
                     let _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
                         result: Ok(None),
@@ -1227,12 +1229,12 @@ impl ContractSyncRuntime {
                     });
                 }
 
-                RuntimeCommand::SaveAllInstances => {
-                    let result = handle.save_all_instances();
+                RuntimeCommand::RestoreAllInstances => {
+                    handle.restore_all_snapshots();
 
                     let sender = handle.inner().execution_state_sender.clone();
                     let _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
-                        result: result.map(|()| None),
+                        result: Ok(None),
                         final_balance: Amount::ZERO,
                         tracker: ResourceTracker::default(),
                     });
@@ -1349,39 +1351,40 @@ impl ContractSyncRuntimeHandle {
         self.execute(application_id, signer, closure)
     }
 
-    /// Drops all loaded contract instances without finalizing.
+    /// Snapshots the Wasm state (memory and globals) of all loaded contract instances.
     ///
-    /// Used during checkpoint rollback to discard stale in-memory state.
-    fn drop_all_instances(&self) {
+    /// The snapshots are stored internally and can be restored with `restore_all_snapshots`.
+    fn snapshot_all_instances(&self) {
         let mut runtime = self.inner();
-        runtime.loaded_applications.clear();
-        runtime.applications_to_finalize.clear();
-        runtime.call_stack.clear();
-        runtime.is_finalizing = false;
-    }
-
-    /// Saves state of all loaded applications without dropping them.
-    ///
-    /// Used before checkpointing to flush Wasm-side in-memory state to the host's
-    /// key-value store. Contract instances remain loaded and can continue processing.
-    #[instrument(skip_all)]
-    fn save_all_instances(&self) -> Result<(), ExecutionError> {
-        let applications: Vec<_> = self
-            .inner()
-            .applications_to_finalize
+        let snapshots: Vec<_> = runtime
+            .loaded_applications
             .iter()
-            .copied()
-            .rev()
+            .filter_map(|(app_id, loaded)| {
+                let mut instance = loaded.instance.try_lock().expect("instance not in use");
+                instance.create_snapshot().map(|s| (*app_id, s))
+            })
             .collect();
-
-        for application in applications {
-            self.execute(application, None, |contract| contract.save().map(|_| None))?;
+        for (app_id, snapshot) in snapshots {
+            runtime.wasm_snapshots.insert(app_id, snapshot);
         }
-
-        Ok(())
     }
 
-    /// Saves and terminates all loaded applications, ending execution.
+    /// Restores all loaded contract instances from their Wasm snapshots.
+    ///
+    /// This undoes any Wasm-level state changes (memory, globals) that occurred since
+    /// the last `snapshot_all_instances` call.
+    fn restore_all_snapshots(&self) {
+        let mut runtime = self.inner();
+        let snapshots: Vec<_> = runtime.wasm_snapshots.drain().collect();
+        for (app_id, snapshot) in snapshots {
+            if let Some(loaded) = runtime.loaded_applications.get(&app_id) {
+                let mut instance = loaded.instance.try_lock().expect("instance not in use");
+                instance.restore_snapshot(snapshot.as_ref());
+            }
+        }
+    }
+
+    /// Notifies all loaded applications that execution is finalizing.
     #[instrument(skip_all)]
     fn finalize(&self, context: FinalizeContext) -> Result<(), ExecutionError> {
         let applications = mem::take(&mut self.inner().applications_to_finalize)
@@ -1392,8 +1395,7 @@ impl ContractSyncRuntimeHandle {
 
         for application in applications {
             self.execute(application, context.authenticated_owner, |contract| {
-                contract.save()?;
-                contract.terminate().map(|_| None)
+                contract.finalize().map(|_| None)
             })?;
             self.inner().loaded_applications.remove(&application);
         }
@@ -1430,7 +1432,7 @@ impl ContractSyncRuntimeHandle {
                 .instance
                 .try_lock()
                 .expect("Application should not be already executing"),
-        )?;
+        );
 
         let mut runtime = self.inner();
         let application_status = runtime.pop_application();
@@ -1440,7 +1442,7 @@ impl ContractSyncRuntimeHandle {
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
-        Ok(result)
+        Ok(result?)
     }
 }
 
@@ -1648,14 +1650,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .inner()
             .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
-        let value = contract
+        let result = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .execute_operation(argument)?;
+            .execute_operation(argument);
 
         self.inner().finish_call();
 
-        Ok(value)
+        result
     }
 
     fn emit(&mut self, stream_name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError> {

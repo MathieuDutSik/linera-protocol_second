@@ -483,11 +483,18 @@ pub trait UserContract {
     /// Reacts to new events on streams this application subscribes to.
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
-    /// Persists the application state to storage without consuming the instance.
-    fn save(&mut self) -> Result<(), ExecutionError>;
+    /// Finishes execution of the current transaction.
+    fn finalize(&mut self) -> Result<(), ExecutionError>;
 
-    /// Validates the final state and finishes execution.
-    fn terminate(&mut self) -> Result<(), ExecutionError>;
+    /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
+    ///
+    /// Returns `None` for non-Wasm contract implementations.
+    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+        None
+    }
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    fn restore_snapshot(&mut self, _snapshot: &(dyn std::any::Any + Send)) {}
 }
 
 /// The public entry points provided by the service part of an application.

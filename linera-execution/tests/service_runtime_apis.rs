@@ -32,8 +32,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
         assert_eq!(runtime.read_chain_balance().unwrap(), chain_balance);
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
     let query = Query::User {
@@ -64,8 +63,7 @@ async fn test_read_owner_balance_system_api(
         }
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
     let query = Query::User {
@@ -92,8 +90,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
         );
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
     let query = Query::User {
@@ -129,8 +126,7 @@ async fn test_read_owner_balances_system_api(
         );
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
     let query = Query::User {
@@ -166,8 +162,7 @@ async fn test_read_balance_owners_system_api(
         );
         Ok(vec![])
     }));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_query_context();
     let query = Query::User {

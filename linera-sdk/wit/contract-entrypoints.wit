@@ -5,8 +5,7 @@ interface contract-entrypoints {
     execute-operation: func(operation: list<u8>) -> list<u8>;
     execute-message: func(message: list<u8>);
     process-streams: func(streams: list<stream-update>);
-    save: func();
-    terminate: func();
+    finalize: func();
 
     record application-id {
         application-description-hash: crypto-hash,

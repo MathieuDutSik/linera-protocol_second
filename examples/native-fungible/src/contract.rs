@@ -142,7 +142,7 @@ impl Contract for NativeFungibleTokenContract {
         }
     }
 
-    async fn save(&mut self) {}
+    async fn store(self) {}
 }
 
 impl NativeFungibleTokenContract {

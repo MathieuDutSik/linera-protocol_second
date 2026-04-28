@@ -75,8 +75,7 @@ async fn test_transfer_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
         authenticated_owner: sender.signer(),
@@ -161,8 +160,7 @@ async fn test_unauthorized_transfer_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
         authenticated_owner: sender.unauthorized_signer(),
@@ -246,8 +244,7 @@ async fn test_claim_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
         authenticated_owner: sender.signer(),
@@ -376,8 +373,7 @@ async fn test_unauthorized_claims(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
         authenticated_owner: sender.unauthorized_signer(),
@@ -434,8 +430,7 @@ async fn test_read_chain_balance_system_api(chain_balance: Amount) {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -479,8 +474,7 @@ async fn test_read_owner_balance_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -514,8 +508,7 @@ async fn test_read_owner_balance_returns_zero_for_missing_accounts(missing_accou
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -556,8 +549,7 @@ async fn test_read_owner_balances_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -598,8 +590,7 @@ async fn test_read_balance_owners_system_api(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -829,8 +820,7 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
     application.expect_call(ExpectedCall::handle_query(|_service, _query| Ok(vec![])));
 
     let context = create_dummy_operation_context(chain_id);
@@ -900,8 +890,7 @@ async fn test_perform_http_request(authorized_apps: Option<Vec<()>>) -> Result<(
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -950,8 +939,7 @@ async fn test_create_multiple_data_blobs() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -1013,8 +1001,7 @@ async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -1080,10 +1067,8 @@ async fn test_callee_api_calls() -> anyhow::Result<()> {
         Ok(vec![])
     }));
 
-    target_application.expect_call(ExpectedCall::default_save());
-    target_application.expect_call(ExpectedCall::default_terminate());
-    caller_application.expect_call(ExpectedCall::default_save());
-    caller_application.expect_call(ExpectedCall::default_terminate());
+    target_application.expect_call(ExpectedCall::default_finalize());
+    caller_application.expect_call(ExpectedCall::default_finalize());
 
     let context = OperationContext {
         authenticated_owner: Some(owner),
@@ -1135,8 +1120,7 @@ async fn test_change_ownership_system_api() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();
@@ -1178,8 +1162,7 @@ async fn test_unauthorized_change_ownership_system_api() -> anyhow::Result<()> {
             Ok(vec![])
         },
     ));
-    application.expect_call(ExpectedCall::default_save());
-    application.expect_call(ExpectedCall::default_terminate());
+    application.expect_call(ExpectedCall::default_finalize());
 
     let context = create_dummy_operation_context(chain_id);
     let mut controller = ResourceController::default();

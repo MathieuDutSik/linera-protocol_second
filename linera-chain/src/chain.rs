@@ -827,11 +827,11 @@ where
             }
 
             // Checkpoint before bundle transactions if using auto-retry.
-            // Save all loaded contract instances first so their in-memory state
-            // is flushed to the chain's key-value store before cloning.
+            // Snapshot Wasm instances (memory + globals) so we can restore them
+            // on failure instead of dropping and recreating.
             let checkpoint = if auto_retry && is_bundle {
                 block_execution_tracker
-                    .save_runtime_instances(chain)
+                    .snapshot_runtime_instances(chain)
                     .await?;
                 Some((
                     chain.clone_unchecked()?,
@@ -878,9 +878,10 @@ where
             // Restore checkpoint.
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
-            // Drop all loaded contract instances so they reload from the restored state.
+            // Restore Wasm instance snapshots so their memory and globals are
+            // back to pre-execution state, matching what the committed path sees.
             block_execution_tracker
-                .drop_runtime_instances(chain)
+                .restore_runtime_snapshots(chain)
                 .await?;
 
             let all_messages_never_reject = !never_reject_application_ids.is_empty()
