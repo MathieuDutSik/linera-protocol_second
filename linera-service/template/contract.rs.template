@@ -30,8 +30,8 @@ impl Contract for {project_name}Contract {{
     type EventValue = ();
 
     fn load(runtime: ContractRuntime<Self>) -> Self {{
-        let state = {project_name}State::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            {project_name}State::load(runtime.root_view_storage_context()).expect("Failed to load state");
         {project_name}Contract {{ state, runtime }}
     }}
 
@@ -52,9 +52,7 @@ impl Contract for {project_name}Contract {{
     fn execute_message(&mut self, _message: Self::Message) {{}}
 
     fn store(mut self) {{
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }}
 }}
 
