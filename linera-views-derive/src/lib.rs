@@ -331,10 +331,9 @@ fn generate_sync_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream
         }
     };
 
-    let first_name_quote = name_quotes.first().ok_or_else(|| Error::new_spanned(
-        input,
-        "Struct must have at least one field",
-    ))?;
+    let first_name_quote = name_quotes
+        .first()
+        .ok_or_else(|| Error::new_spanned(input, "Struct must have at least one field"))?;
 
     let load_metrics = if root && cfg!(feature = "metrics") {
         quote! {

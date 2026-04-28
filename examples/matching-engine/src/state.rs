@@ -99,7 +99,6 @@ impl MatchingEngineState {
     pub fn ask_level(&mut self, price: &PriceAsk) -> &mut LevelView {
         self.asks
             .load_entry_mut(price)
-            
             .expect("Failed to load `LevelView` for an ask price")
     }
 
@@ -107,17 +106,12 @@ impl MatchingEngineState {
     pub fn bid_level(&mut self, price: &PriceBid) -> &mut LevelView {
         self.bids
             .load_entry_mut(price)
-            
             .expect("Failed to load `LevelView` for a bid price")
     }
 
     /// Checks that the order exists and has been issued by the claimed owner.
     pub fn check_order_id(&self, order_id: &OrderId, owner: &AccountOwner) {
-        let value = self
-            .orders
-            .get(order_id)
-            
-            .expect("Failed to load order");
+        let value = self.orders.get(order_id).expect("Failed to load order");
         match value {
             None => panic!("Order is not present therefore cannot be cancelled"),
             Some(value) => {
@@ -137,19 +131,14 @@ impl MatchingEngineState {
         order_id: OrderId,
         cancel_quantity: ModifyQuantity,
     ) -> Option<Transfer> {
-        let key_book = self
-            .orders
-            .get(&order_id)
-            
-            .expect("Failed to load order")?;
+        let key_book = self.orders.get(&order_id).expect("Failed to load order")?;
         let transfer = match key_book.nature {
             OrderNature::Bid => {
                 let view = self.bid_level(&key_book.price.to_bid());
                 let (cancel_quantity, remove_order_id) =
                     view.modify_order_level(order_id, cancel_quantity)?;
                 if remove_order_id {
-                    self.remove_order_id((key_book.account.owner, order_id))
-                        ;
+                    self.remove_order_id((key_book.account.owner, order_id));
                 }
                 let cancel_amount = self
                     .parameters()
@@ -165,8 +154,7 @@ impl MatchingEngineState {
                 let (cancel_quantity, remove_order_id) =
                     view.modify_order_level(order_id, cancel_quantity)?;
                 if remove_order_id {
-                    self.remove_order_id((key_book.account.owner, order_id))
-                        ;
+                    self.remove_order_id((key_book.account.owner, order_id));
                 }
                 Transfer {
                     account: key_book.account,
@@ -199,7 +187,6 @@ impl MatchingEngineState {
         let account_info = self
             .account_info
             .get_mut_or_default(&account.owner)
-            
             .expect("Failed to load account information");
         account_info.orders.insert(order_id);
         let key_book = KeyBook {
@@ -220,7 +207,6 @@ impl MatchingEngineState {
         let account_info = self
             .account_info
             .get_mut(&owner)
-            
             .expect("account_info")
             .unwrap();
         account_info.orders.remove(&order_id);
@@ -265,20 +251,17 @@ impl MatchingEngineState {
                         }
                         Ok(matches)
                     })
-                    
                     .expect("Failed to iterate over ask prices");
                 for price_ask in matching_price_asks {
                     let view = self.ask_level(&price_ask);
-                    let remove_entry = view
-                        .level_clearing(
-                            account,
-                            &mut final_quantity,
-                            &mut transfers,
-                            &nature,
-                            price_ask.to_price(),
-                            *price,
-                        )
-                        ;
+                    let remove_entry = view.level_clearing(
+                        account,
+                        &mut final_quantity,
+                        &mut transfers,
+                        &nature,
+                        price_ask.to_price(),
+                        *price,
+                    );
                     if view.queue.count() == 0 {
                         self.asks
                             .remove_entry(&price_ask)
@@ -297,8 +280,7 @@ impl MatchingEngineState {
                         order_id,
                     };
                     view.queue.push_back(order);
-                    self.insert_order(*account, OrderNature::Bid, order_id, *price)
-                        ;
+                    self.insert_order(*account, OrderNature::Bid, order_id, *price);
                 }
             }
             OrderNature::Ask => {
@@ -311,20 +293,17 @@ impl MatchingEngineState {
                         }
                         Ok(matches)
                     })
-                    
                     .expect("Failed to iterate over bid prices");
                 for price_bid in matching_price_bids {
                     let view = self.bid_level(&price_bid);
-                    let remove_entry = view
-                        .level_clearing(
-                            account,
-                            &mut final_quantity,
-                            &mut transfers,
-                            &nature,
-                            price_bid.to_price(),
-                            *price,
-                        )
-                        ;
+                    let remove_entry = view.level_clearing(
+                        account,
+                        &mut final_quantity,
+                        &mut transfers,
+                        &nature,
+                        price_bid.to_price(),
+                        *price,
+                    );
                     if view.queue.count() == 0 {
                         self.bids
                             .remove_entry(&price_bid)
@@ -343,8 +322,7 @@ impl MatchingEngineState {
                         order_id,
                     };
                     view.queue.push_back(order);
-                    self.insert_order(*account, OrderNature::Ask, order_id, *price)
-                        ;
+                    self.insert_order(*account, OrderNature::Ask, order_id, *price);
                 }
             }
         }
@@ -394,7 +372,6 @@ impl LevelView {
         let orders = self
             .queue
             .iter_mut()
-            
             .expect("Failed to load iterator over orders");
         for order in orders {
             let fill = min(order.quantity, *quantity);
@@ -529,7 +506,6 @@ impl LevelView {
         let iter = self
             .queue
             .iter_mut()
-            
             .expect("Failed to load iterator over level queue");
         let n_remove = iter
             .take_while(|order| order.quantity == Amount::ZERO)
@@ -551,7 +527,6 @@ impl LevelView {
         let mut iter = self
             .queue
             .iter_mut()
-            
             .expect("Failed to load iterator over level queue");
         let state_order = iter.find(|order| order.order_id == order_id)?;
         let new_quantity = match reduce_quantity {

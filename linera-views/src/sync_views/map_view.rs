@@ -396,7 +396,9 @@ where
         F: FnMut(&[u8]) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.to_vec()));
+        let mut updates = self
+            .updates
+            .range(get_key_range_for_prefix(prefix.to_vec()));
         let mut update = updates.next();
         if !self.deletion_set.contains_prefix_of(prefix) {
             let iter = self
@@ -563,7 +565,9 @@ where
         F: FnMut(&[u8], ValueOrBytes<'a, V>) -> Result<bool, ViewError> + Send,
     {
         let prefix_len = prefix.len();
-        let mut updates = self.updates.range(get_key_range_for_prefix(prefix.to_vec()));
+        let mut updates = self
+            .updates
+            .range(get_key_range_for_prefix(prefix.to_vec()));
         let mut update = updates.next();
         if !self.deletion_set.contains_prefix_of(prefix) {
             let iter = self

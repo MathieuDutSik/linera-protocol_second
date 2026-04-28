@@ -88,8 +88,6 @@ impl Contract for CreateAndCallContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }

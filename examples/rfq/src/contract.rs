@@ -36,8 +36,8 @@ impl Contract for RfqContract {
     type EventValue = ();
 
     fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = RfqState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            RfqState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         RfqContract { state, runtime }
     }
 
@@ -107,14 +107,13 @@ impl Contract for RfqContract {
                 }
                 let quote_provided = request_data.quote_provided();
                 let token_pair = request_data.token_pair();
-                let temp_chain_id = self
-                    .start_exchange(
-                        request_id.clone(),
-                        quote_provided,
-                        token_pair,
-                        fee_budget,
-                        owner,
-                    );
+                let temp_chain_id = self.start_exchange(
+                    request_id.clone(),
+                    quote_provided,
+                    token_pair,
+                    fee_budget,
+                    owner,
+                );
                 self.state
                     .request_data(&request_id)
                     .expect("Request not found!")
@@ -302,9 +301,7 @@ impl Contract for RfqContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

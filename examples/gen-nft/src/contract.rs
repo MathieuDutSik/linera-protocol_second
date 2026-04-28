@@ -34,8 +34,8 @@ impl Contract for GenNftContract {
     type EventValue = ();
 
     fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = GenNftState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            GenNftState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         GenNftContract { state, runtime }
     }
 
@@ -124,9 +124,7 @@ impl Contract for GenNftContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

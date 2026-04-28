@@ -43,8 +43,8 @@ impl Contract for EvmBridgeContract {
     type EventValue = ();
 
     fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = BridgeState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            BridgeState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         EvmBridgeContract { state, runtime }
     }
 

@@ -35,8 +35,8 @@ impl Contract for SocialContract {
     type EventValue = Event;
 
     fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = SocialState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            SocialState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         SocialContract { state, runtime }
     }
 
@@ -57,13 +57,9 @@ impl Contract for SocialContract {
                 self.runtime
                     .unsubscribe_from_events(chain_id, app_id, STREAM_NAME.into());
             }
-            Operation::Post { text, image_url } => {
-                self.execute_post_operation(text, image_url)
-            }
+            Operation::Post { text, image_url } => self.execute_post_operation(text, image_url),
             Operation::Like { key } => self.execute_like_operation(key),
-            Operation::Comment { key, comment } => {
-                self.execute_comment_operation(key, comment)
-            }
+            Operation::Comment { key, comment } => self.execute_comment_operation(key, comment),
         }
     }
 
@@ -102,9 +98,7 @@ impl Contract for SocialContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

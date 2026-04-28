@@ -15,9 +15,12 @@ use linera_base::{
 };
 use linera_sdk::ensure;
 use linera_views::{
-    context::Context, log_view::LogView, map_view::MapView, register_view::RegisterView,
-    set_view::SetView, views::ClonableView,
-    views::{RootView, View},
+    context::Context,
+    log_view::LogView,
+    map_view::MapView,
+    register_view::RegisterView,
+    set_view::SetView,
+    views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
 

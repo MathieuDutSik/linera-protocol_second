@@ -321,18 +321,12 @@ impl Contract for ControllerContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
 impl ControllerContract {
-    fn prepare_worker_command_locally(
-        &mut self,
-        owner: AccountOwner,
-        command: &WorkerCommand,
-    ) {
+    fn prepare_worker_command_locally(&mut self, owner: AccountOwner, command: &WorkerCommand) {
         match command {
             WorkerCommand::RegisterWorker { capabilities } => {
                 assert!(
@@ -488,11 +482,7 @@ impl ControllerContract {
         }
     }
 
-    fn update_service(
-        &mut self,
-        service_id: ManagedServiceId,
-        new_workers: HashSet<ChainId>,
-    ) {
+    fn update_service(&mut self, service_id: ManagedServiceId, new_workers: HashSet<ChainId>) {
         log::info!("Updating {service_id:?}: {new_workers:?}");
         let existing_workers = self
             .state

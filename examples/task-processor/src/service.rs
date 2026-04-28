@@ -72,10 +72,7 @@ impl QueryRoot {
     /// Returns the stored results in order.
     async fn results(&self) -> Vec<String> {
         let count = self.state.results.count();
-        self.state
-            .results
-            .read_front(count)
-            .unwrap_or_default()
+        self.state.results.read_front(count).unwrap_or_default()
     }
 
     /// Returns the pending tasks and callback requests for the task processor.

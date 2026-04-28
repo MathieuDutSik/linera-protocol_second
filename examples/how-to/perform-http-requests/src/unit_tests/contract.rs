@@ -6,9 +6,7 @@
 //! Unit tests for the contract.
 
 use how_to_perform_http_requests::{Abi, Operation};
-use linera_sdk::{
-    http, linera_base_types::ApplicationId, Contract as _, ContractRuntime,
-};
+use linera_sdk::{http, linera_base_types::ApplicationId, Contract as _, ContractRuntime};
 
 use super::Contract;
 

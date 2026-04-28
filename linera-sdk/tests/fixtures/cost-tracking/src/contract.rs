@@ -217,11 +217,7 @@ impl CostTrackingContract {
 
         // Test contains_key
         self.log_entry("before_map_contains_key");
-        let contains = self
-            .state
-            .map
-            .contains_key(&"key1".to_string())
-            .unwrap();
+        let contains = self.state.map.contains_key(&"key1".to_string()).unwrap();
         black_box(&contains);
         self.log_entry("after_map_contains_key");
 
@@ -350,8 +346,6 @@ impl Contract for CostTrackingContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }

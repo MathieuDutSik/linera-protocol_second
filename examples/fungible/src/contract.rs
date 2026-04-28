@@ -96,8 +96,7 @@ impl Contract for FungibleTokenContract {
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for Transfer operation");
-                self.state
-                    .debit_for_transfer_from(owner, spender, amount);
+                self.state.debit_for_transfer_from(owner, spender, amount);
                 self.finish_transfer_to_account(amount, target_account, owner);
                 FungibleResponse::Ok
             }
@@ -145,9 +144,7 @@ impl Contract for FungibleTokenContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

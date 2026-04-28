@@ -39,8 +39,7 @@ impl Contract for MatchingEngineContract {
             Vec::new(),
             parameters,
         );
-        let state = MatchingEngineState::load(context)
-            .expect("Failed to load state");
+        let state = MatchingEngineState::load(context).expect("Failed to load state");
         MatchingEngineContract { state, runtime }
     }
 
@@ -109,9 +108,7 @@ impl Contract for MatchingEngineContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 

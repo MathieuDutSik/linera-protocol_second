@@ -3913,12 +3913,8 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
     );
 
     // Wait for both bundles to arrive on the admin chain.
-    notifications_admin
-        .wait_for_bundle(chain_a, None)
-        .await?;
-    notifications_admin
-        .wait_for_bundle(chain_b, None)
-        .await?;
+    notifications_admin.wait_for_bundle(chain_a, None).await?;
+    notifications_admin.wait_for_bundle(chain_b, None).await?;
 
     // Benchmark: process inbox on the matching engine chain.
     // This is where all 100 messages (50 bids + 50 asks) get matched.
@@ -4016,10 +4012,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
     // Admin creates token0 (supply = num_bid_chains for bids at price 1)
     // and token1 (supply = num_ask_chains for asks).
     let state0 = fungible::InitialState {
-        accounts: BTreeMap::from([(
-            owner_admin,
-            Amount::from_tokens(num_bid_chains as u128),
-        )]),
+        accounts: BTreeMap::from([(owner_admin, Amount::from_tokens(num_bid_chains as u128))]),
     };
     let token0 = client_admin
         .publish_and_create::<fungible::FungibleTokenAbi, _, _>(
@@ -4034,10 +4027,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
         .await?;
 
     let state1 = fungible::InitialState {
-        accounts: BTreeMap::from([(
-            owner_admin,
-            Amount::from_tokens(num_ask_chains as u128),
-        )]),
+        accounts: BTreeMap::from([(owner_admin, Amount::from_tokens(num_ask_chains as u128))]),
     };
     let token1 = client_admin
         .publish_and_create::<fungible::FungibleTokenAbi, _, _>(
@@ -4068,8 +4058,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
     let mut notifications_admin = node_service_admin.notifications(chain_admin).await?;
 
     // Admin batch-transfers 1 token0 to owner_a on each bid chain.
-    let app_token0_admin =
-        FungibleApp(node_service_admin.make_application(&chain_admin, &token0)?);
+    let app_token0_admin = FungibleApp(node_service_admin.make_application(&chain_admin, &token0)?);
     let token0_mutations: Vec<String> = bid_chains
         .iter()
         .map(|chain| {
@@ -4084,11 +4073,13 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
             )
         })
         .collect();
-    app_token0_admin.0.multiple_mutate(&token0_mutations).await?;
+    app_token0_admin
+        .0
+        .multiple_mutate(&token0_mutations)
+        .await?;
 
     // Admin batch-transfers 1 token1 to owner_b on each ask chain.
-    let app_token1_admin =
-        FungibleApp(node_service_admin.make_application(&chain_admin, &token1)?);
+    let app_token1_admin = FungibleApp(node_service_admin.make_application(&chain_admin, &token1)?);
     let token1_mutations: Vec<String> = ask_chains
         .iter()
         .map(|chain| {
@@ -4103,7 +4094,10 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
             )
         })
         .collect();
-    app_token1_admin.0.multiple_mutate(&token1_mutations).await?;
+    app_token1_admin
+        .0
+        .multiple_mutate(&token1_mutations)
+        .await?;
 
     // Wait for all chains to receive their tokens.
     for chain in &bid_chains {
@@ -4139,9 +4133,8 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
     // Submit one bid per bid chain (all at price 1, quantity 1).
     let bench_submit_start = std::time::Instant::now();
     for chain in &bid_chains {
-        let app = MatchingEngineApp(
-            node_service_a.make_application(chain, &application_id_matching)?,
-        );
+        let app =
+            MatchingEngineApp(node_service_a.make_application(chain, &application_id_matching)?);
         app.order(matching_engine::Order::Insert {
             owner: owner_a,
             quantity: Amount::ONE,
@@ -4159,9 +4152,8 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
     // Submit one ask per ask chain (all at price 1, quantity 1).
     let bench_submit_start = std::time::Instant::now();
     for chain in &ask_chains {
-        let app = MatchingEngineApp(
-            node_service_b.make_application(chain, &application_id_matching)?,
-        );
+        let app =
+            MatchingEngineApp(node_service_b.make_application(chain, &application_id_matching)?);
         app.order(matching_engine::Order::Insert {
             owner: owner_b,
             quantity: Amount::ONE,

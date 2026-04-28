@@ -32,8 +32,8 @@ impl Contract for CounterContract {
     type EventValue = ();
 
     fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .expect("Failed to load state");
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterContract { state, runtime }
     }
 
@@ -56,9 +56,7 @@ impl Contract for CounterContract {
     }
 
     fn store(mut self) {
-        self.state
-            .save()
-            .expect("Failed to save state");
+        self.state.save().expect("Failed to save state");
     }
 }
 
