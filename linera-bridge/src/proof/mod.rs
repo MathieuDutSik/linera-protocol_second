@@ -807,12 +807,18 @@ mod tests {
 
         let event = parse_deposit_event(&log, TEST_BRIDGE).unwrap();
         assert_eq!(event.source_chain_id, U256::from(8453));
-        assert_eq!(event.target_chain_id, ChainId(CryptoHash::from(target_chain_id.0)));
+        assert_eq!(
+            event.target_chain_id,
+            ChainId(CryptoHash::from(target_chain_id.0))
+        );
         assert_eq!(
             event.target_application_id,
             ApplicationId::new(CryptoHash::from(target_app_id.0))
         );
-        assert_eq!(event.target_account_owner, AccountOwner::from(target_owner.0));
+        assert_eq!(
+            event.target_account_owner,
+            AccountOwner::from(target_owner.0)
+        );
         assert_eq!(event.depositor, depositor);
         assert_eq!(event.token, token);
         assert_eq!(event.amount, U256::from(1_000_000));
