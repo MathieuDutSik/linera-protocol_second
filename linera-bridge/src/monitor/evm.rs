@@ -180,7 +180,7 @@ async fn evm_scan_iteration(
 
         let key = DepositKey {
             source_chain_id: deposit.source_chain_id.to::<u64>(),
-            block_hash: block_hash.0,
+            block_hash,
             tx_index,
             log_index,
         };

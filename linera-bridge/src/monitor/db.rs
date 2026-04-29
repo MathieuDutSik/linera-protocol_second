@@ -227,7 +227,7 @@ mod tests {
     fn test_deposit_key() -> DepositKey {
         DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         }

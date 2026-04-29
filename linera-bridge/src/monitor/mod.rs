@@ -357,7 +357,7 @@ mod tests {
     fn test_deposit_key_hash_matches_evm_bridge() {
         let key = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         };
@@ -370,13 +370,13 @@ mod tests {
     fn test_deposit_key_different_log_index_different_hash() {
         let key1 = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         };
         let key2 = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 1,
         };
@@ -389,7 +389,7 @@ mod tests {
 
         let key = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 1,
             log_index: 0,
         };
@@ -440,7 +440,7 @@ mod tests {
 
         let key = DepositKey {
             source_chain_id: 1,
-            block_hash: [0; 32],
+            block_hash: B256::ZERO,
             tx_index: 0,
             log_index: 0,
         };
@@ -497,7 +497,7 @@ mod tests {
         let mut state = MonitorState::new(0);
         let key = DepositKey {
             source_chain_id: 1,
-            block_hash: [0; 32],
+            block_hash: B256::ZERO,
             tx_index: 0,
             log_index: 0,
         };

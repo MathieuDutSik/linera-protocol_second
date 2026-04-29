@@ -339,7 +339,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let log_index = proof.log_indices[0];
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337, // Anvil chain ID
-        block_hash: deposit_receipt.block_hash.unwrap().0,
+        block_hash: deposit_receipt.block_hash.unwrap(),
         tx_index,
         log_index,
     };
