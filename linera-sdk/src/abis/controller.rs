@@ -12,6 +12,55 @@ use crate::linera_base_types::{
     ServiceAbi,
 };
 
+/// Messages that can be exchanged across chains from the same application instance.
+#[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+pub enum Message {
+    // -- Message to the controller chain --
+    ExecuteWorkerCommand {
+        owner: AccountOwner,
+        command: WorkerCommand,
+    },
+    ExecuteControllerCommand {
+        admin: AccountOwner,
+        command: ControllerCommand,
+    },
+    // -- Messages sent to the workers' control chains from the controller chain --
+    Reset,
+    Start {
+        service_id: ManagedServiceId,
+        owners_to_remove: HashSet<AccountOwner>,
+        start_height: Option<BlockHeight>,
+    },
+    Stop {
+        service_id: ManagedServiceId,
+        new_owners: HashSet<AccountOwner>,
+    },
+    FollowChain {
+        chain_id: ChainId,
+    },
+    ForgetChain {
+        chain_id: ChainId,
+    },
+    // -- Messages sent from the worker's control chain to a service chain --
+    AddOwners {
+        service_id: ManagedServiceId,
+        new_owners: HashSet<AccountOwner>,
+    },
+    RemoveOwners {
+        owners_to_remove: HashSet<AccountOwner>,
+    },
+    // -- Messages sent from a service chain to the worker's control chain --
+    OwnersAdded {
+        service_id: ManagedServiceId,
+        added_at: BlockHeight,
+    },
+    // -- Messages sent from the workers' control chains to the controller chain --
+    HandoffStarted {
+        service_id: ManagedServiceId,
+        target_block_height: BlockHeight,
+    },
+}
+
 pub struct ControllerAbi;
 
 impl ContractAbi for ControllerAbi {
@@ -149,3 +198,56 @@ pub struct LocalWorkerState {
 }
 
 scalar!(LocalWorkerState);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod formats {
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::{
+        ControllerAbi, ControllerCommand, ManagedServiceId, Message, Operation, Worker,
+        WorkerCommand,
+    };
+    use crate::{
+        formats::{BcsApplication, Formats},
+        linera_base_types::AccountOwner,
+    };
+
+    /// The Controller application.
+    pub struct ControllerApplication;
+
+    impl BcsApplication for ControllerApplication {
+        type Abi = ControllerAbi;
+
+        fn formats() -> serde_reflection::Result<Formats> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+
+            // Trace the ABI types
+            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let (response, _) = tracer.trace_type::<()>(&samples)?;
+            let (message, _) = tracer.trace_type::<Message>(&samples)?;
+            let (event_value, _) = tracer.trace_type::<()>(&samples)?;
+
+            // Trace additional supporting types (notably all enums) to populate the registry
+            tracer.trace_type::<WorkerCommand>(&samples)?;
+            tracer.trace_type::<ControllerCommand>(&samples)?;
+            tracer.trace_type::<Worker>(&samples)?;
+            tracer.trace_type::<ManagedServiceId>(&samples)?;
+            tracer.trace_type::<AccountOwner>(&samples)?;
+
+            let registry = tracer.registry()?;
+
+            Ok(Formats {
+                registry,
+                operation,
+                response,
+                message,
+                event_value,
+            })
+        }
+    }
+}
