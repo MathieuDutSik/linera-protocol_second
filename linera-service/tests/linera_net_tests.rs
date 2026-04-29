@@ -421,6 +421,7 @@ impl MatchingEngineApp {
         self.0.mutate(mutation).await.unwrap()
     }
 
+    #[cfg(feature = "engine-benchmark")]
     async fn multiple_orders(&self, orders: &[matching_engine::Order]) -> Value {
         let mutations: Vec<String> = orders
             .iter()
