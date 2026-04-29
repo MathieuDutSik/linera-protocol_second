@@ -30,9 +30,10 @@ use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Bytecode},
-    identifiers::{AccountOwner, ApplicationId},
+    identifiers::AccountOwner,
     vm::VmRuntime,
 };
+use linera_bridge::abi::{BridgeOperation, BridgeParameters};
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
@@ -43,23 +44,7 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use serde::Serialize;
 use wrapped_fungible::{Account, InitialState, WrappedFungibleOperation, WrappedParameters};
-
-// ── Inline evm-bridge types ──
-
-#[derive(Clone, Debug, serde::Deserialize, Serialize)]
-struct BridgeParameters {
-    source_chain_id: u64,
-    bridge_contract_address: [u8; 20],
-    token_address: [u8; 20],
-    rpc_endpoint: String,
-}
-
-#[derive(Debug, Serialize)]
-enum BridgeOperation {
-    RegisterFungibleApp { app_id: ApplicationId },
-}
 
 sol! {
     #[sol(rpc)]

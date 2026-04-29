@@ -12,7 +12,7 @@ version.workspace = true
 
 [features]
 default = ["offchain"]
-chain = []
+chain = ["dep:linera-base"]
 testing = []
 offchain = [
     "dep:alloy",

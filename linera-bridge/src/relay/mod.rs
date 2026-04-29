@@ -516,7 +516,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     linera::ChainOperation::ProcessDeposit { proof, response } => {
                         let result = async {
                             let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                                let op = evm::BridgeOperation::ProcessDeposit {
+                                let op = crate::abi::BridgeOperation::ProcessDeposit {
                                     block_header_rlp: proof.block_header_rlp.clone(),
                                     receipt_rlp: proof.receipt_rlp.clone(),
                                     proof_nodes: proof.proof_nodes.clone(),

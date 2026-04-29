@@ -94,7 +94,7 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
                 // Persist raw BCS operation bytes so deposits can be replayed without the relayer.
                 if let Some(db) = monitor.read().await.db() {
                     for &log_index in &proof.log_indices {
-                        let op = crate::relay::evm::BridgeOperation::ProcessDeposit {
+                        let op = crate::abi::BridgeOperation::ProcessDeposit {
                             block_header_rlp: proof.block_header_rlp.clone(),
                             receipt_rlp: proof.receipt_rlp.clone(),
                             proof_nodes: proof.proof_nodes.clone(),
