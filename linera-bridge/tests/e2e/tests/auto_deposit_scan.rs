@@ -347,7 +347,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             None,
             relay_port,
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            5,  // monitor_scan_interval
+            std::time::Duration::from_secs(5),  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries
             None,
